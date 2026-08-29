@@ -1,0 +1,6 @@
+{
+  "name": "NOON ERP — Finance & Accounting",
+  "description": "تطبيق مكتبي عربي للمحاسبة والإدارة المالية باستخدام Electron وSQLite وفق القيد المزدوج وتقارير IFRS",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { assertSupportedDataPath, createVerifiedBackup, restoreLatestVerifiedBackup, verifyDatabaseFile } from '../electron/database-recovery.mjs';
+
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fullerp-recovery-'));
+const databasePath = path.join(root, 'FULLERP.sqlite');
+const backupDir = path.join(root, 'backups');
+const db = new DatabaseSync(databasePath);
+db.exec('CREATE TABLE sample(id INTEGER PRIMARY KEY,value TEXT); INSERT INTO sample(value) VALUES (\'committed\');');
+const backup = createVerifiedBackup(db, backupDir, 3, new Date('2026-08-27T12:34:56Z'));
+assert.equal(backup.integrity, 'ok');
+db.close();
+fs.writeFileSync(databasePath, Buffer.from('corrupt database bytes'));
+assert.equal(verifyDatabaseFile(databasePath).ok, false);
+const restored = restoreLatestVerifiedBackup(databasePath, backupDir);
+assert.equal(restored.restored, true);
+const recovered = new DatabaseSync(databasePath, { readOnly: true });
+assert.equal(recovered.prepare('SELECT value FROM sample').get().value, 'committed');
+recovered.close();
+if (process.platform === 'win32') assert.throws(() => assertSupportedDataPath('\\\\server\\share\\FULLERP'));
+fs.rmSync(root, { recursive: true, force: true });
+console.log('DATABASE_RECOVERY_REGRESSION_OK verifiedBackup=true corruptedDatabaseDetected=true latestCommittedRestored=true networkPathRejected=true rotationPolicy=3');

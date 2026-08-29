@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NOON ERP — Finance &amp; Accounting</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="./brand/fullerp-icon-32.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('elite-erp-theme');
+          var theme = t === 'dark' || t === 'light' ? t : 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {}
+        try {
+          var l = localStorage.getItem('elite-erp-lang');
+          if (l === 'en' || l === 'ar') {
+            document.documentElement.setAttribute('lang', l);
+            document.documentElement.setAttribute('dir', l === 'ar' ? 'rtl' : 'ltr');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

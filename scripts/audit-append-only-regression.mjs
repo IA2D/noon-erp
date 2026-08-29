@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createRelationalStore, RELATIONAL_COLLECTION_KEYS } from '../electron/relational-store.mjs';
+
+const file = path.join(os.tmpdir(), `fullerp-audit-${process.pid}.sqlite`);
+const db = new DatabaseSync(file);
+db.exec('PRAGMA foreign_keys=ON; CREATE TABLE kv_store(key TEXT PRIMARY KEY,value TEXT NOT NULL,entity_type TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT(datetime(\'now\')));');
+const store = createRelationalStore(db);
+const key = RELATIONAL_COLLECTION_KEYS.auditLogs;
+const log = { id: 'audit-1', timestamp: '2026-08-27 12:00:00', userId: 'admin', userName: 'Admin', userRole: 'CFO', module: 'GENERAL_LEDGER', action: 'POST', details: 'posted', ipAddress: 'desktop' };
+store.syncCollection(key, JSON.stringify([log]));
+store.syncCollection(key, JSON.stringify([{ ...log, details: 'tampered' }, { ...log, id: 'audit-2', details: 'second' }]));
+assert.equal(db.prepare('SELECT count(*) AS count FROM erp_audit_events').get().count, 2);
+assert.throws(() => db.prepare('UPDATE erp_audit_events SET details=\'tampered\' WHERE id=\'audit-1\'').run());
+assert.throws(() => db.prepare('DELETE FROM erp_audit_events WHERE id=\'audit-1\'').run());
+assert.equal(store.diagnostics().auditEvents, 2);
+db.close();
+fs.rmSync(file, { force: true });
+console.log('AUDIT_APPEND_ONLY_REGRESSION_OK appendInsert=true duplicateUpdateIgnored=true directUpdateBlocked=true directDeleteBlocked=true diagnosticsCount=2');

@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import type { JournalEntry } from '../src/types/erp';
+import { replacementJournal, validateSupportingDocuments, type SupportingDocument } from '../src/utils/supportingDocuments';
+import { validateJournalForPosting } from '../src/utils/postingValidation';
+
+const doc = (status: SupportingDocument['status']): SupportingDocument => ({ id: `d-${status}`, documentType: 'INVOICE', fileName: 'invoice.pdf', mimeType: 'application/pdf', sizeBytes: 100, sha256: 'a'.repeat(64), uploadedBy: 'maker', uploadedAt: '2026-08-27T00:00:00Z', status });
+const required = [{ documentType: 'INVOICE', label: 'فاتورة', required: true }];
+assert.equal(validateSupportingDocuments([], required).length, 1);
+assert.equal(validateSupportingDocuments([doc('PENDING')], required).length, 1);
+assert.equal(validateSupportingDocuments([doc('VERIFIED')], required).length, 0);
+assert.equal(validateSupportingDocuments([], required, false).length, 0);
+const original = { id: 'j-posted', status: 'POSTED', entryNumber: 'JV-1' } as JournalEntry;
+const pending = { id: 'j-replacement', status: 'PENDING_POSTING', entryNumber: 'JV-2' } as JournalEntry;
+const replacement = replacementJournal(original, pending, 'maker', 'تصحيح المستند');
+assert.equal(replacement.replacementOfEntryId, original.id);
+assert.throws(() => replacementJournal(original, pending, 'maker', ''));
+const base = { id: 'j1', status: 'PENDING_POSTING', entryNumber: 'JV-10', date: '2026-08-27', currency: 'EGP', exchangeRate: 1, totalDebit: 100, totalCredit: 100, lines: [{ id: 'l1', accountId: 'a1', debit: 100, credit: 0, description: 'x' }, { id: 'l2', accountId: 'a2', debit: 0, credit: 100, description: 'x' }] } as any;
+const accounts = [{ id: 'a1', isActive: true, level: 5, accountType: 2, code: '1', name: 'A', subLedgerType: 'NONE' }, { id: 'a2', isActive: true, level: 5, accountType: 2, code: '2', name: 'B', subLedgerType: 'NONE' }] as any;
+const blocked = validateJournalForPosting(base, accounts, [], [], required);
+assert.equal(blocked.valid, false);
+const accepted = validateJournalForPosting({ ...base, attachments: [doc('VERIFIED')] }, accounts, [], [], required);
+assert.equal(accepted.valid, true);
+console.log('SUPPORTING_DOCUMENTS_REGRESSION_OK requiredMissingBlocked=true pendingUnverifiedBlocked=true verifiedAccepted=true pendingExemption=true replacementLinked=true reasonRequired=true finalPostingBlocked=true finalPostingAccepted=true');

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=(path:string)=>fs.readFileSync(path,'utf8');
+const all=fs.readdirSync('src/components/modules').filter(x=>x.endsWith('.tsx')).map(x=>read(`src/components/modules/${x}`)).join('\n');
+const modal=read('src/components/ui/ModalShell.tsx'); const app=read('src/App.tsx'); const reports=read('src/components/modules/FinancialReportsView.tsx');
+assert.doesNotMatch(all,/نظام نون|نظام النخبة|Noon Professional System/);
+assert.doesNotMatch(all,/2025-01-01|2026-12-31/);
+assert.match(app,/<GlobalEnterNav/);
+assert.match(modal,/role="dialog"/); assert.match(modal,/aria-modal="true"/); assert.match(modal,/aria-label=\{typeof title/); assert.match(modal,/event\.key !== 'Tab'/); assert.match(modal,/previousFocusRef\.current\?\.focus/);
+assert.match(reports,/مقارنة بالفترة السابقة/); assert.match(reports,/configuredFiscalPeriod/);
+assert.match(read('src/components/modules/ContractsView.tsx'),/aria-label="السند المرحل"/);
+assert.match(read('src/components/modules/DuplicateReviewView.tsx'),/aria-label=\{`دمج/);
+console.log('P1_UI_ACCESSIBILITY_REGRESSION_OK brandingUnified=true fiscalDatesConfigured=true enterAsTab=true dialogSemantics=true focusTrap=true focusRestore=true priorComparison=true accessibleActions=true');

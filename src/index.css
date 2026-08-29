@@ -1,0 +1,2681 @@
+@import "tailwindcss";
+
+/* ربط متغير dark: بسمة النظام (data-theme) بدلاً من تفضيلات نظام التشغيل */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* ============================================================
+   التعديل الإجباري للخطوط (Forced Typography Overhaul)
+   فرض الأحجام الاحترافية الدنيا على كلاسات الخطوط الأساسية
+   مهما كانت قيم Tailwind الافتراضية. القواعد هنا خارج
+   الطبقات (unlayered) فتتجاوز كل الأدوات المُولّدة:
+   - text-xs  = 15px  (بيانات ثانوية / شارات)
+   - text-sm  = 16px  (الجداول / الحقول / التسميات)
+   - text-base = 17px (النص العادي)
+   ============================================================ */
+.text-xs { font-size: 0.9375rem !important; line-height: 1.375rem !important; } /* 15px بدلاً من 12px */
+.text-sm { font-size: 1rem !important; line-height: 1.5rem !important; } /* 16px بدلاً من 14px */
+.text-base { font-size: 1.0625rem !important; line-height: 1.625rem !important; } /* 17px */
+
+/* ============================================================
+   مقياس الخطوط (Typography Scale) — رفع عام للمقاسات لراحة
+   أكبر للعين مع الحفاظ على كثافة البيانات المحاسبية.
+   جميع القيم بوحدات مرنة (rem) لضمان تناسق كامل عبر النظام:
+   - text-xs:   15px (بيانات ثانوية / شارات)
+   - text-sm:   16px (الجداول / الحقول / التسميات / النص الأساسي)
+   - text-base: 17px (النص العادي)
+   - text-lg:   19px (العناوين الفرعية)
+   - text-xl:   24px (عناوين الصفحات والنوافذ)
+   - text-2xl:  26px (قيم المؤشرات KPI)
+   - line-height مريح للعربية يمنع اقتطاع أطراف الأحرف.
+   ============================================================ */
+@theme {
+  --text-xs: 0.9375rem;
+  --text-xs--line-height: 1.375rem;
+
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5rem;
+
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.625rem;
+
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.75rem;
+
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.875rem;
+
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 2rem;
+
+  --text-3xl: 2.125rem;
+  --text-3xl--line-height: 2.5rem;
+
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: 2.875rem;
+
+  --text-5xl: 3.25rem;
+  --text-5xl--line-height: 3.75rem;
+}
+
+/* اللون الأساسي للهوية (Primary/Brand) — سماوي موحّد
+   يُضمّن دائماً في المخرجات النهائية حتى لو لم تُستخدم أدواته بعد */
+@theme static {
+  --color-primary: #0284c7;
+  --color-brand: #0284c7;
+}
+
+/* ============================================================
+   نظام التصميم الفاخر (Premium Design System)
+   يدعم الوضع الداكن (الافتراضي) والفاتح الاحترافي
+   ============================================================ */
+
+html {
+  font-family: 'Tajawal', 'Segoe UI', 'Tahoma', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px !important;
+  scroll-behavior: smooth;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ============ متغيرات الوضع الداكن (الافتراضي) ============ */
+:root,
+[data-theme="dark"] {
+  --app-bg-color: #061426;
+  --app-bg-image: linear-gradient(180deg, #061426 0%, #0c2a55 55%, #102b48 100%);
+
+  --glass-bg: linear-gradient(180deg, rgba(9, 25, 47, 0.72) 0%, rgba(6, 14, 28, 0.74) 100%);
+  --glass-card-bg: linear-gradient(180deg, rgba(10, 26, 50, 0.86) 0%, rgba(8, 16, 34, 0.82) 100%);
+  --glass-elevated-bg: linear-gradient(180deg, rgba(14, 38, 72, 0.90) 0%, rgba(8, 14, 28, 0.86) 100%);
+  --glass-border: rgba(148, 163, 184, 0.12);
+  --glass-border-strong: rgba(148, 163, 184, 0.18);
+  --card-panel-bg: linear-gradient(180deg, rgba(11, 26, 48, 0.70) 0%, rgba(7, 15, 33, 0.60) 100%);
+  --input-bg: rgba(13, 24, 44, 0.56);
+  --input-focus-bg: rgba(56, 189, 248, 0.14);
+  --scrollbar-track: rgba(11, 23, 40, 0.45);
+  --scrollbar-thumb: linear-gradient(180deg, rgba(56, 189, 248, 0.32), rgba(37, 99, 235, 0.32));
+  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(56, 189, 248, 0.52), rgba(37, 99, 235, 0.52));
+  --table-head-bg: rgba(10, 22, 38, 0.62);
+  --toast-invert: 0;
+  --glass-top-line: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.14), transparent);
+  --panel-hover-border: rgba(56, 189, 248, 0.20);
+  --panel-hover-shadow: 0 10px 25px rgba(0, 12, 31, 0.40);
+  --elevated-shadow: 0 12px 30px rgba(0, 12, 31, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --aurora-opacity: 0.04;
+  --ambient-orb-opacity: 0.06;
+
+  /* ============ توحيد لوحة الألوان على تدرجات الأزرق الرسمي ============ */
+  /* إعادة تعيين كافة الألوان المميزة إلى عائلة الأزرق (الفاتح والسماوي والأزرق الملكي)
+     على جميع الدرجات (من 50 إلى 950) بحيث لا يظهر أي لون وردي أو بنفسجي أو أخضر في الواجهة.
+     مع الإبقاء على اللونين الوظيفيين فقط بتدرجات رسمية هادئة:
+     الكهرماني الداكن للتنبيهات والأحمر الداكن للخطر/الحذف */
+  --color-emerald-50: #e0f2fe;
+  --color-emerald-100: #bae6fd;
+  --color-emerald-200: #7dd3fc;
+  --color-emerald-300: #38bdf8;
+  --color-emerald-400: #0ea5e9;
+  --color-emerald-500: #0284c7;
+  --color-emerald-600: #0369a1;
+  --color-emerald-700: #075985;
+  --color-emerald-800: #0c4a6e;
+  --color-emerald-900: #082f49;
+  --color-emerald-950: #082f49;
+  --color-green-300: #38bdf8;
+  --color-green-400: #0ea5e9;
+  --color-green-500: #0284c7;
+  --color-green-600: #0369a1;
+  --color-teal-50: #e0f2fe;
+  --color-teal-100: #bae6fd;
+  --color-teal-200: #7dd3fc;
+  --color-teal-300: #38bdf8;
+  --color-teal-400: #0ea5e9;
+  --color-teal-500: #0284c7;
+  --color-teal-600: #0369a1;
+  --color-teal-700: #075985;
+  --color-lime-200: #bae6fd;
+  --color-lime-300: #7dd3fc;
+  --color-lime-400: #38bdf8;
+  --color-lime-500: #0ea5e9;
+  --color-cyan-200: #bae6fd;
+  --color-cyan-300: #7dd3fc;
+  --color-cyan-400: #38bdf8;
+  --color-cyan-500: #0ea5e9;
+  --color-cyan-600: #0284c7;
+  --color-sky-100: #e0f2fe;
+  --color-sky-200: #bae6fd;
+  --color-sky-300: #7dd3fc;
+  --color-sky-400: #38bdf8;
+  --color-sky-500: #0ea5e9;
+  --color-sky-600: #0284c7;
+  --color-sky-700: #0369a1;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-indigo-200: #bae6fd;
+  --color-indigo-300: #7dd3fc;
+  --color-indigo-400: #38bdf8;
+  --color-indigo-500: #0ea5e9;
+  --color-indigo-600: #0284c7;
+  --color-indigo-700: #0369a1;
+  /* ألوان غير مرغوبة نهائياً (وردي، بنفسجي، أرجواني، فوشيا) تُعاد تعيينها إلى الأزرق على جميع الدرجات */
+  --color-purple-200: #e0f2fe;
+  --color-purple-300: #bae6fd;
+  --color-purple-400: #7dd3fc;
+  --color-purple-500: #38bdf8;
+  --color-purple-600: #0ea5e9;
+  --color-purple-700: #0284c7;
+  --color-violet-200: #e0f2fe;
+  --color-violet-300: #bae6fd;
+  --color-violet-400: #7dd3fc;
+  --color-violet-500: #38bdf8;
+  --color-violet-600: #0ea5e9;
+  --color-violet-700: #0284c7;
+  --color-fuchsia-200: #e0f2fe;
+  --color-fuchsia-300: #bae6fd;
+  --color-fuchsia-400: #7dd3fc;
+  --color-fuchsia-500: #38bdf8;
+  --color-fuchsia-600: #0ea5e9;
+  --color-fuchsia-700: #0284c7;
+  --color-pink-200: #e0f2fe;
+  --color-pink-300: #bae6fd;
+  --color-pink-400: #7dd3fc;
+  --color-pink-500: #38bdf8;
+  --color-pink-600: #0ea5e9;
+  --color-pink-700: #0284c7;
+  --color-rose-200: #bae6fd;
+  --color-rose-300: #7dd3fc;
+  --color-rose-400: #38bdf8;
+  --color-rose-500: #0ea5e9;
+  --color-rose-600: #0284c7;
+  --color-rose-700: #0369a1;
+  /* الألوان الوظيفية موحّدة على الأزرق بالكامل (لا أحمر ولا كهرماني) */
+  --color-amber-100: #e0f2fe;
+  --color-amber-200: #bae6fd;
+  --color-amber-300: #7dd3fc;
+  --color-amber-400: #38bdf8;
+  --color-amber-500: #0ea5e9;
+  --color-amber-600: #0284c7;
+  --color-amber-700: #0369a1;
+  --color-orange-300: #7dd3fc;
+  --color-orange-400: #38bdf8;
+  --color-orange-500: #0ea5e9;
+  --color-orange-600: #0284c7;
+  --color-red-100: #dbeafe;
+  --color-red-200: #bfdbfe;
+  --color-red-300: #93c5fd;
+  --color-red-400: #60a5fa;
+  --color-red-500: #3b82f6;
+  --color-red-600: #2563eb;
+  --color-red-700: #1d4ed8;
+}
+
+/* ============ متغيرات الوضع الفاتح الاحترافي ============ */
+[data-theme="light"] {
+  --app-bg-color: #f4f6fb;
+  --app-bg-image:
+    radial-gradient(1100px 600px at 85% -10%, rgba(56, 189, 248, 0.06), transparent 60%),
+    linear-gradient(160deg, #f8fafc 0%, #f1f5f9 50%, #ecf1f8 100%);
+
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 250, 252, 0.82) 100%);
+  --glass-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.86) 100%);
+  --glass-elevated-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+  --glass-border: rgba(100, 116, 139, 0.14);
+  --glass-border-strong: rgba(100, 116, 139, 0.20);
+  --card-panel-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 250, 252, 0.80) 100%);
+  --input-bg: rgba(255, 255, 255, 0.85);
+  --input-focus-bg: rgba(255, 255, 255, 1);
+  --scrollbar-track: rgba(100, 116, 139, 0.08);
+  --scrollbar-thumb: linear-gradient(180deg, rgba(148, 163, 184, 0.55), rgba(148, 163, 184, 0.55));
+  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(100, 116, 139, 0.75), rgba(100, 116, 139, 0.75));
+  --table-head-bg: rgba(100, 116, 139, 0.08);
+  --toast-invert: 0;
+  --glass-top-line: linear-gradient(90deg, transparent, rgba(2, 132, 199, 0.10), transparent);
+  --panel-hover-border: rgba(2, 132, 199, 0.25);
+  --panel-hover-shadow: 0 10px 30px rgba(15, 23, 42, 0.08), 0 3px 10px rgba(15, 23, 42, 0.04);
+  --elevated-shadow: 0 14px 44px rgba(15, 23, 42, 0.10), 0 5px 18px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --aurora-opacity: 0.25;
+  --ambient-orb-opacity: 0.3;
+
+  /* عكس تدرج slate لتحويل النصوص والسطحات تلقائياً */
+  --color-slate-50: #0b1220;
+  --color-slate-100: #16202e;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-600: #94a3b8;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+  --color-slate-950: #f8fafc;
+  --color-white: #0f172a;
+
+  /* تعميق درجات الألوان المميزة لضمان تباين جيد على الخلفية الفاتحة */
+  /* ملاحظة: emerald-100 تُستخدم داخل صناديق التنبيهات الداكنة دائماً لذا تبقى فاتحة */
+  --color-emerald-100: #7dd3fc;
+  --color-emerald-200: #0369a1;
+  --color-emerald-300: #0369a1;
+  --color-emerald-400: #0284c7;
+  --color-emerald-500: #0284c7;
+  --color-emerald-600: #0e7490;
+  --color-emerald-700: #0c4a6e;
+  --color-green-300: #0369a1;
+  --color-green-400: #0284c7;
+  --color-green-500: #0284c7;
+  --color-teal-300: #0369a1;
+  --color-teal-400: #0d9488;
+  --color-teal-500: #0284c7;
+  --color-teal-600: #0f766e;
+  --color-lime-300: #0369a1;
+  --color-lime-400: #4d7c0f;
+  --color-cyan-300: #0369a1;
+  --color-cyan-400: #0891b2;
+  --color-cyan-500: #0284c7;
+  --color-sky-300: #0284c7;
+  --color-sky-400: #0369a1;
+  --color-sky-500: #0284c7;
+  --color-sky-600: #0369a1;
+  --color-blue-300: #1d4ed8;
+  --color-blue-400: #1d4ed8;
+  --color-blue-500: #2563eb;
+  --color-blue-600: #1d4ed8;
+  --color-blue-700: #1e40af;
+  --color-indigo-300: #0284c7;
+  --color-indigo-400: #0369a1;
+  --color-indigo-500: #0284c7;
+  --color-indigo-600: #0369a1;
+  --color-indigo-700: #0369a1;
+  --color-amber-100: #1e40af;
+  --color-amber-200: #1d4ed8;
+  --color-amber-300: #1e40af;
+  --color-amber-400: #1d4ed8;
+  --color-amber-500: #1e40af;
+  --color-red-100: #1e40af;
+  --color-red-200: #1d4ed8;
+  --color-red-300: #1e40af;
+  --color-red-400: #1d4ed8;
+  --color-red-500: #1d4ed8;
+  --color-orange-300: #1e40af;
+  --color-orange-400: #1d4ed8;
+  --color-orange-500: #1e40af;
+  --color-purple-300: #0284c7;
+  --color-purple-400: #0369a1;
+  --color-purple-500: #0284c7;
+  --color-violet-300: #0284c7;
+  --color-violet-400: #0369a1;
+  --color-violet-500: #0284c7;
+  --color-fuchsia-300: #0284c7;
+  --color-fuchsia-400: #0284c7;
+  --color-fuchsia-500: #0284c7;
+  --color-pink-300: #0284c7;
+  --color-pink-400: #0e7490;
+  --color-pink-500: #0284c7;
+  --color-rose-300: #0284c7;
+  --color-rose-400: #0369a1;
+  --color-rose-500: #0284c7;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: #e2e8f0;
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  background-color: var(--app-bg-color);
+  background-image: var(--app-bg-image);
+  background-attachment: fixed;
+  transition: background-color 0.4s ease;
+}
+
+[data-theme="light"] body,
+body[data-theme="light"] {
+  color: #1e293b;
+}
+
+.app-bg {
+  background-color: var(--app-bg-color);
+  background-image: var(--app-bg-image);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(148, 163, 184, 0.35);
+  color: #f8fafc;
+}
+
+[data-theme="light"] ::selection {
+  background: rgba(100, 116, 139, 0.25);
+  color: #0f172a;
+}
+
+[dir="rtl"] {
+  direction: rtl;
+}
+
+.dir-rtl {
+  direction: rtl;
+}
+
+/* RTL: محاذاة الأسهم والأيقونات الاتجاهية */
+[dir="rtl"] .chevron-flip {
+  transform: scaleX(-1);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(148, 163, 184, 0.6);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@layer utilities {
+
+  /* ======================= Glass Effects ======================= */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 16px rgba(2, 6, 23, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .glass-card {
+    background: var(--glass-card-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--glass-border-strong);
+    box-shadow: 0 6px 20px rgba(2, 6, 23, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .glass-elevated {
+    background: var(--glass-elevated-bg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--glass-border-strong);
+    box-shadow: var(--elevated-shadow);
+  }
+
+  /* لوحة داخلية موحدة للبطاقات */
+  .card-panel {
+    background: var(--card-panel-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 1rem;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  }
+
+  .card-panel:hover {
+    border-color: var(--panel-hover-border);
+    box-shadow: var(--panel-hover-shadow);
+  }
+
+  /* ======================= Inputs ======================= */
+  .glass-input {
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border-strong);
+    color: var(--color-slate-200);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+
+  .glass-input:focus {
+    border-color: rgba(148, 163, 184, 0.6);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
+    background: var(--input-focus-bg);
+  }
+
+  .glass-input::placeholder {
+    color: var(--color-slate-400);
+  }
+
+  /* ======================= Buttons ======================= */
+  .btn-primary {
+    background-image: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(2, 6, 23, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  }
+
+  .btn-primary:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 6px 16px rgba(2, 6, 23, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+
+  .btn-primary:active {
+    transform: translateY(1px);
+  }
+
+  .btn-ghost {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--glass-border-strong);
+    color: var(--color-slate-300);
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(148, 163, 184, 0.32);
+    color: var(--color-slate-100);
+  }
+
+  .btn-danger {
+    background-image: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(2, 6, 23, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  }
+
+  .btn-danger:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 6px 16px rgba(2, 6, 23, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  /* ======================= Typography ======================= */
+  .accent-glow {
+    box-shadow: none;
+  }
+
+  .code-font {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #cbd5e1 0%, #f8fafc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* ======================= Animations ======================= */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out forwards;
+    transform-origin: top center;
+  }
+
+  /* ======================= Nav Popovers (Portal) ======================= */
+  .nav-popover-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: transparent;
+  }
+
+  .nav-popover {
+    border-radius: 1rem;
+    border: 1px solid rgba(100, 116, 139, 0.18);
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow:
+      0 22px 55px rgba(15, 23, 42, 0.16),
+      0 8px 22px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  [data-theme="dark"] .nav-popover {
+    background: #0f172a;
+    color: #f1f5f9;
+    border-color: rgba(148, 163, 184, 0.24);
+    box-shadow:
+      0 22px 55px rgba(2, 6, 23, 0.55),
+      0 8px 22px rgba(2, 6, 23, 0.35);
+  }
+
+  .nav-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1rem 0.875rem;
+    border-bottom: 1px solid rgba(100, 116, 139, 0.14);
+  }
+
+  [data-theme="dark"] .nav-popover-header {
+    border-bottom-color: rgba(148, 163, 184, 0.18);
+  }
+
+  .nav-popover-title {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+
+  .nav-popover-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
+    color: #64748b;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    cursor: pointer;
+  }
+
+  .nav-popover-close:hover {
+    background: rgba(100, 116, 139, 0.12);
+    color: #0f172a;
+  }
+
+  [data-theme="dark"] .nav-popover-close {
+    color: #94a3b8;
+  }
+
+  [data-theme="dark"] .nav-popover-close:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: #f8fafc;
+  }
+
+  .nav-popover-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid rgba(100, 116, 139, 0.14);
+  }
+
+  [data-theme="dark"] .nav-popover-footer {
+    border-top-color: rgba(148, 163, 184, 0.18);
+  }
+
+  .nav-popover-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid rgba(100, 116, 139, 0.1);
+    transition: background-color 0.15s ease;
+    cursor: pointer;
+    text-align: right;
+  }
+
+  .nav-popover-item:hover {
+    background: rgba(100, 116, 139, 0.08);
+  }
+
+  [data-theme="dark"] .nav-popover-item {
+    border-bottom-color: rgba(148, 163, 184, 0.12);
+  }
+
+  [data-theme="dark"] .nav-popover-item:hover {
+    background: rgba(148, 163, 184, 0.08);
+  }
+
+  .nav-popover-empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    font-size: 1rem;
+    color: #64748b;
+  }
+
+  [data-theme="dark"] .nav-popover-empty {
+    color: #94a3b8;
+  }
+
+  .animate-toast-in {
+    animation: toastIn 0.25s ease-out;
+  }
+
+  .animate-glow-pulse {
+    animation: glowPulse 3s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2.6s linear infinite;
+  }
+
+  .animate-float {
+    animation: floaty 6s ease-in-out infinite;
+  }
+
+  /* ======================= Custom Scrollbar ======================= */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: padding-box;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* ======================= Hover Effects ======================= */
+  .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  /* ======================= إطفاء التوهجات الملوّنة ======================= */
+  /* إزالة الظلال الملوّنة (glow) من جميع الأزرار والبطاقات نهائياً — تُترك الظلال الرمادية الطبيعية فقط */
+  [class*="shadow-sky-400"],
+  [class*="shadow-sky-500"],
+  [class*="shadow-blue-400"],
+  [class*="shadow-blue-500"],
+  [class*="shadow-indigo-400"],
+  [class*="shadow-indigo-500"],
+  [class*="shadow-teal-400"],
+  [class*="shadow-teal-500"],
+  [class*="shadow-emerald-400"],
+  [class*="shadow-emerald-500"],
+  [class*="shadow-amber-400"],
+  [class*="shadow-amber-500"],
+  [class*="shadow-orange-400"],
+  [class*="shadow-orange-500"],
+  [class*="shadow-red-400"],
+  [class*="shadow-red-500"],
+  [class*="shadow-red-400"],
+  [class*="shadow-red-500"],
+  [class*="shadow-purple-400"],
+  [class*="shadow-purple-500"] {
+    --tw-shadow-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* ======================= Status Badges ======================= */
+  .badge-success {
+    background: rgba(2, 132, 199, 0.16);
+    color: var(--color-emerald-300);
+    border: 1px solid rgba(2, 132, 199, 0.32);
+  }
+
+  .badge-warning {
+    background: rgba(2, 132, 199, 0.16);
+    color: var(--color-amber-300);
+    border: 1px solid rgba(2, 132, 199, 0.32);
+  }
+
+  .badge-danger {
+    background: rgba(2, 132, 199, 0.16);
+    color: var(--color-red-300);
+    border: 1px solid rgba(2, 132, 199, 0.32);
+  }
+
+  .badge-info {
+    background: rgba(2, 132, 199, 0.16);
+    color: var(--color-sky-300);
+    border: 1px solid rgba(2, 132, 199, 0.32);
+  }
+
+  /* ======================= Tables ======================= */
+  .table-premium thead th {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--color-slate-400);
+    background: var(--table-head-bg);
+  }
+
+  .table-premium tbody tr {
+    transition: background 0.15s ease;
+  }
+
+  .table-premium tbody tr:hover {
+    background: rgba(148, 163, 184, 0.05);
+  }
+
+  /* ======================= Dividers ======================= */
+  .divider-gradient {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.25), transparent);
+  }
+
+  /* ======================= شجرة دليل الحسابات (مثل مجلدات المشاريع) ======================= */
+  .coa-tree-line {
+    --coa-line: rgba(148, 163, 184, 0.45);
+    align-items: center;
+    height: 100%;
+  }
+
+  .coa-seg {
+    position: relative;
+    width: 24px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  /* خط عمودي ممتد (جد غير الأخير — الخط يستمر للأسفل) */
+  .coa-seg-vert::before {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--coa-line);
+    border-radius: 2px;
+  }
+
+  /* كوع العقدة غير الأخيرة (شكل T): خط عمودي كامل + أفقي في المنتصف */
+  .coa-seg-elbow::before {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--coa-line);
+    border-radius: 2px;
+  }
+
+  .coa-seg-elbow::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: calc(50% - 1px);
+    width: 100%;
+    height: 2px;
+    background: var(--coa-line);
+    border-radius: 2px;
+  }
+
+  /* كوع العقدة الأخيرة (شكل L): الخط العمودي للنصف العلوي فقط + أفقي في المنتصف */
+  .coa-seg-elbow-last::before {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 50%;
+    width: 2px;
+    background: var(--coa-line);
+    border-radius: 2px;
+  }
+
+  .coa-seg-elbow-last::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: calc(50% - 1px);
+    width: 100%;
+    height: 2px;
+    background: var(--coa-line);
+    border-radius: 2px;
+  }
+
+  [data-theme="light"] .coa-tree-line {
+    --coa-line: rgba(15, 23, 42, 0.35);
+  }
+
+  /* ======================= Misc ======================= */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .progress-bar {
+    background: linear-gradient(90deg, #0ea5e9, #2563eb);
+    border-radius: 999px;
+  }
+}
+
+/* ======================= انتقال سلس عند تبديل الثيم ======================= */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition:
+    background-color 0.55s ease,
+    border-color 0.55s ease,
+    color 0.55s ease,
+    box-shadow 0.55s ease !important;
+}
+
+/* ======================= شريط الشفق العلوي (Aurora Beam) ======================= */
+.aurora-beam {
+  position: fixed;
+  top: -180px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120%;
+  height: 440px;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(60% 60% at 50% 0%, rgba(56, 189, 248, 0.20), transparent 70%),
+    radial-gradient(40% 55% at 28% 12%, rgba(56, 189, 248, 0.16), transparent 70%),
+    radial-gradient(40% 55% at 72% 12%, rgba(14, 165, 233, 0.12), transparent 70%);
+  opacity: var(--aurora-opacity);
+  filter: blur(4px);
+}
+
+[data-theme="light"] .aurora-beam {
+  background: radial-gradient(60% 60% at 50% 0%, rgba(2, 132, 199, 0.10), transparent 70%),
+    radial-gradient(40% 55% at 28% 12%, rgba(14, 165, 233, 0.08), transparent 70%),
+    radial-gradient(40% 55% at 72% 12%, rgba(2, 132, 199, 0.06), transparent 70%);
+}
+
+/* ======================= كرات محيطية مضبوطة بالثيم ======================= */
+.ambient-orb {
+  opacity: var(--ambient-orb-opacity);
+  transition: opacity 0.55s ease;
+}
+
+/* ======================= تخصيصات إضافية للوضع الفاتح ======================= */
+[data-theme="light"] .btn-ghost:hover {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.16);
+  color: #0f172a;
+}
+
+[data-theme="light"] .glass-input:focus {
+  border-color: rgba(100, 116, 139, 0.55);
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.12);
+}
+
+[data-theme="light"] .table-premium tbody tr:hover {
+  background: rgba(100, 116, 139, 0.05);
+}
+
+[data-theme="light"] .hover-lift:hover {
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.10);
+}
+
+[data-theme="light"] .accent-glow {
+  box-shadow: 0 0 20px rgba(2, 132, 199, 0.15);
+}
+
+[data-theme="light"] .glass {
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="light"] .glass-card {
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="light"] ::selection {
+  background: rgba(2, 132, 199, 0.2);
+  color: #0f172a;
+}
+
+[data-theme="light"] .btn-primary {
+  background-image: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%);
+  box-shadow: 0 3px 12px rgba(2, 132, 199, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+[data-theme="light"] .btn-primary:hover {
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="light"] .btn-danger {
+  background-image: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%);
+  box-shadow: 0 3px 12px rgba(37, 99, 235, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+[data-theme="light"] .btn-danger:hover {
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="light"] .btn-ghost {
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--color-slate-600);
+}
+
+[data-theme="light"] .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(2, 132, 199, 0.35);
+  color: #0f172a;
+}
+
+[data-theme="light"] .gradient-text {
+  background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* في الثيم الفاتح تبقى نصوص الأزرار الملونة الصلبة بيضاء للوضوح */
+[data-theme="light"] .bg-sky-500,
+[data-theme="light"] .bg-sky-400,
+[data-theme="light"] .bg-blue-500,
+[data-theme="light"] .bg-blue-600,
+[data-theme="light"] .bg-emerald-500,
+[data-theme="light"] .bg-emerald-400,
+[data-theme="light"] .bg-red-500,
+[data-theme="light"] .bg-red-400 {
+  color: #ffffff !important;
+}
+
+/* في الثيم الفاتح تبقى أيقونات ونصوص الشعارات/الأفاتار/الأزرار التدرجية الزرقاء بيضاء للوضوح */
+[data-theme="light"] .from-sky-500.to-blue-600,
+[data-theme="light"] .from-sky-500.to-blue-600 * {
+  color: #ffffff !important;
+}
+
+/* ============================================================
+   تصحيح الثيم الفاتح: الأسطح البيضاء (Paper)
+   أي عنصر bg-white يُجبر على البياض بدلاً من انعكاسه إلى كحلي داكن
+   (.bg-white يعتمد على --color-white الذي يُعكس في الوضع الفاتح)
+   ============================================================ */
+[data-theme="light"] .bg-white {
+  background-color: #ffffff;
+}
+
+/* ============================================================
+   ترويسة سجل التتبع والأمان — تُستخدم الآن مكوّن PageHeader الموحد.
+   أزرار asc-btn تُعامل عبر فئات Tailwind المضمنة مباشرة في JSX.
+   ============================================================ */
+
+/* الطبقة الورقية: تعيد تدرجات slate والعناصر البيضاء إلى لوحة الفاتح
+   داخل المكوّنات المصممة كأسطح بيضاء (النوافذ، التقارير، أوراق الطباعة) */
+[data-theme="light"] .paper {
+  --color-white: #ffffff;
+  --color-black: #0f172a;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+}
+
+/* ============================================================
+   إصلاح تباين الوضع الفاتح — استعادة دلالات لوحة slate
+   كل القواعد مقيدة بـ [data-theme="light"] حصراً فلا تمس
+   الوضع الداكن إطلاقاً. ملاحظة جوهرية: القيم المعكوسة لـ
+   bg-slate-700/800/900 و border-slate-700/800 و --color-white
+   تُترك كما هي لأن نمط «الحقول الداكنة» (bg-slate-900 text-white)
+   يعتمد على انعكاسها ليتحول تلقائياً إلى حقل فاتح في الثيم الفاتح.
+   ============================================================ */
+[data-theme="light"] .text-slate-600 { color: #475569; }
+[data-theme="light"] .text-slate-700 { color: #334155; }
+[data-theme="light"] .text-slate-800 { color: #1e293b; }
+[data-theme="light"] .text-slate-900 { color: #0f172a; }
+[data-theme="light"] .hover\:text-slate-900:hover { color: #0f172a; }
+
+[data-theme="light"] .bg-slate-50 { background-color: #f8fafc; }
+[data-theme="light"] .bg-slate-100 { background-color: #f1f5f9; }
+[data-theme="light"] .bg-slate-100\/90 { background-color: #f1f5f9; }
+[data-theme="light"] .bg-slate-200 { background-color: #e2e8f0; }
+[data-theme="light"] .hover\:bg-slate-50:hover { background-color: #f8fafc; }
+[data-theme="light"] .hover\:bg-slate-100:hover { background-color: #f1f5f9; }
+[data-theme="light"] .hover\:bg-slate-200:hover { background-color: #e2e8f0; }
+
+[data-theme="light"] .border-slate-100 { border-color: #f1f5f9; }
+[data-theme="light"] .border-slate-200 { border-color: #e2e8f0; }
+[data-theme="light"] .border-slate-300 { border-color: #cbd5e1; }
+
+[data-theme="light"] .divide-slate-100 > :not(:last-child) { border-color: #f1f5f9; }
+[data-theme="light"] .divide-slate-200 > :not(:last-child) { border-color: #e2e8f0; }
+
+/* إكمال الهوية السماوية الفاتحة: بقايا الأحمر/الكهرماني/الأخضر
+   تُعاد إلى الأزرق السماوي — مطابقةً لسلوك الوضع الداكن الذي
+   يلوّنها بالأزرق أصلاً (مع بقاء الفرق دلالياً عبر النص) */
+[data-theme="light"] .bg-red-50 { background-color: #e0f2fe; }
+[data-theme="light"] .bg-red-100 { background-color: #e0f2fe; }
+[data-theme="light"] .bg-amber-50 { background-color: #e0f2fe; }
+[data-theme="light"] .bg-emerald-50 { background-color: #e0f2fe; }
+[data-theme="light"] .bg-emerald-100 { background-color: #e0f2fe; }
+[data-theme="light"] .hover\:bg-red-50:hover { background-color: #e0f2fe; }
+[data-theme="light"] .hover\:bg-emerald-50:hover { background-color: #e0f2fe; }
+
+[data-theme="light"] .text-red-600 { color: #0284c7; }
+[data-theme="light"] .text-red-700 { color: #0369a1; }
+[data-theme="light"] .text-amber-600 { color: #0284c7; }
+[data-theme="light"] .text-amber-700 { color: #0369a1; }
+[data-theme="light"] .text-emerald-600 { color: #0284c7; }
+[data-theme="light"] .text-emerald-700 { color: #0369a1; }
+[data-theme="light"] .hover\:text-red-600:hover { color: #0284c7; }
+[data-theme="light"] .hover\:text-emerald-600:hover { color: #0284c7; }
+
+[data-theme="light"] .border-red-200 { border-color: #bae6fd; }
+[data-theme="light"] .border-red-300 { border-color: #bae6fd; }
+[data-theme="light"] .border-amber-200 { border-color: #bae6fd; }
+[data-theme="light"] .border-emerald-200 { border-color: #bae6fd; }
+
+[data-theme="light"] .bg-amber-500\/20 { background-color: rgba(224, 242, 254, 0.9); }
+[data-theme="light"] .text-amber-400 { color: #0369a1; }
+
+/* ============================================================
+   الطبقة الاحترافية الفاخرة — مكونات موحّدة وأنيقة لجميع الصفحات
+   ============================================================ */
+
+/* بطاقة موحدة لبطاقات الإحصاءات */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--glass-card-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--panel-hover-border);
+  box-shadow: var(--panel-hover-shadow);
+}
+
+.stat-card .stat-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(2, 132, 199, 0.22);
+  background: rgba(2, 132, 199, 0.12);
+  color: var(--color-sky-400);
+  transition: transform 0.25s ease;
+}
+
+.stat-card:hover .stat-icon {
+  transform: scale(1.08);
+}
+
+.stat-card .stat-value {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 1.75rem;
+  line-height: 1.3;
+  margin-top: 0.5rem;
+  color: var(--color-white);
+}
+
+.stat-card .stat-hint {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  margin-top: 0.3rem;
+  color: var(--color-slate-500);
+}
+
+/* ترويسة قسم موحّدة وأنيقة */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.section-head .section-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(2, 132, 199, 0.12);
+  border: 1px solid rgba(2, 132, 199, 0.2);
+  color: var(--color-sky-400);
+}
+
+.section-head .section-title {
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1.35;
+  color: var(--color-white);
+}
+
+.section-head .section-subtitle {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  margin-top: 0.2rem;
+  color: var(--color-slate-500);
+}
+
+.section-head .section-line {
+  flex: 1;
+  height: 1px;
+  min-width: 2rem;
+  background: linear-gradient(to left, rgba(148, 163, 184, 0.3), transparent);
+}
+
+/* حاوية محتوى موحّدة داخل الصفحات */
+.page-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* بطاقة محتوى موحّدة */
+.content-card {
+  background: var(--glass-card-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+}
+
+/* مكوّن جدول احترافي متجدد */
+.table-premium {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.table-premium thead th {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-slate-400);
+  background: var(--table-head-bg);
+  padding: 0.8rem 1rem;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.table-premium thead th:first-child {
+  border-radius: 0.8rem 0 0 0.8rem;
+}
+
+.table-premium thead th:last-child {
+  border-radius: 0 0.8rem 0.8rem 0;
+}
+
+.table-premium tbody td {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  vertical-align: middle;
+  line-height: 1.6;
+}
+
+.table-premium tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* حقول الإدخال — تنسيق راقٍ وموحّد */
+.glass-input {
+  background: var(--input-bg);
+  border: 1px solid var(--glass-border-strong);
+  color: var(--color-white);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.6);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+
+.glass-input::placeholder {
+  color: var(--color-slate-500);
+}
+
+.glass-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* شارات الحالة الموحّدة */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  border: 1px solid;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+/* ======================= Keyframes ======================= */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes glowPulse {
+
+  0%,
+  100% {
+    box-shadow: none;
+  }
+
+  50% {
+    box-shadow: none;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes floaty {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   الطباعة الاحترافية — طباعة سند القبض على ورق A4
+   تُخفى كافة عناصر الواجهة وتُظهر ورقة السند البيضاء فقط
+   ============================================================ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 10mm 10mm 10mm !important;
+    background: #ffffff !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color-scheme: light !important;
+  }
+
+  body {
+    visibility: hidden !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body:not(.printing-financial-report) #erp-statement-print-zone,
+  body:not(.printing-financial-report) #erp-statement-print-zone * {
+    visibility: visible !important;
+  }
+
+  body:not(.printing-financial-report) #erp-statement-print-zone {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  body.printing-financial-report #erp-statement-print-zone {
+    display: none !important;
+  }
+
+  .statement-page-item {
+    page-break-after: always !important;
+    break-after: page !important;
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 0 0 10mm 0 !important;
+  }
+
+  .statement-page-item:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print,
+  .print-toolbar {
+    display: none !important;
+  }
+}
+
+/* منطقة الطباعة للتقرير المالي — مخفية على الشاشة وتظهر للطباعة فقط */
+.print-only {
+  display: none;
+}
+
+@media print {
+  /* The active report uses the cash-movement master shell. */
+  .print-area.is-printing {
+    display: block !important;
+    visibility: visible !important;
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    z-index: 99999 !important;
+  }
+  .print-area.is-printing,
+  .print-area.is-printing * {
+    visibility: visible !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-area .p-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    direction: rtl;
+    margin-bottom: 16px;
+  }
+
+  .print-area .p-table th,
+  .print-area .p-table td {
+    border: 1px solid #cbd5e1;
+    padding: 4px 6px;
+    text-align: right;
+  }
+
+  .print-area .p-table th {
+    background: #f1f5f9;
+    font-weight: 700;
+  }
+
+  .print-area .p-table tr:nth-child(even) {
+    background: #f8fafc;
+  }
+
+  /* Balance Sheet A4 Landscape print table */
+  .print-area table {
+    width: 100%;
+    border-collapse: collapse;
+    direction: rtl;
+  }
+  .print-area table th,
+  .print-area table td {
+    border: 1px solid #94a3b8 !important;
+    padding: 4px 8px;
+    text-align: right;
+  }
+  .print-area table th {
+    font-weight: 700;
+    background: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print-area table td {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Ensure colored backgrounds (emerald-50, sky-50, etc.) print correctly */
+  .print-area table [class*="bg-"] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+/* ============================================================
+   الثيم الداكن الكامل — منع أي أسطح بيضاء أو فاتحة داخل الثيم
+   الداكن. هذه القواعد تشتغل فقط عند تفعيل data-theme="dark"
+   ولا تمس الثيم الفاتح إطلاقاً.
+   ============================================================ */
+
+/* أسطح الخلفيات الفاتحة → درجات كحلية داكنة متناسقة مع خلفية النظام */
+[data-theme="dark"] .bg-white { background-color: #0f1d36; }
+[data-theme="dark"] .bg-slate-50 { background-color: #0b1729; }
+[data-theme="dark"] .bg-slate-100 { background-color: #0e1c33; }
+[data-theme="dark"] .bg-slate-200 { background-color: #152640; }
+[data-theme="dark"] .bg-slate-300 { background-color: #1e3250; }
+
+/* الخلفيات الملونة الفاتحة → درجات داكنة شفافة من نفس اللون */
+[data-theme="dark"] .bg-sky-100 { background-color: rgba(14, 165, 233, 0.18); }
+[data-theme="dark"] .bg-blue-100 { background-color: rgba(59, 130, 246, 0.18); }
+[data-theme="dark"] .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.18); }
+[data-theme="dark"] .bg-emerald-100 { background-color: rgba(2, 132, 199, 0.18); }
+[data-theme="dark"] .bg-red-100 { background-color: rgba(37, 99, 235, 0.18); }
+
+/* النصوص الداكنة → فاتحة لضمان القراءة على الأسطح الداكنة */
+[data-theme="dark"] .text-slate-600 { color: #94a3b8; }
+[data-theme="dark"] .text-slate-700 { color: #cbd5e1; }
+[data-theme="dark"] .text-slate-800 { color: #e2e8f0; }
+[data-theme="dark"] .text-slate-900 { color: #f1f5f9; }
+[data-theme="dark"] .text-blue-700 { color: #93c5fd; }
+[data-theme="dark"] .text-sky-700 { color: #7dd3fc; }
+[data-theme="dark"] .text-emerald-700 { color: #7dd3fc; }
+[data-theme="dark"] .text-red-700 { color: #93c5fd; }
+
+/* الحدود الفاتحة → داكنة */
+[data-theme="dark"] .border-slate-100 { border-color: #1e3250; }
+[data-theme="dark"] .border-slate-200 { border-color: #223750; }
+[data-theme="dark"] .border-slate-300 { border-color: #2b4464; }
+[data-theme="dark"] .border-slate-900 { border-color: #64748b; }
+[data-theme="dark"] .border-sky-300 { border-color: rgba(56, 189, 248, 0.45); }
+[data-theme="dark"] .border-blue-200 { border-color: rgba(96, 165, 250, 0.4); }
+[data-theme="dark"] .border-blue-300 { border-color: rgba(147, 197, 253, 0.4); }
+[data-theme="dark"] .border-red-300 { border-color: rgba(147, 197, 253, 0.4); }
+
+/* حالات التحويم فوق الأسطح الفاتحة → داكنة */
+[data-theme="dark"] .hover\:bg-slate-50:hover { background-color: #0b1729; }
+[data-theme="dark"] .hover\:bg-slate-100:hover { background-color: #0e1c33; }
+[data-theme="dark"] .hover\:bg-slate-200:hover { background-color: #152640; }
+[data-theme="dark"] .hover\:bg-blue-100:hover { background-color: rgba(59, 130, 246, 0.18); }
+[data-theme="dark"] .hover\:bg-red-100:hover { background-color: rgba(37, 99, 235, 0.18); }
+
+/* ============================================================
+   الطباعة من الثيم الداكن — تُرجع ورق الطباعة (.paper) إلى
+   البياض كما هو، لأن الإصلاح الداكن للشاشة فقط ولا يمس
+   المخرجات المطبوعة أو الـ PDF.
+   ============================================================ */
+@media print {
+  [data-theme="dark"] .paper {
+    --color-white: #ffffff;
+    --color-black: #0f172a;
+    --color-slate-50: #f8fafc;
+    --color-slate-100: #f1f5f9;
+    --color-slate-200: #e2e8f0;
+    --color-slate-300: #cbd5e1;
+    --color-slate-400: #94a3b8;
+    --color-slate-500: #64748b;
+    --color-slate-600: #475569;
+    --color-slate-700: #334155;
+    --color-slate-800: #1e293b;
+    --color-slate-900: #0f172a;
+  }
+
+  /* نفس العنصر يحمل paper + bg-white (مثل سندات القبض/الصرف)
+     أو bg-white كعنصر داخلي (مثل صفحات كشف الحساب) */
+  [data-theme="dark"] .paper.bg-white,
+  [data-theme="dark"] .paper .bg-white { background-color: #ffffff; }
+  [data-theme="dark"] .paper .bg-slate-50 { background-color: #f8fafc; }
+  [data-theme="dark"] .paper .bg-slate-100 { background-color: #f1f5f9; }
+  [data-theme="dark"] .paper .bg-slate-200 { background-color: #e2e8f0; }
+  [data-theme="dark"] .paper .bg-slate-300 { background-color: #cbd5e1; }
+
+  [data-theme="dark"] .paper.text-slate-900,
+  [data-theme="dark"] .paper .text-slate-900 { color: #0f172a; }
+  [data-theme="dark"] .paper .text-slate-600 { color: #475569; }
+  [data-theme="dark"] .paper .text-slate-700 { color: #334155; }
+  [data-theme="dark"] .paper .text-slate-800 { color: #1e293b; }
+
+  [data-theme="dark"] .paper .border-slate-100 { border-color: #e2e8f0; }
+  [data-theme="dark"] .paper .border-slate-200 { border-color: #e2e8f0; }
+  [data-theme="dark"] .paper .border-slate-300 { border-color: #cbd5e1; }
+  [data-theme="dark"] .paper .border-slate-900 { border-color: #0f172a; }
+  [data-theme="dark"] .paper .border-sky-300 { border-color: #7dd3fc; }
+  [data-theme="dark"] .paper .border-blue-200 { border-color: #bfdbfe; }
+  [data-theme="dark"] .paper .border-blue-300 { border-color: #93c5fd; }
+  [data-theme="dark"] .paper .border-red-300 { border-color: #fca5a5; }
+
+  [data-theme="dark"] .paper .text-blue-700 { color: #1d4ed8; }
+  [data-theme="dark"] .paper .text-sky-700 { color: #0369a1; }
+  [data-theme="dark"] .paper .text-emerald-700 { color: #047857; }
+  [data-theme="dark"] .paper .text-red-700 { color: #b91c1c; }
+}
+
+/* ============================================================
+   توسيع المقاسات الدقيقة المضمّنة (Arbitrary Sizes) — شبكة أمان
+   أي كلاس ثابت صغير (10-13px) متبقٍ في المكونات يُرفع إجبارياً
+   إلى الحد الأدنى الاحترافي (14-15px). هذه القواعد خارج الطبقات
+   (unlayered) لذا تربح على أدوات Tailwind المُولّدة مهما كان
+   ترتيبها.
+   ============================================================ */
+.text-\[10px\] { font-size: 15px; }
+.text-\[11px\] { font-size: 15px; }
+.text-\[12px\] { font-size: 15px; }
+.text-\[13px\] { font-size: 16px; }
+
+/* ============================================================
+   فرض الحد الأدنى لحجم النصوص التفاعلية
+   (حقول الإدخال، القوائم المنسدلة، مناطق النص، الأزرار)
+   ============================================================ */
+input,
+select,
+textarea,
+button {
+  font-size: 15px !important;
+}
+
+/* ============================================================
+   استيعاب الأحجام الجديدة بأريحية (Spacing)
+   ارتفاع مريح للحقول والقوائم ومناطق النص حتى لا تُقطع
+   الحروف ولا تتداخل النصوص بعد التكبير. مع استثناء
+   مربعات الاختيار وأزرار الراديو من الارتفاع الأدنى.
+   ============================================================ */
+.glass-input,
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="tel"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="month"],
+select,
+textarea {
+  line-height: 1.5;
+  min-height: 2.75rem;
+}
+
+/* ============================================================
+   جدول ثابت الرأس: تطبيق sticky على thead داخل أي حاوية
+   تحمل كلاس enhanced-sticky-header (التقارير المالية المتقدمة)
+   ============================================================ */
+.enhanced-sticky-header thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.enhanced-sticky-header thead th {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+[data-theme="light"] .enhanced-sticky-header thead th {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+/* ============================================================
+   ترويسة التقرير المطبوع — مصفوفة 3 أعمدة (للطباعة + PDF)
+   ألوان: أسود #000 | بنفسجي #c6c7f8 | خلفية #f9f8fc
+   ============================================================ */
+.print-report-header {
+  margin-bottom: 8px;
+  color: #000;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.rpt-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  direction: rtl;
+  gap: 0;
+  margin-bottom: 10px;
+}
+.rpt-col-right { width: 33%; text-align: right; }
+.rpt-col-center { width: 34%; display: flex; justify-content: center; }
+.rpt-col-left { width: 33%; text-align: left; direction: ltr; }
+.rpt-company-ar { font-size: 14px; font-weight: 900; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rpt-company-en { font-size: 12px; font-weight: 800; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rpt-sub { font-size: 9px; color: #555; margin-top: 2px; }
+.rpt-logo {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #ccc;
+}
+.rpt-logo-fallback {
+  background: linear-gradient(135deg, #c6c7f8, #8b8cf8);
+}
+.rpt-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 900;
+  color: #000;
+  margin: 6px 0 2px;
+}
+.rpt-title-en {
+  text-align: center;
+  font-size: 11px;
+  color: #666;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.rpt-date-range {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: #333;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.rpt-date-sep { color: #999; font-weight: 900; }
+.rpt-divider {
+  height: 2px;
+  background: #000;
+  margin-bottom: 8px;
+}
+.rpt-meta-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f9f8fc;
+  border: 1px solid #000;
+  padding: 4px 10px;
+  font-size: 10px;
+  margin-bottom: 12px;
+  color: #444;
+}
+
+/* ============================================================
+   ReportPageTemplate — قالب التقرير الموحّد (الشاشة + الطباعة)
+   ألوان: Navy #0F3D6E | Steel #2A75D3 | Badge BG #EBF3FC
+   ============================================================ */
+.report-page-template {
+  font-family: 'Tajawal', 'Cairo', 'Tahoma', sans-serif;
+  color: #1e293b;
+  background: #ffffff;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  margin: 0 auto;
+}
+.report-landscape { max-width: 297mm; }
+.report-portrait  { max-width: 210mm; }
+
+/* ── الرأس: مصفوفة 3 أعمدة ── */
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  direction: rtl;
+  gap: 0;
+  padding-bottom: 12px;
+  margin-bottom: 10px;
+  border-bottom: 3px solid #0F3D6E;
+}
+.report-header-col {
+  min-width: 0;
+}
+.report-header-col-right { width: 33%; text-align: right; }
+.report-header-col-left  { width: 33%; text-align: left; direction: ltr; }
+.report-header-col-center {
+  width: 34%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* الشعار */
+.report-logo {
+  max-height: 72px;
+  max-width: 180px;
+  object-fit: contain;
+  margin-bottom: 6px;
+}
+
+/* اسم الشركة */
+.report-company-name {
+  font-size: 14px;
+  font-weight: 900;
+  color: #0F3D6E;
+  margin: 0 0 3px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.report-company-detail {
+  font-size: 10.5px;
+  color: #475569;
+  margin: 1px 0;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* شارة عنوان التقرير */
+.report-title-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(135deg, #0F3D6E 0%, #1B4D89 50%, #2A75D3 100%);
+  color: #ffffff;
+  padding: 8px 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(15, 61, 110, 0.25);
+  min-width: 200px;
+}
+.report-title-ar {
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.3;
+}
+.report-title-en {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  margin-top: 1px;
+  direction: ltr;
+}
+.report-subtitle {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* ── شريط البيانات الوصفية ── */
+.report-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  background: #EBF3FC;
+  border: 1px solid #CBD5E1;
+  border-left: 4px solid #2A75D3;
+  padding: 6px 14px;
+  font-size: 10.5px;
+  margin-bottom: 14px;
+  color: #334155;
+  border-radius: 4px;
+}
+.report-metadata-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.report-metadata-label {
+  font-weight: 700;
+  color: #0F3D6E;
+}
+.report-metadata-value {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+/* ── محتوى التقرير ── */
+.report-content {
+  min-height: 100px;
+}
+.report-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.report-content thead th {
+  background: #0F3D6E;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 7px 8px;
+  text-align: right;
+  border-bottom: 2px solid #1B4D89;
+  white-space: nowrap;
+}
+.report-content tbody tr:nth-child(even) {
+  background: #F8FAFC;
+}
+.report-content tbody td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #E2E8F0;
+  color: #1e293b;
+  vertical-align: middle;
+}
+.report-content tbody tr:hover {
+  background: #F1F5F9;
+}
+.report-content tfoot td {
+  background: #0F3D6E;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 8px;
+  border-top: 3px solid #1B4D89;
+}
+
+/* ── الشريط السفلي ── */
+.report-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  margin-top: 16px;
+  border-top: 2px solid #CBD5E1;
+  font-size: 10px;
+  color: #64748b;
+  gap: 12px;
+}
+.report-footer-right,
+.report-footer-center,
+.report-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.report-footer-center {
+  font-weight: 600;
+  color: #334155;
+}
+.report-footer-label {
+  font-weight: 700;
+  color: #0F3D6E;
+}
+.report-footer-value {
+  font-weight: 500;
+}
+.report-footer-timestamp {
+  font-family: 'Courier New', monospace;
+  font-size: 9.5px;
+  direction: ltr;
+}
+.report-footer-page-num {
+  font-weight: 800;
+  font-size: 12px;
+  color: #0F3D6E;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* ============================================================
+   VoucherPrintTemplate — قالب السندات الموحّد
+   ============================================================ */
+.voucher-print-wrapper {
+  font-family: 'Tajawal', 'Cairo', 'Tahoma', sans-serif;
+  color: #1e293b;
+  background: #ffffff;
+}
+
+/* ── محتوى السند (الجدول الرئيسي) ── */
+.voucher-body {
+  margin-bottom: 14px;
+}
+.voucher-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.5;
+  direction: rtl;
+}
+.voucher-body thead th {
+  background: #0F3D6E;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 7px 8px;
+  text-align: right;
+  border-bottom: 2px solid #1B4D89;
+  white-space: nowrap;
+}
+.voucher-body tbody tr:nth-child(even) {
+  background: #F8FAFC;
+}
+.voucher-body tbody td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #E2E8F0;
+  color: #1e293b;
+  vertical-align: middle;
+}
+.voucher-body tbody tr:hover {
+  background: #F1F5F9;
+}
+.voucher-body tfoot td {
+  background: #0F3D6E;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 8px;
+  border-top: 3px solid #1B4D89;
+}
+
+/* ── التفقيط والملخص المالي ── */
+.voucher-tafqeet {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  margin-top: 10px;
+  border-top: 2px solid #CBD5E1;
+  page-break-inside: avoid;
+}
+.voucher-tafqeet-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: right;
+}
+.voucher-tafqeet-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #0F3D6E;
+}
+.voucher-tafqeet-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.6;
+}
+.voucher-tafqeet-left {
+  text-align: left;
+  direction: ltr;
+  flex-shrink: 0;
+}
+.voucher-tafqeet-total {
+  font-size: 15px;
+  font-weight: 900;
+  color: #0F3D6E;
+  padding: 6px 16px;
+  background: #EBF3FC;
+  border: 1px solid #CBD5E1;
+  border-left: 4px solid #2A75D3;
+  border-radius: 4px;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+/* ── التوقيعات والاعتمادات المحاسبية ── */
+.voucher-signatures {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  text-align: center;
+  padding-top: 36px;
+  margin-top: 24px;
+  border-top: 2px solid #CBD5E1;
+  page-break-inside: avoid;
+}
+.voucher-signature-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.voucher-sig-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #0F3D6E;
+  margin-bottom: 2px;
+}
+.voucher-sig-line {
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #94a3b8;
+}
+.voucher-sig-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+}
+.voucher-sig-placeholder {
+  font-size: 9.5px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* ============================================================
+   طباعة احترافية — A4 (الاتجاه يُحدَّد ديناميكياً عبر printReport())
+   ============================================================ */
+@media print {
+
+  /* ── 1. إخفاء عناصر واجهة المستخدم ── */
+  nav, sidebar, .no-print, .kpi-cards, .filter-section, button, .action-bar {
+    display: none !important;
+  }
+
+  /* ── 1.5 احتواء تلقائي لمحتوى التقرير ── */
+  .print-area {
+    overflow: hidden !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .print-area table {
+    table-layout: fixed !important;
+  }
+  .print-area td,
+  .print-area th {
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    max-width: none !important;
+    padding: 4px 6px !important;
+  }
+  /* الحفاظ على نصوص الترويسة بدون التفاف */
+  .print-report-header,
+  .report-header,
+  .report-header-col,
+  .rpt-header-row,
+  .rpt-col-right,
+  .rpt-col-center,
+  .rpt-col-left,
+  .report-company-name,
+  .report-company-detail,
+  .rpt-company-ar,
+  .rpt-company-en,
+  .rpt-sub,
+  .report-title-badge,
+  .report-title-ar,
+  .report-title-en,
+  .report-subtitle,
+  .report-footer,
+  .report-footer-right,
+  .report-footer-center,
+  .report-footer-left {
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    white-space: nowrap !important;
+  }
+
+  /* ── 2. إظهار الترويسة المخفية ── */
+  .print-report-header {
+    display: block !important;
+  }
+  body, #root, .main-content, .report-container {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+  body {
+    direction: rtl;
+    font-family: 'Tahoma', 'Arial', sans-serif;
+    color: #1e293b !important;
+  }
+
+  /* ── 3. فرض الألوان والحدود في PDF ── */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* ── 4. سلوك الجداول متعددة الصفحات ── */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto;
+  }
+  thead {
+    display: table-header-group !important;
+  }
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     6. جدول ميزان المراجعة
+     ═══════════════════════════════════════════════════════ */
+  #trial-balance-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 9.5px !important;
+  }
+  #trial-balance-table colgroup col { width: auto; }
+  #trial-balance-table colgroup col:nth-child(1) { width: 9%; }
+  #trial-balance-table colgroup col:nth-child(2) { width: 18%; }
+  #trial-balance-table colgroup col:nth-child(3) { width: 5%; }
+  #trial-balance-table colgroup col:nth-child(n+4) { width: 11%; }
+
+  #trial-balance-table thead tr:first-child th {
+    background: #cbd5e1 !important;
+    color: #0f172a !important;
+    border-bottom: 2px solid #64748b !important;
+    padding: 5px 6px !important;
+    font-size: 9px !important;
+  }
+  #trial-balance-table thead tr:last-child th {
+    background: #e2e8f0 !important;
+    color: #1e293b !important;
+    border-bottom: 1.5px solid #94a3b8 !important;
+    padding: 3px 6px !important;
+    font-size: 8.5px !important;
+  }
+  #trial-balance-table tbody td {
+    padding: 3px 5px !important;
+    color: #1e293b !important;
+    font-size: 9px !important;
+    border-bottom: 0.5px solid #e2e8f0 !important;
+  }
+  #trial-balance-table tbody tr.tb-print-group-header td {
+    background: #f1f5f9 !important;
+    font-weight: bold !important;
+    border-top: 1.5px solid #94a3b8 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+  }
+  #trial-balance-table tbody tr.tb-print-group-footer td {
+    background: #f1f5f9 !important;
+    font-weight: bold !important;
+    border-top: 1px solid #94a3b8 !important;
+    border-bottom: 1.5px solid #94a3b8 !important;
+    font-size: 8.5px !important;
+  }
+  #trial-balance-table tfoot tr {
+    background: #cbd5e1 !important;
+  }
+  #trial-balance-table tfoot td {
+    background: #cbd5e1 !important;
+    color: #0f172a !important;
+    font-weight: bold !important;
+    font-size: 9.5px !important;
+    padding: 5px 6px !important;
+    border-top: 2px solid #64748b !important;
+  }
+  #trial-balance-table tbody tr:nth-child(even):not(.tb-print-group-header):not(.tb-print-group-footer) {
+    background: #f8fafc !important;
+  }
+
+  /* شريط ملخص ميزان المراجعة */
+  #trial-balance-summary {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+    padding: 6px 10px !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 4px !important;
+    background: #f1f5f9 !important;
+    font-size: 9px !important;
+    color: #1e293b !important;
+    margin-top: 4px !important;
+  }
+  #trial-balance-summary .h-4 { display: none !important; }
+  #trial-balance-summary span { color: #1e293b !important; }
+  #trial-balance-summary .text-sky-400,
+  #trial-balance-summary .text-amber-400,
+  #trial-balance-summary .text-emerald-400,
+  #trial-balance-summary .text-red-400 { color: #0f172a !important; font-weight: bold !important; }
+
+  /* ═══════════════════════════════════════════════════════
+     7. قائمة الدخل — Income Statement
+     ═══════════════════════════════════════════════════════ */
+  .print-is-container {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .print-is-container .rounded-2xl {
+    border-radius: 0 !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+  .print-is-container .bg-white,
+  .print-is-container [class*="bg-white"] {
+    background: #ffffff !important;
+  }
+  .print-is-container .dark\:bg-slate-900 {
+    background: #ffffff !important;
+  }
+  .print-is-container [class*="text-slate-100"],
+  .print-is-container [class*="text-slate-200"],
+  .print-is-container [class*="text-slate-300"] {
+    color: #1e293b !important;
+  }
+  .print-is-container [class*="text-slate-400"],
+  .print-is-container [class*="text-slate-500"] {
+    color: #64748b !important;
+  }
+  .print-is-container [class*="text-emerald-400"],
+  .print-is-container [class*="text-emerald-600"],
+  .print-is-container [class*="text-emerald-700"],
+  .print-is-container [class*="text-emerald-800"] {
+    color: #047857 !important;
+  }
+  .print-is-container [class*="text-rose-400"],
+  .print-is-container [class*="text-rose-600"],
+  .print-is-container [class*="text-rose-700"],
+  .print-is-container [class*="text-rose-800"] {
+    color: #b91c1c !important;
+  }
+  .print-is-container [class*="text-sky-400"],
+  .print-is-container [class*="text-sky-700"] {
+    color: #0369a1 !important;
+  }
+  .print-is-container [class*="text-amber-400"],
+  .print-is-container [class*="text-amber-700"] {
+    color: #b45309 !important;
+  }
+  .print-is-container [class*="text-blue-400"],
+  .print-is-container [class*="text-blue-700"] {
+    color: #1d4ed8 !important;
+  }
+  .print-is-container [class*="bg-emerald-50"],
+  .print-is-container [class*="dark\:bg-emerald-950"] {
+    background: #ecfdf5 !important;
+  }
+  .print-is-container [class*="bg-rose-50"],
+  .print-is-container [class*="dark\:bg-rose-950"] {
+    background: #fff1f2 !important;
+  }
+  .print-is-container [class*="bg-sky-50"],
+  .print-is-container [class*="dark\:bg-sky-950"] {
+    background: #f0f9ff !important;
+  }
+  .print-is-container [class*="bg-amber-50"],
+  .print-is-container [class*="dark\:bg-amber-950"] {
+    background: #fffbeb !important;
+  }
+  .print-is-container [class*="bg-blue-50"],
+  .print-is-container [class*="dark\:bg-blue-950"] {
+    background: #eff6ff !important;
+  }
+  .print-is-container [class*="border-slate-200"],
+  .print-is-container [class*="dark\:border-slate-800"] {
+    border-color: #e2e8f0 !important;
+  }
+  .print-is-container [class*="border-emerald-300"],
+  .print-is-container [class*="dark\:border-emerald-700"] {
+    border-color: #6ee7b7 !important;
+  }
+  .print-is-container [class*="border-rose-300"],
+  .print-is-container [class*="dark\:border-rose-700"] {
+    border-color: #fca5a5 !important;
+  }
+  .print-is-container [class*="border-sky-300"],
+  .print-is-container [class*="dark\:border-sky-700"] {
+    border-color: #7dd3fc !important;
+  }
+  .print-is-container [class*="border-amber-300"],
+  .print-is-container [class*="dark\:border-amber-700"] {
+    border-color: #fcd34d !important;
+  }
+  .print-is-container [class*="border-blue-300"],
+  .print-is-container [class*="dark\:border-blue-700"] {
+    border-color: #93c5fd !important;
+  }
+  .print-is-container .bg-gradient-to-l { background: none !important; }
+
+  /* ═══════════════════════════════════════════════════════
+     8. الميزانية العمومية — Balance Sheet
+     ═══════════════════════════════════════════════════════ */
+  .print-bs-container {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .print-bs-container .rounded-2xl {
+    border-radius: 0 !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+  .print-bs-container .bg-white,
+  .print-bs-container [class*="bg-white"] {
+    background: #ffffff !important;
+  }
+  .print-bs-container .dark\:bg-slate-900 {
+    background: #ffffff !important;
+  }
+  .print-bs-container [class*="text-slate-100"],
+  .print-bs-container [class*="text-slate-200"],
+  .print-bs-container [class*="text-slate-300"] {
+    color: #1e293b !important;
+  }
+  .print-bs-container [class*="text-slate-400"],
+  .print-bs-container [class*="text-slate-500"] {
+    color: #64748b !important;
+  }
+  .print-bs-container [class*="text-emerald-400"],
+  .print-bs-container [class*="text-emerald-600"],
+  .print-bs-container [class*="text-emerald-700"],
+  .print-bs-container [class*="text-emerald-800"] {
+    color: #047857 !important;
+  }
+  .print-bs-container [class*="text-sky-400"],
+  .print-bs-container [class*="text-sky-700"],
+  .print-bs-container [class*="text-sky-800"] {
+    color: #0369a1 !important;
+  }
+  .print-bs-container [class*="bg-emerald-50"],
+  .print-bs-container [class*="dark\:bg-emerald-950"] {
+    background: #ecfdf5 !important;
+  }
+  .print-bs-container [class*="bg-sky-50"],
+  .print-bs-container [class*="dark\:bg-sky-950"] {
+    background: #f0f9ff !important;
+  }
+  .print-bs-container [class*="border-slate-200"],
+  .print-bs-container [class*="dark\:border-slate-800"] {
+    border-color: #e2e8f0 !important;
+  }
+  .print-bs-container [class*="border-emerald-300"],
+  .print-bs-container [class*="dark\:border-emerald-700"] {
+    border-color: #6ee7b7 !important;
+  }
+  .print-bs-container [class*="border-sky-300"],
+  .print-bs-container [class*="dark\:border-sky-700"] {
+    border-color: #7dd3fc !important;
+  }
+  .print-bs-container .bg-gradient-to-l { background: none !important; }
+
+  /* ═══════════════════════════════════════════════════════
+     9. توقيعات الاعتماد — مشتركة بين التقارير
+     ═══════════════════════════════════════════════════════ */
+  .grid-cols-3.gap-6.mt-10 {
+    page-break-inside: avoid !important;
+  }
+  .grid-cols-3.gap-6.mt-10 [class*="text-slate-700"],
+  .grid-cols-3.gap-6.mt-10 [class*="dark\:text-slate-300"] {
+    color: #1e293b !important;
+  }
+  .grid-cols-3.gap-6.mt-10 [class*="text-slate-500"],
+  .grid-cols-3.gap-6.mt-10 [class*="dark\:text-slate-400"] {
+    color: #64748b !important;
+  }
+  .grid-cols-3.gap-6.mt-10 [class*="border-slate-300"],
+  .grid-cols-3.gap-6.mt-10 [class*="dark\:border-slate-700"] {
+    border-color: #94a3b8 !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     10. ReportPageTemplate — قالب التقرير الموحّد للطباعة
+     ═══════════════════════════════════════════════════════ */
+  .report-page-template {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+  }
+  .report-page-template .report-header {
+    border-bottom-color: #0F3D6E !important;
+    word-break: normal !important;
+  }
+  .report-page-template .report-header-col-right,
+  .report-page-template .report-header-col-left,
+  .report-page-template .report-header-col-center {
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    white-space: nowrap !important;
+  }
+  .report-page-template .report-title-badge {
+    background: #0F3D6E !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-page-template .report-metadata {
+    background: #EBF3FC !important;
+    border-color: #CBD5E1 !important;
+    border-left-color: #2A75D3 !important;
+  }
+  .report-page-template .report-content thead th {
+    background: #0F3D6E !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-page-template .report-content tbody tr:nth-child(even) {
+    background: #F8FAFC !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-page-template .report-content tfoot td {
+    background: #0F3D6E !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-page-template .report-footer {
+    border-top-color: #CBD5E1 !important;
+  }
+  /* منع كسر الصف داخل المحتوى */
+  .report-content tr {
+    page-break-inside: avoid !important;
+  }
+  .report-content table {
+    page-break-inside: auto;
+  }
+  .report-content thead {
+    display: table-header-group !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     11. VoucherPrintTemplate — طباعة السندات
+     ═══════════════════════════════════════════════════════ */
+  .voucher-print-wrapper {
+    display: block !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .voucher-body table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 10px !important;
+    border-collapse: collapse !important;
+  }
+  .voucher-body thead th {
+    background: #0F3D6E !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .voucher-body tbody tr:nth-child(even) {
+    background: #F8FAFC !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .voucher-body tfoot td {
+    background: #0F3D6E !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .voucher-body tr {
+    page-break-inside: avoid !important;
+  }
+  .voucher-body td,
+  .voucher-body th {
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    max-width: none !important;
+    padding: 4px 6px !important;
+  }
+  .voucher-tafqeet {
+    page-break-inside: avoid !important;
+  }
+  .voucher-tafqeet-total {
+    background: #EBF3FC !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .voucher-signatures {
+    page-break-inside: avoid !important;
+  }
+  .voucher-signatures .voucher-sig-title {
+    color: #0F3D6E !important;
+  }
+  .voucher-signatures .voucher-sig-line {
+    border-bottom-color: #94a3b8 !important;
+  }
+}
+
+/* ============================================================
+   FinancialReportPrintLayout — قواعد الطباعة الموحدة
+   ============================================================ */
+@media print {
+  /* إخفاء عناصر التحكم والشريط الجانبي */
+  nav, sidebar, .no-print, button, header, footer:not(.print-footer) {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  /* إعدادات أبعاد الصفحات */
+  @page {
+    margin: 8mm;
+  }
+
+  .print-landscape {
+    page: landscape;
+  }
+
+  /* تنسيق الجداول المحاسبية للطباعة — report-table */
+  table.report-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  table.report-table th {
+    background-color: #c5c7f1 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    border: 1px solid #000 !important;
+    color: #000 !important;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 6px 4px;
+  }
+
+  table.report-table td {
+    border: 1px solid #000 !important;
+    font-size: 10px;
+    padding: 4px;
+    color: #000 !important;
+  }
+
+  table.report-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  table.report-table thead {
+    display: table-header-group;
+  }
+
+  table.report-table tfoot {
+    display: table-footer-group;
+  }
+
+  /* صفوف الإجماليات */
+  table.report-table tr.report-total-row {
+    background: #e8e7fc !important;
+    font-weight: 900;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* خلايا الأرقام — محاذاة لليسار */
+  table.report-table td.report-num,
+  table.report-table th.report-num {
+    text-align: left !important;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-weight: 700;
+  }
+}

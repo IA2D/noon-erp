@@ -1,0 +1,24 @@
+node_modules/
+build/*
+!build/icon.png
+!build/icon.ico
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.aider*
+# قاعدة بيانات SQLite المحلية لمحرك التقارير
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# نواتج البناء وملفات التحقق المحلية
+release/
+transition_artifacts/
+dev-log.txt
+fix.cjs
+fix_tb.cjs
+-
