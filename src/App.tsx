@@ -75,23 +75,21 @@ import { buildLinkedReversal, linkOriginalToReversal } from './utils/accountingL
 import { nextCloseStatus, periodRecordFor, transitionFinancialPeriod, type FinancialPeriodRecord } from './utils/periodLifecycle';
 import { buildControlAccountTransfer, hasPostedEntityMovement, type ControlEntityKind } from './utils/controlAccountTransfer';
 import { AUTH_USERS, AuthUser, CAN_OVERRIDE_EXCHANGE_LIMITS, ERPModule, permissionsFor, ROLES, SESSION_KEY } from './constants/permissions';
-import { loadBranchesLocal } from './utils/companyStore';
 import { migrateLegacyWorkflowStatuses } from './utils/statusMigration';
 import { normalizeStandardLevelFiveAccountNames } from './utils/accountNaming';
 
 const REPORTING_YEAR_SESSION_KEY = 'fullerp-reporting-year';
 const MIN_REPORTING_YEAR = 2026;
 
-function isAllowedReportingYear(value: unknown): value is string {
-  return /^\d{4}$/.test(String(value || '')) && Number(value) >= MIN_REPORTING_YEAR;
+function currentReportingYear(): string {
+  return String(Math.max(MIN_REPORTING_YEAR, new Date().getFullYear()));
 }
 
-function configuredReportingYear(): string {
-  try {
-    const year = loadBranchesLocal()[0]?.fiscalYear;
-    if (isAllowedReportingYear(year)) return String(year);
-  } catch {}
-  return String(Math.max(MIN_REPORTING_YEAR, new Date().getFullYear()));
+function reportingYearOptions(currentYear = new Date().getFullYear()): string[] {
+  const effectiveCurrentYear = Math.max(MIN_REPORTING_YEAR, currentYear);
+  const years: string[] = [];
+  for (let year = MIN_REPORTING_YEAR; year <= effectiveCurrentYear + 1; year += 1) years.push(String(year));
+  return years.sort((a, b) => Number(b) - Number(a));
 }
 
 const K = {
@@ -196,10 +194,7 @@ function AppInner() {
   const { dir, t } = useI18n();
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => loadSession());
-  const [reportingYear, setReportingYear] = useState<string>(() => {
-    const remembered = window.sessionStorage.getItem(REPORTING_YEAR_SESSION_KEY);
-    return isAllowedReportingYear(remembered) ? remembered : configuredReportingYear();
-  });
+  const [reportingYear, setReportingYear] = useState<string>(currentReportingYear);
   const { activeModule, openModule, resetTabs, requestCloseTab } = useTabs();
 
   const [accounts, setAccounts] = useLocalStorageState<Account[]>(K.accounts, initialAccounts);
@@ -220,19 +215,7 @@ function AppInner() {
   const [closedYears, setClosedYears] = useLocalStorageState<string[]>(K.closedYears, []);
   const [closedMonths, setClosedMonths] = useLocalStorageState<string[]>(K.closedMonths, []);
   const [periodStates, setPeriodStates] = useLocalStorageState<FinancialPeriodRecord[]>(K.periodStates, []);
-  const availableReportingYears = useMemo(() => {
-    const years = new Set<string>();
-    const current = new Date().getFullYear();
-    for (let year = MIN_REPORTING_YEAR; year <= Math.max(MIN_REPORTING_YEAR, current + 2); year += 1) years.add(String(year));
-    const configuredYear = configuredReportingYear();
-    if (isAllowedReportingYear(configuredYear)) years.add(configuredYear);
-    [...journals, ...vouchers, ...receiptVouchers].forEach(item => {
-      const year = String(item.date || '').slice(0, 4);
-      if (isAllowedReportingYear(year)) years.add(year);
-    });
-    closedYears.forEach(year => { if (isAllowedReportingYear(year)) years.add(year); });
-    return [...years].sort((a, b) => Number(b) - Number(a));
-  }, [journals, vouchers, receiptVouchers, closedYears]);
+  const availableReportingYears = useMemo(reportingYearOptions, []);
 
   useEffect(() => {
     setPeriodStates(previous => {
@@ -611,6 +594,7 @@ function AppInner() {
   const handleLogout = () => {
     addAuditLog('SETTINGS', 'LOGOUT', `تسجيل خروج المستخدم: ${currentUserName}`);
     setCurrentUser(null);
+    setReportingYear(currentReportingYear());
     if (window.desktopStore) window.desktopStore.logout('');
     try {
       window.localStorage.removeItem(SESSION_KEY);
