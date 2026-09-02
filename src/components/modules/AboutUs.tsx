@@ -41,9 +41,9 @@ const TEXT: Record<'ar' | 'en', AboutCopy> = {
     teamTitle: 'الفريق البرمجي',
     teamSubtitle: 'المطورون القائمون على تطوير وصيانة النظام',
     team: [
-      { name: 'ياسر محمد ياسر', role: 'المطور الرئيسي', initial: 'ي', github: 'alhomidyyasser-cmyk' },
+      { name: 'ياسر محمد الحميدي', role: 'المطور الرئيسي', initial: 'ي', github: 'alhomidyyasser-cmyk' },
       { name: 'أحمد إسماعيل إبراهيم', role: 'مدير المنتج ومصمم تجربة وواجهات المستخدم ومهندس ضمان الجودة', initial: 'أ', github: 'ia2d' },
-      { name: 'عبدالمالك علي', role: 'المستشار المحاسبي', initial: 'ع', linkedin: 'noon-erp' },
+      { name: 'عبد الملك علي الريمي', role: 'المستشار المحاسبي', initial: 'ع', linkedin: 'noon-erp' },
     ],
     rights: `© 2026 ${PRODUCT_NAME_AR} — جميع الحقوق محفوظة. يُمنع إعادة توزيع النظام أو نسخه دون إذن كتابي من المطور.`,
   },
@@ -57,9 +57,9 @@ const TEXT: Record<'ar' | 'en', AboutCopy> = {
     teamTitle: 'Development Team',
     teamSubtitle: 'The developers behind the system',
     team: [
-      { name: 'Yasser Mohammed Yasser', role: 'Lead Developer', initial: 'Y', github: 'alhomidyyasser-cmyk' },
+      { name: 'Yasser Mohammed Al-Hamidi', role: 'Lead Developer', initial: 'Y', github: 'alhomidyyasser-cmyk' },
       { name: 'Ahmed Ismail Ibrahim', role: 'Product Manager, UI/UX Designer & QA Engineer', initial: 'A', github: 'ia2d' },
-      { name: 'Abdulmalik Ali', role: 'Accounting Consultant', initial: 'A', linkedin: 'noon-erp' },
+      { name: 'Abdulmalik Ali Al-Raimi', role: 'Accounting Consultant', initial: 'A', linkedin: 'noon-erp' },
     ],
     rights: `© 2026 ${PRODUCT_NAME} — All rights reserved. Redistribution or copying without written permission is prohibited.`,
   },
@@ -102,7 +102,8 @@ export default function AboutUs() {
             </div>
           </div>
           <div className="w-16 h-16 bg-sky-50 rounded-2xl border border-sky-100 flex items-center justify-center shadow-xs shrink-0 overflow-hidden dark:bg-sky-950/80 dark:border-sky-800/50">
-            <img src="/brand/fullerp-icon-128.png" alt="NOON ERP" className="h-full w-full object-contain" />
+            <img src="./brand/fullerp-icon-128.png" alt="NOON ERP" className="h-full w-full object-contain dark:hidden" />
+            <img src="./brand/fullerp-icon-dark-128.png" alt="NOON ERP" className="hidden h-full w-full object-contain dark:block" />
           </div>
         </div>
         <p className="text-slate-600 text-sm md:text-base leading-relaxed pt-2 border-t border-slate-100 dark:text-slate-400 dark:border-slate-800">

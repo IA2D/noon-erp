@@ -159,8 +159,10 @@ const aboutUs = read('src/components/modules/AboutUs.tsx');
 assert.match(aboutUs, /github: 'alhomidyyasser-cmyk'/);
 assert.match(aboutUs, /name: 'أحمد إسماعيل إبراهيم', role: 'مدير المنتج ومصمم تجربة وواجهات المستخدم ومهندس ضمان الجودة'[\s\S]*github: 'ia2d'/);
 assert.match(aboutUs, /name: 'Ahmed Ismail Ibrahim', role: 'Product Manager, UI\/UX Designer & QA Engineer'/);
-assert.match(aboutUs, /name: 'عبدالمالك علي', role: 'المستشار المحاسبي'[\s\S]*linkedin: 'noon-erp'/);
-assert.match(aboutUs, /src="\/brand\/fullerp-icon-128\.png" alt="NOON ERP"/);
+assert.match(aboutUs, /name: 'ياسر محمد الحميدي', role: 'المطور الرئيسي'/);
+assert.match(aboutUs, /name: 'عبد الملك علي الريمي', role: 'المستشار المحاسبي'[\s\S]*linkedin: 'noon-erp'/);
+assert.match(aboutUs, /src="\.\/brand\/fullerp-icon-128\.png" alt="NOON ERP"/);
+assert.match(aboutUs, /src="\.\/brand\/fullerp-icon-dark-128\.png" alt="NOON ERP"/);
 assert.doesNotMatch(aboutUs, /name: 'ياسر محمد ياسر'[^\n]*linkedin|name: 'أحمد إسماعيل إبراهيم'[^\n]*linkedin/);
 assert.match(aboutUs, /https:\/\/www\.linkedin\.com\/in\/\$\{m\.linkedin\}/);
 

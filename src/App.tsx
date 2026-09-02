@@ -80,13 +80,18 @@ import { migrateLegacyWorkflowStatuses } from './utils/statusMigration';
 import { normalizeStandardLevelFiveAccountNames } from './utils/accountNaming';
 
 const REPORTING_YEAR_SESSION_KEY = 'fullerp-reporting-year';
+const MIN_REPORTING_YEAR = 2026;
+
+function isAllowedReportingYear(value: unknown): value is string {
+  return /^\d{4}$/.test(String(value || '')) && Number(value) >= MIN_REPORTING_YEAR;
+}
 
 function configuredReportingYear(): string {
   try {
     const year = loadBranchesLocal()[0]?.fiscalYear;
-    if (/^\d{4}$/.test(String(year || ''))) return String(year);
+    if (isAllowedReportingYear(year)) return String(year);
   } catch {}
-  return String(new Date().getFullYear());
+  return String(Math.max(MIN_REPORTING_YEAR, new Date().getFullYear()));
 }
 
 const K = {
@@ -193,7 +198,7 @@ function AppInner() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => loadSession());
   const [reportingYear, setReportingYear] = useState<string>(() => {
     const remembered = window.sessionStorage.getItem(REPORTING_YEAR_SESSION_KEY);
-    return /^\d{4}$/.test(remembered || '') ? remembered! : configuredReportingYear();
+    return isAllowedReportingYear(remembered) ? remembered : configuredReportingYear();
   });
   const { activeModule, openModule, resetTabs, requestCloseTab } = useTabs();
 
@@ -218,13 +223,14 @@ function AppInner() {
   const availableReportingYears = useMemo(() => {
     const years = new Set<string>();
     const current = new Date().getFullYear();
-    for (let year = current - 5; year <= current + 2; year += 1) years.add(String(year));
-    years.add(configuredReportingYear());
+    for (let year = MIN_REPORTING_YEAR; year <= Math.max(MIN_REPORTING_YEAR, current + 2); year += 1) years.add(String(year));
+    const configuredYear = configuredReportingYear();
+    if (isAllowedReportingYear(configuredYear)) years.add(configuredYear);
     [...journals, ...vouchers, ...receiptVouchers].forEach(item => {
       const year = String(item.date || '').slice(0, 4);
-      if (/^\d{4}$/.test(year)) years.add(year);
+      if (isAllowedReportingYear(year)) years.add(year);
     });
-    closedYears.forEach(year => { if (/^\d{4}$/.test(year)) years.add(year); });
+    closedYears.forEach(year => { if (isAllowedReportingYear(year)) years.add(year); });
     return [...years].sort((a, b) => Number(b) - Number(a));
   }, [journals, vouchers, receiptVouchers, closedYears]);
 
