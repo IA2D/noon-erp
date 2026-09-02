@@ -198,7 +198,7 @@ export default function SubLedgerDetailModal({open, account, entities, currencyO
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-500/15 hover:bg-sky-400 text-white shadow-lg transition-all cursor-pointer"
+            className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-500 text-[#ffffff] shadow-lg transition-all cursor-pointer"
           >
             تم
           </button>

@@ -1,3 +1,4 @@
+import {dateToDisplay} from '../../utils/dateInput';
 import { useMemo } from 'react';
 import { loadBranchesLocal, DEFAULT_COMPANY_BRANCH } from '../../utils/companyStore';
 import type { CompanyBranch } from '../../types/erp';
@@ -31,7 +32,7 @@ export default function PrintReportHeader({
   );
 
   const now = new Date();
-  const printDate = now.toLocaleDateString('ar-SA');
+  const printDate = now.toLocaleDateString('en-GB');
   const printTime = now.toLocaleTimeString('ar-SA');
 
   return (
@@ -67,9 +68,9 @@ export default function PrintReportHeader({
       {/* فترة التقرير */}
       {fromDate && toDate && (
         <div className="rpt-date-range">
-          <span>من تاريخ : {fromDate}</span>
+          <span>من تاريخ : {dateToDisplay(fromDate)}</span>
           <span className="rpt-date-sep">|</span>
-          <span>إلى تاريخ : {toDate}</span>
+          <span>إلى تاريخ : {dateToDisplay(toDate)}</span>
         </div>
       )}
 

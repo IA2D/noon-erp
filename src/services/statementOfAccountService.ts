@@ -1,3 +1,5 @@
+import { dateToIso, inDateRange } from '../utils/dateInput';
+import { lineBelongsToEntity, entityOpening, isBeforeReport } from '../utils/reportData';
 import type {
   Account,
   BankAccount,
@@ -127,7 +129,7 @@ export function buildStatementSubject(kind: StatementEntityKind, id: string, acc
       return {
         kind, id: e.id, code: e.code, name: e.nameAr,
         linkedAccountId: linked?.id || '', accountCode: linked?.code || '—', accountName: linked?.nameAr || '—',
-        openingBalance: e.openingBalance ?? linked?.openingBalance ?? 0
+        openingBalance: e.openingBalance ?? 0
       };
     }
     case 'CUSTOMER': {
@@ -137,7 +139,7 @@ export function buildStatementSubject(kind: StatementEntityKind, id: string, acc
       return {
         kind, id: c.id, code: c.code, name: c.nameAr,
         linkedAccountId: linked?.id || '', accountCode: linked?.code || '—', accountName: linked?.nameAr || '—',
-        openingBalance: c.openingBalance ?? linked?.openingBalance ?? 0
+        openingBalance: c.openingBalance ?? 0
       };
     }
     case 'VENDOR': {
@@ -147,7 +149,7 @@ export function buildStatementSubject(kind: StatementEntityKind, id: string, acc
       return {
         kind, id: v.id, code: v.code, name: v.nameAr,
         linkedAccountId: linked?.id || '', accountCode: linked?.code || '—', accountName: linked?.nameAr || '—',
-        openingBalance: v.openingBalance ?? linked?.openingBalance ?? 0
+        openingBalance: v.openingBalance ?? 0
       };
     }
     case 'CASH_BOX': {
@@ -157,7 +159,7 @@ export function buildStatementSubject(kind: StatementEntityKind, id: string, acc
       return {
         kind, id: b.id, code: b.code, name: b.nameAr,
         linkedAccountId: linked?.id || '', accountCode: linked?.code || '—', accountName: linked?.nameAr || '—',
-        openingBalance: b.openingBalance ?? linked?.openingBalance ?? 0
+        openingBalance: b.openingBalance ?? 0
       };
     }
     case 'BANK': {
@@ -167,7 +169,7 @@ export function buildStatementSubject(kind: StatementEntityKind, id: string, acc
       return {
         kind, id: b.id, code: b.code, name: b.bankNameAr,
         linkedAccountId: linked?.id || '', accountCode: linked?.code || '—', accountName: linked?.nameAr || '—',
-        openingBalance: b.openingBalance ?? linked?.openingBalance ?? 0
+        openingBalance: b.openingBalance ?? 0
       };
     }
   }
@@ -180,7 +182,8 @@ export function lineMatches(line: JournalLine, subject: StatementSubject): boole
   if (!subject.linkedAccountId || line.accountId !== subject.linkedAccountId) return false;
   if (!subject.id) return false;
   const expected = STATEMENT_KIND_META[subject.kind].subLedgerType;
-  if (line.subLedgerType && expected && line.subLedgerType !== expected) return false;
+  if (line.subLedgerType && expected && line.subLedgerType !== expected && !(subject.kind === 'BANK' && line.subLedgerType === 'EXCHANGER')) return false;
+  if (line.subLedgerId && line.subLedgerId !== subject.id) return false;
   // الصندوق/البنك مرتبطان 1:1 بحسابهما — المطابقة بمعرّف الحساب تكفي دون اشتراط وسم صريح
   if (subject.kind === 'CASH_BOX' || subject.kind === 'BANK') return true;
   // حسابات السيطرة (عميل/مورد/موظف) تجميعية — يجب أن يكون القيد موسوماً صراحةً بهذا الكيان
@@ -201,22 +204,24 @@ export function queryStatement(input: StatementInput): StatementResult | null {
 
   const posted = (journals || []).filter(j => j.status === 'POSTED');
 
-  const inRange = (date: string) => {
-    const d = date.slice(0, 10);
-    return d >= fromDate.slice(0, 10) && d <= toDate.slice(0, 10);
-  };
+  const peers = kind === 'CASH_BOX' ? cashBoxes || [] : kind === 'BANK' ? bankAccounts || [] : kind === 'EMPLOYEE' ? employees || [] : kind === 'CUSTOMER' ? customers || [] : vendors || [];
+  const entity = peers.find(e => e.id === id);
+  const expected = STATEMENT_KIND_META[kind].subLedgerType;
+  const types: SubLedgerType[] = kind === 'BANK' ? ['BANK','EXCHANGER'] : expected ? [expected] : [];
+  const baseCode = currencies?.find(c => c.isBase)?.code || 'YER';
+  if (entity) subject.openingBalance = entityOpening(entity, baseCode, baseCode);
 
   const movements: Omit<StatementRow, 'running' | 'seq'>[] = [];
   let preOpening = 0;
 
   posted.forEach(j => {
     j.lines.forEach(line => {
-      if (!lineMatches(line, subject)) return;
-      const isInRange = inRange(j.date);
+      if (entity ? !lineBelongsToEntity(line, j, entity, peers, types) : !lineMatches(line, subject)) return;
+      const isInRange = inDateRange(j.date, fromDate, toDate);
       const net = (line.debit || 0) - (line.credit || 0);
       if (isInRange) {
         movements.push({
-          date: j.date,
+          date: dateToIso(j.date),
           docType: docTypeByJournal ? docTypeByJournal(j.id) : 'قيد يومية',
           docNumber: j.entryNumber,
           reference: j.reference || '—',
@@ -224,7 +229,7 @@ export function queryStatement(input: StatementInput): StatementResult | null {
           debit: line.debit || 0,
           credit: line.credit || 0
         });
-      } else if (j.date < fromDate) {
+      } else if (isBeforeReport(j.date, fromDate)) {
         preOpening += net;
       }
     });

@@ -1,3 +1,4 @@
+import { dateToIso, inDateRange, isValidDateIso } from './dateInput';
 import type { Account, JournalEntry } from '../types/erp';
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -9,7 +10,7 @@ export interface ReportPeriodValidation {
 
 /** ISO dates are compared lexically so reporting is timezone-independent. */
 export function validateReportPeriod(fromDate: string, toDate: string): ReportPeriodValidation {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+  if (!isValidDateIso(fromDate) || !isValidDateIso(toDate)) {
     return { valid: false, error: 'يرجى إدخال تاريخ بداية ونهاية صحيحين.' };
   }
   if (fromDate > toDate) {
@@ -20,7 +21,7 @@ export function validateReportPeriod(fromDate: string, toDate: string): ReportPe
 
 export function postedJournalsInRange(journals: JournalEntry[], fromDate: string, toDate: string): JournalEntry[] {
   return journals.filter(journal =>
-    journal.status === 'POSTED' && journal.date >= fromDate && journal.date <= toDate
+    journal.status === 'POSTED' && inDateRange(journal.date, fromDate, toDate)
   );
 }
 
@@ -41,7 +42,7 @@ export function buildPeriodAccounts(
 
   const signedBefore = new Map<string, number>();
   journals.forEach(journal => {
-    if (journal.status !== 'POSTED' || journal.date >= fromDate) return;
+    if (journal.status !== 'POSTED' || !dateToIso(journal.date) || dateToIso(journal.date) >= dateToIso(fromDate)) return;
     journal.lines.forEach(line => {
       signedBefore.set(
         line.accountId,

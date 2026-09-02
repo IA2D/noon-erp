@@ -1,3 +1,4 @@
+import { REPORT_PRINT_CSS } from '../../../electron/report-layout.mjs';
 import React, { useMemo } from 'react';
 import { Building2 } from 'lucide-react';
 import { loadBranchesLocal, DEFAULT_COMPANY_BRANCH } from '../../utils/companyStore';
@@ -45,7 +46,7 @@ function fmtDate(d?: string): string {
 function stampNow(): string {
   const d = new Date();
   const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function defaultsFromStorage(): CompanyInfo {
@@ -90,7 +91,7 @@ export default function FinancialReportPrintLayout({
       data-print-master="cash-movement"
       dir="rtl"
     >
-      <style>{FINANCIAL_REPORT_PRINT_CSS}</style>
+      <style>{FINANCIAL_REPORT_PRINT_CSS + REPORT_PRINT_CSS}</style>
 
       {/* ═══════════════════════════════════════════════════
           الترويسة: صف الشركة 3 أعمدة
@@ -170,6 +171,17 @@ export const FINANCIAL_REPORT_PRINT_CSS = `
   display: flex;
   flex-direction: column;
 }
+.report-print-master th,
+.report-print-master td {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  overflow: hidden !important;
+  height: auto !important;
+}
+.report-print-master thead th {
+  text-align: center !important;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    الترويسة: صف الشركة 3 أعمدة
@@ -181,21 +193,21 @@ export const FINANCIAL_REPORT_PRINT_CSS = `
   gap: 10px;
   margin-bottom: 8px;
 }
-.frp-meta-grid { display:flex; flex-wrap:wrap; gap:6px 14px; border:1px solid #111; padding:6px 8px; margin:6px 0 8px; font-size:10px; }
+.frp-meta-grid { display:flex; flex-wrap:wrap; gap:6px 14px; border:1px solid #111; padding:6px 8px; margin:6px 0 8px; font-size:8px; }
 .frp-meta-item { display:flex; gap:4px; align-items:center; }
 .frp-col-right { flex: 1; text-align: right; }
 .frp-col-center { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; }
 .frp-col-left  { flex: 1; text-align: left; direction: ltr; }
-.frp-company-ar { font-size: 14px; font-weight: 900; color: #000; line-height: 1.4; }
-.frp-company-en { font-size: 12px; font-weight: 800; color: #000; line-height: 1.3; }
-.frp-sub { font-size: 9px; color: #555; margin-top: 1px; line-height: 1.3; }
+.frp-company-ar { font-size:11.2px; font-weight: 900; color: #000; line-height: 1.4; }
+.frp-company-en { font-size:9.6px; font-weight: 800; color: #000; line-height: 1.3; }
+.frp-sub { font-size:7.2px; color: #555; margin-top: 1px; line-height: 1.3; }
 
 /* ── الشعار الدائري ── */
 .frp-logo {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  object-fit: cover;
+  width: 80px;
+  height: 80px;
+  border-radius: 0;
+  object-fit: contain;
   border: 1.5px solid #ccc;
   margin-bottom: 4px;
 }
@@ -210,20 +222,21 @@ export const FINANCIAL_REPORT_PRINT_CSS = `
 /* ── عنوان التقرير ── */
 .frp-report-title {
   text-align: center;
-  font-size: 16px;
+  font-size:12.8px;
   font-weight: 900;
   color: #000;
   margin: 2px 0 0;
   white-space: nowrap;
   padding: 4px 18px;
-  border: 1.5px solid #c5c7f1;
+  border: 0;
+  outline: 0;
   border-radius: 8px;
   background: #f0f0ff;
 }
 .frp-report-title-en {
   margin-top: 2px;
   color: #475569;
-  font-size: 9px;
+  font-size:7.2px;
   font-weight: 700;
   text-align: center;
 }
@@ -234,7 +247,7 @@ export const FINANCIAL_REPORT_PRINT_CSS = `
   justify-content: center;
   align-items: center;
   gap: 12px;
-  font-size: 11px;
+  font-size:7.2px;
   color: #333;
   font-weight: 700;
   margin-top: 6px;
@@ -272,7 +285,7 @@ export const FINANCIAL_REPORT_PRINT_CSS = `
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 10px;
+  font-size:8px;
   font-weight: bold;
   color: #000;
 }
@@ -305,24 +318,23 @@ export const FINANCIAL_REPORT_PRINT_CSS = `
   }
 
   .frp-wrap {
-    display: flex !important;
-    flex-direction: column !important;
+    display: block !important;
     visibility: visible !important;
     position: relative !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
-    min-height: calc(297mm - 28mm) !important;
+    min-height: 0 !important;
     overflow: visible !important;
   }
 
   .frp-wrap.frp-landscape {
-    min-height: calc(210mm - 24mm) !important;
+    min-height: 0 !important;
   }
 
   .frp-content {
-    flex: 1 0 auto !important;
+    flex: none !important;
   }
 
   .frp-report-title {
@@ -352,7 +364,8 @@ export const FINANCIAL_REPORT_PRINT_CSS = `
     page-break-inside: avoid !important;
     page-break-after: auto !important;
   }
-  table { width: 100% !important; border-collapse: collapse !important; }
+  table { width: 96% !important; max-width: 96% !important; margin-left: auto !important; margin-right: auto !important; border-collapse: collapse !important; table-layout: fixed !important; }
+  th, td { white-space: normal !important; overflow: hidden !important; overflow-wrap: anywhere !important; word-break: break-word !important; height: auto !important; }
   img { max-width: 100% !important; }
   .frp-header, .frp-page-foot, .frp-date-range { break-inside: avoid !important; }
   thead {

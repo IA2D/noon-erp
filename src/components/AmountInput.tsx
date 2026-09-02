@@ -67,6 +67,8 @@ export default function AmountInput({ value, onChange, className, title, require
 
   const handleBlur = () => {
     setFocused(false);
+    // A derived/read-only amount is presentation-only. Navigating across it must never write zero back to its source side.
+    if (readOnly || disabled) return;
     const trimmed = text.replace(/,/g, '');
     if (trimmed === '') {
       setText('');

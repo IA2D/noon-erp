@@ -36,7 +36,27 @@ const isVisible = (element: HTMLElement | null): element is HTMLElement => {
   if (!element?.isConnected) return false;
   if (element.hidden || element.closest('[hidden], [aria-hidden="true"]')) return false;
   const style = window.getComputedStyle(element);
-  return style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
+  if (style.display === 'none' || style.visibility === 'hidden' || element.getClientRects().length === 0) return false;
+
+  // A control behind the currently raised modal is geometrically visible to the DOM,
+  // but it is not an interactive shortcut target. Without this check, a page-level
+  // F9 field can steal F9 from a locally handled account cell inside a foreground form.
+  const dialogs = [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
+    .filter(dialog => {
+      const dialogStyle = window.getComputedStyle(dialog);
+      return dialogStyle.display !== 'none'
+        && dialogStyle.visibility !== 'hidden'
+        && dialog.getClientRects().length > 0;
+    });
+  if (dialogs.length > 0) {
+    const ownDialog = element.closest<HTMLElement>('[role="dialog"]');
+    const topZ = Math.max(...dialogs.map(dialog => Number.parseInt(window.getComputedStyle(dialog).zIndex || '0', 10) || 0));
+    if (!ownDialog) return false;
+    const ownZ = Number.parseInt(window.getComputedStyle(ownDialog).zIndex || '0', 10) || 0;
+    if (ownZ < topZ) return false;
+  }
+
+  return true;
 };
 
 const isEditable = (target: EventTarget | null): boolean => {

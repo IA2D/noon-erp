@@ -205,19 +205,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
         });
         updated[side] = round2(next.localAmount);
       } else {
-        updated[side] = round2(val);
-        if (l.currency !== baseCode) {
-          // العملة الأجنبية: تحرير المحلي يعيد حساب سعر الصرف الفعلي = المحلي ÷ الأجنبي (ربط مثلثي)
-          const foreign = Number(l[side]) > 0 ? round2(Number(l[side]) / rate) : 0;
-          if (foreign > 0) {
-            const next = handleCurrencyFieldChange('local', val, {
-              foreignAmount: foreign,
-              exchangeRate: rate,
-              localAmount: Number(l[side]) || 0,
-            });
-            updated.exchangeRate = next.exchangeRate;
-          }
-        }
+       updated[side] = round2(val);
       }
       if (val > 0) {
         updated[side === 'debit' ? 'credit' : 'debit'] = 0;
@@ -512,7 +500,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
       setIsModalOpen(true);
     }
   }}
-  className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-400 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+  className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
   >
   <Plus className="w-4 h-4" />
   إنشاء قيد يومية جديد (JV)
@@ -908,7 +896,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
 
   <td className="py-2 px-2">
   {account ? (
-  <div className="text-slate-200 font-semibold leading-6 truncate w-full max-w-full" title={`${account.code} - ${account.nameAr}`}>{account.nameAr}</div>
+  <div tabIndex={0} className="text-slate-200 font-semibold leading-6 truncate w-full max-w-full focus:outline-none focus:ring-2 focus:ring-sky-500/40 rounded" title={`${account.code} - ${account.nameAr}`}>{account.nameAr}</div>
   ) : (
    <div className="text-slate-600 dark:text-slate-400 text-sm leading-6"></div>
   )}
@@ -1151,7 +1139,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
       currentUserName={selectedEntry.createdBy}
       metadata={[
        { label: 'حالة القيد', value: selectedEntry.status === 'POSTED' ? 'مُرّحل' : selectedEntry.status === 'PENDING_POSTING' ? 'بانتظار الترحيل' : 'ملغى' },
-       ...(selectedEntry.reference ? [{ label: 'المرجع', value: selectedEntry.reference }] : []),
+       { label: 'رقم المرجع', value: selectedEntry.reference || '—' },
        ...(selectedEntry.sourceType && selectedEntry.sourceType !== 'MANUAL' ? [{ label: 'المصدر', value: selectedEntry.sourceType === 'PAYMENT_VOUCHER' ? 'سند صرف' : 'سند قبض' }] : []),
        ...(selectedEntry.referenceCode ? [{ label: 'رقم مستند المصدر', value: selectedEntry.referenceCode }] : []),
        { label: 'البيان العام', value: selectedEntry.narration },
@@ -1164,13 +1152,24 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
        { roleLabelAr: 'المحقق / المستلم' },
       ]}
      >
-      <table>
+     <table>
+       <colgroup>
+        <col style={{ width: '3%' }} />
+        <col style={{ width: '12%' }} />
+        <col style={{ width: '20%' }} />
+        <col style={{ width: '23%' }} />
+        <col style={{ width: '11%' }} />
+        <col style={{ width: '11%' }} />
+        <col style={{ width: '10%' }} />
+        <col style={{ width: '10%' }} />
+       </colgroup>
        <thead>
         <tr>
          <th className="text-center">#</th>
          <th>رقم الحساب</th>
          <th>اسم الحساب المحاسبي</th>
          <th>البيان / الشرح</th>
+         <th>رقم المرجع</th>
          <th>مركز التكلفة</th>
          <th className="text-left">مدين ({selectedEntry.currency})</th>
          <th className="text-left">دائن ({selectedEntry.currency})</th>
@@ -1181,8 +1180,9 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
          <tr key={line.id}>
           <td className="text-center font-mono">{idx + 1}</td>
           <td className="font-mono">{line.accountCode}</td>
-          <td className="font-semibold">{line.accountNameAr}</td>
+          <td className="font-semibold">{line.subLedgerName || line.accountNameAr}</td>
           <td className="text-slate-600">{line.description}</td>
+          <td className="font-mono text-slate-600">{line.referenceNumber || '—'}</td>
           <td className="text-slate-600">
            {line.costCenterId ? (() => {
             const cc = costCenters.find(c => c.id === line.costCenterId);
@@ -1196,7 +1196,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
        </tbody>
        <tfoot>
         <tr>
-         <td colSpan={5} className="text-left font-bold">الإجمالي:</td>
+         <td colSpan={6} className="text-left font-bold">الإجمالي:</td>
          <td className="font-bold text-left font-mono whitespace-nowrap">{selectedEntry.totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
          <td className="font-bold text-left font-mono whitespace-nowrap">{selectedEntry.totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>

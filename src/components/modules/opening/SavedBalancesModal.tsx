@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { ClipboardList, Pencil, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ClipboardList, Pencil, Trash2, CheckCircle2, AlertTriangle, X } from 'lucide-react';
 import type { BrowseRow } from './types';
 import { round2 } from './types';
 import { fmtAmountCur } from '../../../utils/format';
-import ModalShell from '../../ui/ModalShell';
 
 interface Props {
   open: boolean;
@@ -32,25 +31,17 @@ export default function SavedBalancesModal({
   onDelete,
 }: Props) {
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
-  const [isMaximized, setIsMaximized] = useState(false);
   const difference = round2(totalDebit - totalCredit);
 
+  if (!open) return null;
   return (
-    <ModalShell
-      id="opening-balances-browse"
-      open={open}
-      onClose={onClose}
-      title="استعراض الأرصدة المدخلة"
-      subtitle="تعديل يحمّل الرصيد إلى ورقة العمل — حذف يزيله من قاعدة البيانات ويحدّث المجاميع"
-      icon={ClipboardList}
-      size="xl"
-      maxWidth="max-w-5xl"
-      maximized={isMaximized}
-      onToggleMaximize={() => setIsMaximized(v => !v)}
-      bodyClassName="p-0"
-      footer={
-        <div
-          className={`flex items-center justify-between gap-3 flex-wrap px-4 py-3 border-t border-slate-800 ${isBalanced ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'
+    <section className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm" aria-label="الأرصدة الافتتاحية المحفوظة">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-700 bg-slate-950 px-4 py-3">
+        <h3 className="flex items-center gap-2 text-sm font-black text-slate-100"><ClipboardList className="h-4 w-4 text-sky-400" />الأرصدة الافتتاحية المحفوظة</h3>
+        <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="إخفاء الأرصدة المحفوظة"><X className="h-4 w-4" /></button>
+      </div>
+      <div
+          className={`flex items-center justify-between gap-3 flex-wrap px-4 py-3 border-b border-slate-800 ${isBalanced ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'
             }`}
         >
           <div className="flex items-center gap-4 flex-wrap text-xs">
@@ -79,8 +70,6 @@ export default function SavedBalancesModal({
             {isBalanced ? 'متوازن' : `غير متوازن (فرق ${fmtAmountCur(Math.abs(difference), baseCode)})`}
           </span>
         </div>
-      }
-    >
       {rows.length === 0 ? (
         <div className="p-12 text-center text-slate-400">
           <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-40" />
@@ -222,6 +211,6 @@ export default function SavedBalancesModal({
           </table>
         </div>
       )}
-    </ModalShell>
+    </section>
   );
 }

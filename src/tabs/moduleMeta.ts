@@ -55,7 +55,6 @@ export const MODULE_META: Record<ERPModule, ModuleMeta> = {
   TRUSTS: { module: 'TRUSTS', titleAr: 'العهد', titleEn: 'Trusts', icon: Vault },
   CUSTODY: { module: 'CUSTODY', titleAr: 'العُهد المالية والعينية', titleEn: 'Custody & Petty Cash', icon: Vault },
   CONTRACTS: { module: 'CONTRACTS', titleAr: 'العقود والالتزامات', titleEn: 'Contracts & Obligations', icon: FileSignature },
-  DATA_QUALITY: { module: 'DATA_QUALITY', titleAr: 'جودة البيانات والدمج', titleEn: 'Data Quality & Merge', icon: ShieldCheck },
   REPORTS: { module: 'REPORTS', titleAr: 'التقارير المالية', titleEn: 'Financial Reports', icon: FileBarChart2 },
   STATEMENT_ACCOUNT: { module: 'STATEMENT_ACCOUNT', titleAr: 'كشف حساب تحليلي', titleEn: 'Statement of Account', icon: FileText },
   AGING: { module: 'AGING', titleAr: 'أعمار الديون', titleEn: 'Aging Report', icon: CalendarClock },

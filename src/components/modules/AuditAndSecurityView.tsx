@@ -1,3 +1,4 @@
+import DateField from '../ui/DateField';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AuditLog } from '../../types/erp';
 import {
@@ -65,7 +66,6 @@ export default function AuditAndSecurityView({ auditLogs }: Props) {
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
-  const [isTableExpanded, setIsTableExpanded] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -255,14 +255,14 @@ export default function AuditAndSecurityView({ auditLogs }: Props) {
                     <Calendar className="w-3.5 h-3.5" />
                     من تاريخ
                   </span>
-                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={selectCls} />
+                  <DateField  value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={selectCls} />
                 </label>
                 <label className="flex items-center gap-2">
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 shrink-0">
                     <Calendar className="w-3.5 h-3.5" />
                     إلى تاريخ
                   </span>
-                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={selectCls} />
+                  <DateField  value={dateTo} onChange={e => setDateTo(e.target.value)} className={selectCls} />
                 </label>
                 {hasActiveFilters && (
                   <button
@@ -325,22 +325,12 @@ export default function AuditAndSecurityView({ auditLogs }: Props) {
                     <th className="py-4 px-4">الإجراء</th>
                     <th className="py-4 px-4">تفاصيل العملية</th>
                     <th className="py-4 px-4">عنوان IP</th>
-                    <th className="py-4 px-4 w-10">
-                      <button
-                        onClick={() => setIsTableExpanded(v => !v)}
-                        className="p-1.5 rounded-lg border border-slate-700/70 bg-slate-800/80 text-slate-400 hover:border-sky-500 hover:text-sky-300 transition-all cursor-pointer"
-                        title={isTableExpanded ? 'طي الجدول' : 'توسيع الجدول'}
-                      >
-                        {isTableExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
-                    </th>
                   </tr>
                 </thead>
-                {isTableExpanded && (
                 <tbody className="divide-y divide-slate-800/60">
                   {pagedLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-14 text-center">
+                      <td colSpan={6} className="p-14 text-center">
                         <FileWarning className="w-10 h-10 mx-auto mb-3 text-slate-600" />
                         <div className="text-slate-400 font-bold">لا توجد سجلات مطابقة</div>
                         <p className="text-xs text-slate-500 mt-1">جرّب تعديل الفلاتر أو مسحها لعرض السجلات</p>
@@ -386,7 +376,7 @@ export default function AuditAndSecurityView({ auditLogs }: Props) {
                           </tr>
                           {isExpanded && (
                             <tr className="bg-slate-900/40">
-                              <td colSpan={7} className="p-5">
+                              <td colSpan={6} className="p-5">
                                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
                                   <div className="flex items-center justify-between flex-wrap gap-2">
                                     <span className="text-xs font-bold text-slate-400">تفاصيل السجل رقم #{log.id}</span>
@@ -425,12 +415,11 @@ export default function AuditAndSecurityView({ auditLogs }: Props) {
                     })
                   )}
                 </tbody>
-                )}
               </table>
             </div>
 
             {/* Pagination */}
-            {isTableExpanded && filteredLogs.length > 0 && (
+            {filteredLogs.length > 0 && (
               <div className="flex items-center justify-between flex-wrap gap-3 px-4 py-3 border-t border-slate-800 bg-slate-900/40">
                 <div className="text-xs text-slate-400">
                   عرض <span className="font-bold text-white">{startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filteredLogs.length)}</span> من

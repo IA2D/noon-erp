@@ -1,3 +1,4 @@
+import DateField from '../ui/DateField';
 ﻿import React, { useMemo, useRef, useState } from 'react';
 import {
   Vault,
@@ -335,7 +336,7 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
           </div>
           <div>
             <label className={FORM_LABEL}>تاريخ الطلب *</label>
-            <input type="date" value={form.requestedDate} onChange={e => update({ requestedDate: e.target.value })} className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
+            <DateField  value={form.requestedDate} onChange={e => update({ requestedDate: e.target.value })} className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
           </div>
         </div>
 
@@ -354,7 +355,7 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
               searchPlaceholder="بحث بالرقم الوظيفي أو الاسم..."
               searchIcon={Users}
             />
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">ربط إلزامي بحساب أستاذ الموظفين.</p>
+
           </div>
           <div className="sm:col-span-3">
             <label className={FORM_LABEL}>الغرض / بيان العهدة *</label>
@@ -366,7 +367,7 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
           {form.type === 'TEMPORARY' && (
             <div>
               <label className={FORM_LABEL}>تاريخ الانقضاء (التصفية الإجبارية) *</label>
-              <input type="date" value={form.expectedClearanceDate} onChange={e => update({ expectedClearanceDate: e.target.value })} className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
+              <DateField  value={form.expectedClearanceDate} onChange={e => update({ expectedClearanceDate: e.target.value })} className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100" />
             </div>
           )}
           {form.type === 'ASSET' && (
@@ -433,7 +434,7 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
               onChange={e => update({ exchangeRate: Number(e.target.value) })}
               className="h-10 w-full px-3 py-2 text-sm border rounded-md bg-background border-input focus:outline-none focus:ring-2 focus:ring-primary"
             />
-            {isBaseCur && <span className="text-xs text-muted-foreground">العملة الأساسية – ثابت = 1.</span>}
+
             {!isBaseCur && rateViolation && <span className="text-xs text-red-600">{rateViolation}</span>}
           </div>
           {!isBaseCur && (
@@ -447,7 +448,7 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
                 title="تحرير المبلغ المحلي يعيد حساب سعر الصرف تلقائياً = المحلي ÷ الأجنبي"
                 className="h-10 w-full px-3 py-2 text-sm border rounded-md bg-background border-input focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <span className="text-xs text-muted-foreground">تحريره يُحدِّث سعر الصرف = المحلي ÷ الأجنبي.</span>
+
             </div>
           )}
         </div>
@@ -482,7 +483,7 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
                 );
               })}
             </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">يتغير مصدر الصرف تلقائياً مع طريقة الصرف — يُصفّى دليل الصندوق/البنوك/الصرافين النشطين المرتبطين بحساب مستوى خامس.</p>
+
           </div>
           <div>
             <label className={FORM_LABEL}>{methodSourceMeta.label}</label>
@@ -498,7 +499,7 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
               searchPlaceholder={methodSourceMeta.searchPlaceholder}
               searchIcon={methodSourceMeta.searchIcon}
             />
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">الجهة غير المرتبطة بحساب محاسبي لا تظهر. تُلزم الاختيار قبل الترحيل لإتمام القيد الآلي.</p>
+
           </div>
         </div>
 
@@ -1017,7 +1018,7 @@ export default function CustodyView({
       action: 'PENDING',
     }));
     onUpdateCustody(c.id, { approvals, status: 'PENDING_APPROVAL', updatedAt: nowStamp() });
-    toast('success', `أُرسلت ${c.custodyNumber} للاعتماد — المطلوب ${level} مستوى/مستويات.`);
+    toast('success', `أُرسلت ${c.custodyNumber} للاعتماد.`);
   };
 
   const openApprove = (c: Custody) => {
@@ -1028,12 +1029,13 @@ export default function CustodyView({
     if (!approveTarget) return;
     const requiredLevel = requiredApprovalLevel(approveTarget.amount, employeeOf(approveTarget));
     if (!canApprove(approveTarget, level)) {
-      toast('error', 'هذا المستوى غير قادر على الاعتماد حالياً — انتظر دور المستوى الأسبق أو تحقق من الحالة.');
+      toast('error', 'العهدة ليست بانتظار الاعتماد.');
       return;
     }
-    const approvals = approveTarget.approvals.map(a =>
-      a.level === level ? { ...a, action, actionAt: nowStamp() } : a
-    );
+    const approvals: CustodyApproval[] = [
+      ...approveTarget.approvals.filter(a => a.action !== 'PENDING'),
+      { id: `approval-${Date.now()}`, level: 1, approverName: currentUserName, action, actionAt: nowStamp() },
+    ];
     if (action === 'REJECTED') {
       onUpdateCustody(approveTarget.id, { approvals, status: 'CREATED', updatedAt: nowStamp() });
       toast('info', `تم رفض ${approveTarget.custodyNumber} — أُعيدت لحالة جديدة.`);
@@ -1046,7 +1048,7 @@ export default function CustodyView({
       status: complete ? 'APPROVED' : 'PENDING_APPROVAL',
       updatedAt: nowStamp(),
     });
-    toast('success', complete ? `اعتمدت ${approveTarget.custodyNumber} بالكامل (${requiredLevel} مستوى).` : `تم اعتماد المستوى ${level} من ${requiredLevel}.`);
+    toast('success', complete ? `تم اعتماد ${approveTarget.custodyNumber}.` : `تم اعتماد المستوى ${level} من ${requiredLevel}.`);
     setApproveTarget(null);
   };
 
@@ -1071,7 +1073,7 @@ export default function CustodyView({
       createdBy: currentUserName,
       reference: `CUSTODY-${disburseTarget.custodyNumber}`,
     };
-    const journal = buildDisbursementJournal(ctx, disburseTarget, advanceAcc, source.account);
+    const journal = buildDisbursementJournal(ctx, { ...disburseTarget, disbursementSource: disburseSource }, advanceAcc, source.account);
     if (!onAddJournal(journal)) {
       toast('error', 'تعذر ترحيل قيد صرف العهدة؛ لم تُعدّل العهدة.');
       return;
@@ -1482,7 +1484,7 @@ export default function CustodyView({
       <PageHeader
         icon={<Vault className="w-6 h-6" />}
         title="العُهد المالية والعينية"
-        subtitle="دورة حياة متكاملة: إصدار → اعتماد (3 مستويات) → صرف → تصفية بالمستندات → رد → إقفال — مع قيود محاسبية آلية وفق IFRS"
+        subtitle="دورة حياة متكاملة: إصدار → اعتماد واحد → صرف → تصفية بالمستندات → رد → إقفال — مع قيود محاسبية آلية وفق IFRS"
         actions={
           <button
             type="button"
@@ -1572,20 +1574,20 @@ export default function CustodyView({
             <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">{filtered.length} سجل</span>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-sm">
+        <div className="overflow-x-auto custom-scrollbar" dir="rtl">
+          <table className="w-full min-w-[1540px] table-fixed text-right text-xs" dir="rtl">
             <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200">
               <tr>
-                <th className="py-3.5 px-4">رقم العهدة</th>
-                <th className="py-3.5 px-4">النوع</th>
-                <th className="py-3.5 px-4">الموظف</th>
-                <th className="py-3.5 px-4">الغرض</th>
-                <th className="py-3.5 px-4">المبلغ</th>
-                <th className="py-3.5 px-4">الرصيد القائم</th>
-                <th className="py-3.5 px-4">الانقضاء</th>
-                <th className="py-3.5 px-4">الحالة</th>
-                <th className="py-3.5 px-4">تاريخ الطلب</th>
-                <th className="py-3.5 px-4">إجراءات</th>
+                <th className="w-32 whitespace-nowrap px-4 py-3">رقم العهدة</th>
+                <th className="w-36 whitespace-nowrap px-4 py-3">النوع</th>
+                <th className="w-40 whitespace-nowrap px-4 py-3">الموظف</th>
+                <th className="w-56 whitespace-nowrap px-4 py-3">الغرض</th>
+                <th className="w-40 whitespace-nowrap px-4 py-3">المبلغ</th>
+                <th className="w-40 whitespace-nowrap px-4 py-3">الرصيد القائم</th>
+                <th className="w-44 whitespace-nowrap px-4 py-3">الانقضاء</th>
+                <th className="w-48 whitespace-nowrap px-4 py-3">الحالة</th>
+                <th className="w-36 whitespace-nowrap px-4 py-3">تاريخ الطلب</th>
+                <th className="w-32 whitespace-nowrap px-4 py-3 text-center">إجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -1608,29 +1610,29 @@ export default function CustodyView({
                 const Icon = meta.icon;
                 return (
                   <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <td className="py-3 px-4 font-mono font-bold text-sky-600">{c.custodyNumber}</td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center gap-1.5 text-sm font-bold px-2 py-1 rounded-full border ${meta.chip}`}>
+                    <td className="whitespace-nowrap overflow-hidden px-4 py-3 font-mono font-bold text-sky-600">{c.custodyNumber}</td>
+                    <td className="whitespace-nowrap overflow-hidden px-4 py-3">
+                      <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1 text-xs font-bold ${meta.chip}`}>
                         <Icon className="w-3.5 h-3.5" />
                         {meta.short}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-semibold text-slate-900 dark:text-white">{c.employeeName}</td>
-                    <td className="py-3 px-4 text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate" title={c.title}>{c.title}</td>
-                    <td className="py-3 px-4 font-mono text-slate-900 dark:text-white">{fmtC(c.amount, c.currency || baseCurrency)}</td>
-                    <td className={`py-3 px-4 font-mono font-bold ${balance > 0 ? 'text-red-600' : 'text-slate-500 dark:text-slate-400'}`}>{fmtC(balance, c.currency || baseCurrency)}</td>
-                    <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <td className="overflow-hidden px-4 py-3 font-semibold text-slate-900 dark:text-white" title={c.employeeName}><div className="truncate whitespace-nowrap">{c.employeeName}</div></td>
+                    <td className="overflow-hidden px-4 py-3 text-slate-600 dark:text-slate-400" title={c.title}><div className="truncate whitespace-nowrap">{c.title}</div></td>
+                    <td className="whitespace-nowrap overflow-hidden px-4 py-3 font-mono text-slate-900 dark:text-white" dir="ltr">{fmtC(c.amount, c.currency || baseCurrency)}</td>
+                    <td className={`whitespace-nowrap overflow-hidden px-4 py-3 font-mono font-bold ${balance > 0 ? 'text-red-600' : 'text-slate-500 dark:text-slate-400'}`} dir="ltr">{fmtC(balance, c.currency || baseCurrency)}</td>
+                    <td className="whitespace-nowrap overflow-hidden px-4 py-3 text-slate-500 dark:text-slate-400">
                       {c.expectedClearanceDate ? (
-                        <>
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap">
                           <Calendar className="w-3.5 h-3.5" />
-                          {c.expectedClearanceDate}
+                          {formatDate(c.expectedClearanceDate)}
                           {overdue && <span className="text-red-600 font-bold">({overdueDays(c)}ي)</span>}
-                        </>
+                        </span>
                       ) : <span className="text-slate-600 dark:text-slate-400">—</span>}
                     </td>
-                    <td className="py-3 px-4"><StatusChip status={c.status} overdue={overdue} /></td>
-                    <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{c.requestedDate}</td>
-                    <td className="py-3 px-4">
+                    <td className="whitespace-nowrap overflow-hidden px-4 py-3"><StatusChip status={c.status} overdue={overdue} /></td>
+                    <td className="whitespace-nowrap overflow-hidden px-4 py-3 text-slate-500 dark:text-slate-400">{formatDate(c.requestedDate)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
                       <button
                         type="button"
                         onClick={e => openRowMenu(e, c)}
@@ -1736,12 +1738,12 @@ export default function CustodyView({
               <div className="rounded-xl p-4 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">الموظف:</span><span className="font-semibold text-slate-900 dark:text-white">{approveTarget.employeeName}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">المبلغ:</span><span className="font-mono text-slate-900 dark:text-white">{fmtC(approveTarget.amount, approveTarget.currency || baseCurrency)}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">المستويات المطلوبة:</span><span className="font-mono font-bold text-sky-600">{reqLevel} مستوى</span></div>
+                <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">الاعتماد المطلوب:</span><span className="font-mono font-bold text-sky-600">{reqLevel} مستوى</span></div>
               </div>
               <div className="space-y-2">
                 {APPROVAL_LEVEL_ROLES.slice(0, reqLevel).map((lvl) => {
-                  const a = approveTarget.approvals.find(x => x.level === lvl.level);
-                  const isNext = approveTarget.approvals.find(x => x.action === 'PENDING')?.level === lvl.level;
+                  const a = approveTarget.status === 'PENDING_APPROVAL' ? undefined : approveTarget.approvals.find(x => x.level === lvl.level);
+                  const isNext = canApprove(approveTarget, lvl.level);
                   return (
                     <div key={lvl.level} className={`rounded-xl p-3 border flex items-center justify-between ${isNext ? 'border-sky-300 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/10' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'}`}>
                       <div className="flex items-center gap-3">
@@ -2177,7 +2179,7 @@ export default function CustodyView({
           <div className="fixed inset-0 z-[105]" onClick={() => setRowMenu(null)} />
           {(() => {
             const c = rowMenu.c;
-            const nextPending = c.approvals.find(a => a.action === 'PENDING');
+            const nextPending = c.status === 'PENDING_APPROVAL' ? { level: 1 } : null;
             const canRep = canReplenishLow(c);
             const menuItem =
               'w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-sky-50 hover:text-sky-700 transition-colors text-right cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed';
@@ -2222,7 +2224,7 @@ export default function CustodyView({
                 {c.status === 'PENDING_APPROVAL' && nextPending && (
                   <button type="button" onClick={() => { openApprove(c); setRowMenu(null); }} className={menuItem}>
                     <ShieldCheck className="w-4 h-4 text-sky-600" />
-                    اعتماد (المستوى {nextPending.level})
+                    اعتماد
                   </button>
                 )}
                 {canDisburse(c) && (

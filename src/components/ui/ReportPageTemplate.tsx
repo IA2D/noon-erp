@@ -19,9 +19,12 @@ export default function ReportPageTemplate({
 }: ReportPageTemplateProps) {
   const company = useMemo(() => companyProp || loadBranchesLocal()[0] || DEFAULT_COMPANY_BRANCH, [companyProp]);
   const entries = [
-    ...(reportSubtitle ? [{ label: 'المرجع', value: reportSubtitle }] : []),
+    ...(reportSubtitle ? [{ label: 'رقم المستند', value: reportSubtitle }] : []),
     ...(currency ? [{ label: 'العملة', value: currency }] : []),
-    ...metadata,
+    ...metadata.filter(entry =>
+      !(currency && entry.label === 'العملة')
+      && !(reportSubtitle && entry.label === 'رقم المستند'),
+    ),
   ];
   return (
     <div className={`report-page-template ${printOnly ? 'hidden' : ''} ${className}`} dir="rtl">

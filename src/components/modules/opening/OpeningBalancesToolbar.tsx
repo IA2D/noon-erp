@@ -45,7 +45,7 @@ export default function OpeningBalancesToolbar({
             type="button"
             onClick={onLoadAll}
             className={ghostBtn}
-            title="تبديل عرض/طي الأرصدة المحفوظة في الجدول"
+            title="تحميل الأرصدة المحفوظة داخل جدول الإدخال الرئيسي"
           >
             <ClipboardList className="w-3.5 h-3.5 text-sky-600" />
             استعراض الأرصدة المدخلة

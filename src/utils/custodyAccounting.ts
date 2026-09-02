@@ -59,8 +59,8 @@ export function buildDisbursementJournal(
 ): JournalEntry {
   const narration = `صرف عهدة ${custody.custodyNumber} — ${custody.title} (${custody.employeeName})`;
   return journal(ctx, narration, [
-    line(advanceAccount, custody.amount, 0, `صرف عهدة ${custody.custodyNumber} — ${custody.title}`, subLedgerOf(custody)),
-    line(sourceAccount, 0, custody.amount, `مقابل صرف عهدة ${custody.custodyNumber} لـ ${custody.employeeName}`),
+    {...line(advanceAccount, custody.amount, 0, `صرف عهدة ${custody.custodyNumber} — ${custody.title}`, subLedgerOf(custody)), costCenterId: custody.costCenterId},
+    {...line(sourceAccount, 0, custody.amount, `مقابل صرف عهدة ${custody.custodyNumber} لـ ${custody.employeeName}`), ...(custody.disbursementSource ? {subLedgerId: custody.disbursementSource, subLedgerType: custody.disbursementMethod === 'CASH' ? 'CASH_BOX' as const : custody.disbursementMethod === 'EXCHANGE' ? 'EXCHANGER' as const : 'BANK' as const} : {})},
   ]);
 }
 
@@ -89,8 +89,9 @@ export function buildSettlementJournal(
         `${it.description}${it.vendorName ? ` — ${it.vendorName}` : ''}${it.invoiceNumber ? ` (فاتورة ${it.invoiceNumber})` : ''}`
       )
     );
+    lines[lines.length - 1].costCenterId = it.costCenterId || custody.costCenterId;
     if (vatAccount && it.taxAmount > 0) {
-      lines.push(line(vatAccount, it.taxAmount, 0, `ضريبة القيمة المضافة — ${it.description}`));
+      lines.push({...line(vatAccount, it.taxAmount, 0, `ضريبة القيمة المضافة — ${it.description}`), costCenterId: it.costCenterId || custody.costCenterId});
     }
   }
   lines.push(line(advanceAccount, 0, advanceCredit, `تصفية عهدة ${custody.custodyNumber} بالمستندات`, subLedgerOf(custody)));
@@ -149,8 +150,9 @@ export function buildReplenishmentJournal(
         `استعاضة عهدة ${custody.custodyNumber} — ${it.description}${it.vendorName ? ` (${it.vendorName})` : ''}`
       )
     );
+    lines[lines.length - 1].costCenterId = it.costCenterId || custody.costCenterId;
     if (vatAccount && it.taxAmount > 0) {
-      lines.push(line(vatAccount, it.taxAmount, 0, `ضريبة القيمة المضافة — ${it.description}`));
+      lines.push({...line(vatAccount, it.taxAmount, 0, `ضريبة القيمة المضافة — ${it.description}`), costCenterId: it.costCenterId || custody.costCenterId});
     }
   }
   const total = Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;

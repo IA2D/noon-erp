@@ -10,7 +10,6 @@ import {
   Coins,
   Network,
   CircleDollarSign
-  ,ScanSearch
 } from 'lucide-react';
 import { Account, CashBox, BankAccount, Employee, Customer, Vendor, CostCenter, Currency } from '../../types/erp';
 import { ERPModule } from '../../constants/permissions';
@@ -107,14 +106,6 @@ export default function InputsView({
       iconClass: 'bg-sky-500/20 text-sky-400',
       meta: `${vendors.length} مورد`,
       module: 'VENDORS'
-    },
-    {
-      id: 'in-data-quality',
-      icon: ScanSearch,
-      title: 'جودة البيانات ودمج المكرر',
-      iconClass: 'bg-amber-500/20 text-amber-400',
-      meta: 'عملاء · موردون · موظفون',
-      module: 'DATA_QUALITY'
     },
     {
       id: 'in-cost-centers',

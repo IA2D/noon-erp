@@ -21,3 +21,8 @@ contextBridge.exposeInMainWorld('desktopStore', {
 contextBridge.exposeInMainWorld('desktopPrint', {
   preview: options => ipcRenderer.invoke('desktop-print:preview', options),
 });
+
+contextBridge.exposeInMainWorld('desktopWindow', {
+  getUiScale: () => ipcRenderer.sendSync('desktop-window:get-ui-scale'),
+  setUiScalePercent: percent => ipcRenderer.sendSync('desktop-window:set-ui-scale', percent),
+});

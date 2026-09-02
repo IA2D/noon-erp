@@ -1,3 +1,4 @@
+import { dateToDisplay } from '../../../utils/dateInput';
 import React, { useMemo, useRef } from 'react';
 import { Printer, X } from 'lucide-react';
 import type { CompanyBranch } from '../../../types/erp';
@@ -9,7 +10,7 @@ import { openDesktopPrintPreview } from '../../../utils/desktopPrintPreview';
 
 const fmt = (n: number): string =>
   n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtDate = (d: string): string => (d ? d.replace(/-/g, '/') : '—');
+const fmtDate = (d: string): string => (dateToDisplay(d) || '—');
 
 const DECIMAL_BY_CODE: Record<string, string> = {
   YER: 'فلس',
@@ -80,7 +81,7 @@ export default function StatementOfAccountReport({
     <div className="soa-wrap">
       <style>{`
         .soa-wrap { direction: rtl; }
-        .soa-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .soa-table { width: 96%; max-width: 96%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-size:8px; }
         .soa-table th, .soa-table td { border: 1px solid #000; padding: 3px 5px; text-align: right; }
         .soa-table th { background: #c6c7f8; color: #000; font-weight: 900; white-space: nowrap; }
         .soa-table thead { display: table-header-group; }
@@ -173,7 +174,7 @@ export default function StatementOfAccountReport({
                     <th className="soa-col-date">التاريخ</th>
                     <th className="soa-col-doc">نوع المستند</th>
                     <th className="soa-col-no">رقم المستند</th>
-                    <th className="soa-col-ref">المرجع</th>
+
                     <th>البيان</th>
                     <th className="soa-col-num">مدين</th>
                     <th className="soa-col-num">دائن</th>
@@ -190,7 +191,7 @@ export default function StatementOfAccountReport({
                       <td className="soa-col-date">{row.seq === 0 ? '—' : fmtDate(row.date)}</td>
                       <td className="soa-col-doc">{row.docType}</td>
                       <td className="soa-col-no">{row.docNumber}</td>
-                      <td className="soa-col-ref">{row.reference}</td>
+
                       <td>{row.narration}</td>
                       <td className="soa-col-num">{row.debit > 0 ? fmt(row.debit) : ''}</td>
                       <td className="soa-col-num">{row.credit > 0 ? fmt(row.credit) : ''}</td>

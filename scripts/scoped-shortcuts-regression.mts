@@ -36,11 +36,19 @@ const f9Input = read('src/components/ui/F9SearchInput.tsx');
 const journalSearch = read('src/components/modules/JournalSearchBar.tsx');
 const narration = read('src/hooks/useNarrationContextMenu.ts');
 const openingGrid = read('src/components/modules/opening/OpeningBalancesGrid.tsx');
+const subLedgerCell = read('src/components/ui/SubLedgerF9Cell.tsx');
 
 assert.match(registry, /document\.addEventListener\('keydown', handleShortcut, true\)/);
+assert.match(registry, /querySelectorAll<HTMLElement>\('\[role="dialog"\]'\)/);
+assert.match(registry, /if \(!ownDialog\) return false/);
+assert.match(registry, /if \(ownZ < topZ\) return false/);
 assert.equal((registry.match(/document\.addEventListener\('keydown', handleShortcut, true\)/g) ?? []).length, 1);
-assert.match(f9Input, /registerScopedShortcut\(\{[\s\S]*?key: 'F9'/);
+assert.match(f9Input, /shortcutKey = 'F9'/);
+assert.match(f9Input, /registerScopedShortcut\(\{[\s\S]*?key: shortcutKey/);
 assert.match(journalSearch, /registerScopedShortcut\(\{[\s\S]*?key: 'F9'/);
+assert.match(subLedgerCell, /registerScopedShortcut\(\{[\s\S]*?key: 'F9'/);
+assert.match(subLedgerCell, /getElement: \(\) => cellRef\.current/);
+assert.doesNotMatch(subLedgerCell, /addEventListener\('keydown'/);
 assert.doesNotMatch(f9Input, /if \(e\.key === 'F9'\)/);
 assert.doesNotMatch(journalSearch, /window\.addEventListener\('keydown'/);
 
@@ -54,4 +62,4 @@ assert.match(openingGrid, /handleAddShortcut/);
 assert.match(openingGrid, /e\.key !== 'F2' && e\.key !== 'Insert'/);
 assert.match(openingGrid, /handleCellKeyDown/);
 
-console.log('SCOPED_SHORTCUTS_OK uniqueVisible=true multipleUnfocusedBlocked=true focusedTarget=true hiddenTargetsIgnored=true ambiguousFocusBlocked=true f9Centralized=true journalGlobalCollisionRemoved=true rowShortcutsFocused=true');
+console.log('SCOPED_SHORTCUTS_OK uniqueVisible=true multipleUnfocusedBlocked=true focusedTarget=true hiddenTargetsIgnored=true backgroundModalTargetsIgnored=true ambiguousFocusBlocked=true f9Centralized=true subLedgerFocusedWins=true journalGlobalCollisionRemoved=true rowShortcutsFocused=true');

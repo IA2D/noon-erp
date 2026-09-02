@@ -1,3 +1,4 @@
+import DateField from '../ui/DateField';
 import React, { useState } from 'react';
 import {
   Users,
@@ -348,7 +349,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
           <button
             type="button"
             onClick={openAdd}
-            className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-400 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+            className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             إضافة موظف جديد
@@ -423,14 +424,14 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
                     {employees.indexOf(emp) + 1}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 flex-1 min-w-[270px]">
+                <div className="flex items-center gap-3 w-80 flex-shrink-0 min-w-0">
                   <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]} text-white flex items-center justify-center font-black text-sm shadow-lg flex-shrink-0`}>
                     {initials(emp.nameAr)}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-sky-400 text-sm">{emp.code}</span>
-                      <span className="font-bold text-white whitespace-nowrap">{emp.nameAr}</span>
+                      <span className="font-bold text-white truncate block">{emp.nameAr}</span>
                     </div>
                     <div className="text-xs text-slate-400 font-mono whitespace-nowrap">{emp.nameEn || '—'}</div>
                   </div>
@@ -583,7 +584,6 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
                   <div className="w-full px-3 py-2 text-sm rounded-xl bg-slate-900/60 border border-slate-700/60 font-mono font-bold text-sky-400 text-center" dir="ltr">
                     {modal.form.code || '—'}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">يولّد تلقائياً بدلالة التسلسل EMP-### لسجل الموظفين.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">الجنس</label>
@@ -710,8 +710,8 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
                   <label className="block text-xs font-semibold text-slate-300 mb-1">تاريخ التعيين</label>
                   <div className="relative">
                     <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input
-                      type="date"
+                    <DateField
+
                       value={modal.form.hireDate}
                       onChange={e => setModal({ ...modal, form: { ...modal.form, hireDate: e.target.value } })}
                       className="w-full px-9 py-2 text-sm glass-input rounded-xl font-mono"
@@ -774,9 +774,6 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
                     );
                   })}
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
-                  أول عملة مضمّنة تُعتبر الافتراضية لراتب الموظف — تُوقف العملات بدلاً من حذفها لضمان سلامة السجل المحاسبي.
-                </p>
               </div>
 
               <div>
@@ -808,15 +805,9 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
                     <option key={acc.id} value={acc.id}>{acc.code} - {acc.nameAr}</option>
                   ))}
                 </select>
-                {isLinkedOutOfDomain(accounts, 'EMPLOYEE_ADVANCE', modal.form.linkedAccountId) ? (
-                  <p className="text-xs text-amber-400 mt-1">
+                {isLinkedOutOfDomain(accounts, 'EMPLOYEE_ADVANCE', modal.form.linkedAccountId) && (<p className="text-xs text-amber-400 mt-1">
                     الحساب المرتبط حالياً خارج مجموعة سلف الموظفين الشهرية — اختر حساباً من القائمة أعلاه.
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-500 mt-1">
-                    إجباري — تعرض القائمة حسابات سلف الموظفين الشهرية (المستوى الخامس)، وإن لم توجد تُعرض كل الحسابات النشطة.
-                  </p>
-                )}
+                  </p>)}
               </div>
 
               <div className="flex items-center gap-3 rounded-xl p-3 border border-slate-700/60 bg-slate-900/40">
@@ -844,7 +835,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
               <button
                 type="submit"
                 form="employee-form"
-                className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-500/15 hover:bg-sky-400 text-white shadow-lg transition-all cursor-pointer"
+                className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-500 text-[#ffffff] shadow-lg transition-all cursor-pointer"
               >
                 {modal.mode === 'add' ? 'حفظ الموظف' : 'حفظ التعديلات'}
               </button>

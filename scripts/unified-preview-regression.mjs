@@ -18,7 +18,8 @@ for (const file of directModules) {
 }
 const reports = read('src/components/modules/FinancialReportsView.tsx');
 for (const type of ['COST_CENTERS','PAYMENT_VOUCHERS_REPORT','RECEIPT_VOUCHERS_REPORT','JOURNAL_ENTRIES_REPORT','CASHBOX_REPORT','BANK_REPORT','EMPLOYEES_REPORT','CUSTOMERS_REPORT','VENDORS_REPORT','TRUSTS_REPORT']) assert.match(reports, new RegExp(type));
-assert.match(reports, /window\.desktopPrint\.preview/);
+assert.match(reports, /openDesktopPrintPreview/);
+assert.match(read('src/utils/desktopPrintPreview.ts'), /window\.desktopPrint\.preview/);
 const reportShell = read('src/components/ui/ReportPageTemplate.tsx');
 assert.match(reportShell, /FinancialReportPrintLayout/);
 assert.match(read('src/components/reports/FinancialReportPrintLayout.tsx'), /data-print-master="cash-movement"/);

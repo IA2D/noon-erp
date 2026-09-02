@@ -354,7 +354,7 @@ export default function TrustsView({
      <button
       type="button"
       onClick={() => { setCreateError(''); setIsCreateOpen(true); }}
-      className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-400 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+      className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
      >
       <Plus className="w-4 h-4" />
       إصدار عهدة جديدة
@@ -646,7 +646,7 @@ export default function TrustsView({
 
       <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
        <button type="button" onClick={() => setIsCreateOpen(false)} className="px-4 py-2 text-slate-300 hover:bg-white/10 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
-       <button type="submit" className="px-5 py-2 bg-sky-500/15 hover:bg-sky-400 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer">إصدار العهدة</button>
+       <button type="submit" className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] rounded-xl text-sm font-bold shadow-lg cursor-pointer">إصدار العهدة</button>
       </div>
      </form>
     </ModalShell>
@@ -730,7 +730,7 @@ export default function TrustsView({
 
       <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
        <button type="button" onClick={() => setReturnTarget(null)} className="px-4 py-2 text-slate-300 hover:bg-white/10 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
-       <button type="submit" className="px-5 py-2 bg-sky-500/15 hover:bg-sky-400 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer">تأكيد الرد</button>
+       <button type="submit" className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] rounded-xl text-sm font-bold shadow-lg cursor-pointer">تأكيد الرد</button>
       </div>
      </form>
     </ModalShell>
@@ -801,7 +801,7 @@ export default function TrustsView({
 
       <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
        <button type="button" onClick={() => setGlTarget(null)} className="px-4 py-2 text-slate-300 hover:bg-white/10 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
-       <button type="submit" disabled={usableAccounts.length < 2} className="px-5 py-2 bg-sky-500/15 hover:bg-sky-400 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">ترحيل القيد</button>
+       <button type="submit" disabled={usableAccounts.length < 2} className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">ترحيل القيد</button>
       </div>
      </form>
     </ModalShell>
@@ -882,7 +882,7 @@ export default function TrustsView({
       </div>
 
       <div className="pt-4 border-t border-slate-800 flex justify-end">
-       <button type="button" onClick={() => setDetailsTarget(null)} className="px-5 py-2 bg-sky-500/15 hover:bg-sky-400 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer">إغلاق</button>
+       <button type="button" onClick={() => setDetailsTarget(null)} className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] rounded-xl text-sm font-bold shadow-lg cursor-pointer">إغلاق</button>
       </div>
      </div>
     </ModalShell>

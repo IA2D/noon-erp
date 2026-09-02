@@ -39,7 +39,7 @@ import {
   Vendor,
 } from '../../types/erp';
 import { isPostingAccount, nextReceiptVoucherNumber, level4GroupOf } from '../../utils/accountingEngine';
-import { validateSubLedgerLines, SubLedgerDataset, subLedgerTypeOf } from '../../utils/subLedger';
+import { validateSubLedgerLines, SubLedgerDataset, subLedgerTypeOf, resolveSubLedgerName } from '../../utils/subLedger';
 import { useActiveCurrencies } from '../../hooks/useActiveCurrencies';
 import { useExchangeRateGuard } from '../../hooks/useExchangeRateGuard';
 import { tafqeet } from '../../utils/tafqeet';
@@ -290,6 +290,21 @@ export default function ReceiptVouchersWindow({
 
   const subLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
 
+  const reportAccountName = (line: ReceiptVoucherLine): string => {
+    const linkedJournal = selectedReceipt?.journalEntryId
+      ? journals.find(entry => entry.id === selectedReceipt.journalEntryId)
+      : journals.find(entry => entry.type === 'RV' && entry.referenceCode === selectedReceipt?.receiptNumber);
+    const linkedLine = linkedJournal?.lines.find(entryLine => entryLine.accountId === line.accountId && !!entryLine.subLedgerId);
+    const type = line.subLedgerType
+      || linkedLine?.subLedgerType
+      || subLedgerTypeOf(accounts.find(account => account.id === line.accountId), subLedgerDataset);
+    const subLedgerId = line.subLedgerId || linkedLine?.subLedgerId;
+    return line.subLedgerName
+      || linkedLine?.subLedgerName
+      || (subLedgerId && type !== 'NONE' ? resolveSubLedgerName(subLedgerDataset, type, subLedgerId) : '')
+      || line.accountNameAr;
+  };
+
   /** العملة الافتراضية لكيان الحساب المساعد المختار — تُنزّل تلقائياً في السطر عند التفعيل */
   const defaultCurrencyOfSubLedger = (type: SubLedgerType | undefined, entityId: string): string | undefined => {
     if (!type || !entityId) return undefined;
@@ -310,6 +325,8 @@ export default function ReceiptVouchersWindow({
   const [f9Open, setF9Open] = useState(false);
   const [f9LineId, setF9LineId] = useState<string | null>(null);
   const [f9Query, setF9Query] = useState('');
+  const [f9ActiveIndex, setF9ActiveIndex] = useState(0);
+  const f9SearchRef = useRef<HTMLInputElement>(null);
 
   const f9Level5 = useMemo(
     () =>
@@ -332,8 +349,21 @@ export default function ReceiptVouchersWindow({
   const openF9 = (lineId: string) => {
     setF9LineId(lineId);
     setF9Query('');
+    setF9ActiveIndex(0);
     setF9Open(true);
+    window.setTimeout(() => f9SearchRef.current?.focus({ preventScroll: true }), 60);
   };
+
+  useEffect(() => {
+    if (!f9Open) return;
+    const timer = window.setTimeout(() => f9SearchRef.current?.focus({ preventScroll: true }), 60);
+    return () => window.clearTimeout(timer);
+  }, [f9Open]);
+
+  useEffect(() => {
+    if (!f9Open) return;
+    document.querySelector<HTMLElement>(`#receipt-voucher-f9 [data-f9-account-index="${f9ActiveIndex}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [f9ActiveIndex, f9Open]);
 
   const applyF9Account = (account: Account) => {
     if (!f9LineId) return;
@@ -385,7 +415,7 @@ export default function ReceiptVouchersWindow({
       return [{ id: '', name: 'لا توجد صناديق نقدية — أنشئ صندوقاً من (بيانات الصناديق) أولاً', accountId: '' }];
     } else if (sourceType === 'BANK_ACCOUNT') {
       if (bankAccounts.length > 0) {
-        return bankAccounts.map(b => ({
+      return bankAccounts.filter(b => receiptMethod === 'CHEQUE' ? b.entityType === 'BANK' : b.entityType === 'EXCHANGE').map(b => ({
           id: b.id,
           name: [b.code, `${b.bankNameAr} (${b.accountNumber})`].filter(Boolean).join(' - '),
           accountId: b.linkedAccountId || '1101020001',
@@ -655,27 +685,27 @@ export default function ReceiptVouchersWindow({
   /** التحقق من بيانات السند — تعيد null عند وجود خطأ (مع إظهار رسالة) */
   const validateAndBuildReceipt = (): ReceiptVoucher | null => {
     if (!payerName.trim()) {
-      alert('يرجى إدخال اسم السداد / المدفوع منه.');
+      toast('error', 'يرجى إدخال اسم السداد / المدفوع منه.');
       return null;
     }
 
     if (!selectedSourceAccountId) {
-      alert('يرجى اختيار الحساب أو الصندوق/البنك المستلم للمقبوض.');
+      toast('error', 'يرجى اختيار الحساب أو الصندوق/البنك المستلم للمقبوض.');
       return null;
     }
 
     if (receiptMethod === 'CHEQUE' && !referenceNumber.trim()) {
-      alert('يرجى إدخال رقم الشيك.');
+      toast('error', 'يرجى إدخال رقم الشيك.');
       return null;
     }
 
     if (receiptMethod === 'CHEQUE' && !chequeDueDate) {
-      alert('يرجى تحديد تاريخ استحقاق الشيك.');
+      toast('error', 'يرجى تحديد تاريخ استحقاق الشيك.');
       return null;
     }
 
     if (receiptMethod === 'BANK_TRANSFER' && !referenceNumber.trim()) {
-      alert('يرجى إدخال رقم الحوالة / الإشعار البنكي.');
+      toast('error', 'يرجى إدخال رقم الحوالة / الإشعار البنكي.');
       return null;
     }
 
@@ -684,24 +714,24 @@ export default function ReceiptVouchersWindow({
 
     const invalidLine = lines.find(l => !l.accountId || !l.currency || Number(l.amount) <= 0);
     if (invalidLine) {
-      alert('يرجى التأكد من اختيار الحساب والعملة وإدخال مبلغ أكبر من صفر لكل سطر في جدول القبض.');
+      toast('error', 'يرجى التأكد من اختيار الحساب والعملة وإدخال مبلغ أكبر من صفر لكل سطر في جدول القبض.');
       return null;
     }
 
     if (debitLocalTotal <= 0) {
-      alert('يرجى إدخال المبلغ الإجمالي للمقبوض (الصندوق/البنك المستلم) — يجب أن يكون أكبر من صفر.');
+      toast('error', 'يرجى إدخال المبلغ الإجمالي للمقبوض (الصندوق/البنك المستلم) — يجب أن يكون أكبر من صفر.');
       return null;
     }
 
     // التحقق الموحد من الحسابات المساعدة قبل الحفظ (بأرقام الأسطر)
     const slCheck = validateSubLedgerLines(computedLines, accounts, subLedgerDataset);
     if (!slCheck.valid) {
-      alert(slCheck.message || 'يرجى تحديد الحساب المساعد للسطر المطلوب.');
+      toast('error', slCheck.message || 'يرجى تحديد الحساب المساعد للسطر المطلوب.');
       return null;
     }
 
     if (Math.abs(balanceDifference) > 0.005) {
-      alert('لا يمكن حفظ السند — يجب أن يتساوى إجمالي المدين (المقبوض) مع إجمالي الدائن (البنود).');
+      toast('error', 'لا يمكن حفظ السند — يجب أن يتساوى إجمالي المدين (المقبوض) مع إجمالي الدائن (البنود).');
       return null;
     }
 
@@ -785,7 +815,7 @@ export default function ReceiptVouchersWindow({
       await downloadVoucherPdf(printablePaperRef.current, voucherFileName('receipt-voucher', selectedReceipt.receiptNumber));
     } catch (err) {
       console.error('PDF generation failed', err);
-      alert('تعذر إنشاء ملف PDF.');
+      toast('error', 'تعذر إنشاء ملف PDF.');
     } finally {
       setPdfBusy(false);
     }
@@ -973,6 +1003,7 @@ export default function ReceiptVouchersWindow({
               { label: 'الإجمالي', render: r => <span className="font-mono font-bold text-slate-800">{fmt(r.totalAmount)} <span className="text-blue-600 text-sm">{r.currency || 'YER'}</span></span> }
             ]}
             searchText={r => [r.receiptNumber, r.date, r.payerName, r.narration, r.referenceNumber || '', r.totalAmount, r.currency, r.status, r.receiptMethod, r.sourceAccountNameAr].join(' ')}
+            onSelect={r => setSearchTerm(r.receiptNumber)}
             browseTitle="استعراض سندات القبض"
           />
         </div>
@@ -1183,7 +1214,7 @@ export default function ReceiptVouchersWindow({
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300">
                     {selectedReceipt.lines?.length ? selectedReceipt.lines.map(l => (
                       <tr key={l.id}>
-                        <td className="py-2 px-3 font-semibold">{l.accountNameAr}</td>
+                        <td className="py-2 px-3 font-semibold">{reportAccountName(l)}</td>
                         <td className="py-2 px-3 text-slate-500 dark:text-slate-400">{l.description || '—'}</td>
                         <td className="py-2 px-3 text-center font-mono font-bold">{fmt(l.totalAmount || l.amount)}</td>
                       </tr>
@@ -1353,7 +1384,7 @@ export default function ReceiptVouchersWindow({
                 <div>
                   <div className="flex items-stretch gap-2">
                     <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 leading-none">سعر الصرف مقابل {baseCode}</label>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 leading-none">سعر الصرف</label>
                       <ExchangeRateField
                         value={exchangeRate}
                         onChange={v => setExchangeRate(v)}
@@ -1368,7 +1399,7 @@ export default function ReceiptVouchersWindow({
                       <div className="min-h-[1.05rem] mt-1.5 leading-none"></div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 leading-none">المبلغ المحلي ({baseCode})</label>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 leading-none">المبلغ المحلي</label>
                       {isBaseCurrency ? (
                         <AmountInput
                           value={debitLocalAmount || ''}
@@ -1498,7 +1529,7 @@ export default function ReceiptVouchersWindow({
                           <th className="p-3 min-w-[95px] whitespace-nowrap" title="العملة">العملة</th>
                           <th className="p-3 min-w-[90px] whitespace-nowrap" title="سعر الصرف">سعر الصرف</th>
                           <th className="p-3 min-w-[240px] whitespace-nowrap" title="البيان التفصيلي للسطر">البيان التفصيلي للسطر</th>
-                          <th className="p-3 min-w-[130px] whitespace-nowrap" title={`المبلغ المحلي (${baseCode})`}>المبلغ المحلي ({baseCode})</th>
+                          <th className="p-3 min-w-[130px] whitespace-nowrap" title="المبلغ المحلي">المبلغ المحلي</th>
                           <th className="p-3 min-w-[130px] whitespace-nowrap" title="المبلغ الأجنبي">المبلغ الأجنبي</th>
                           <th className="p-3 min-w-[140px] whitespace-nowrap" title="مركز التكلفة">مركز التكلفة</th>
                           <th className="p-3 min-w-[130px] whitespace-nowrap" title="رقم المرجع">رقم المرجع</th>
@@ -1522,6 +1553,7 @@ export default function ReceiptVouchersWindow({
                                   <input
                                     type="text"
                                     readOnly
+                                    data-enter-nav-field="account-name"
                                     value={computed.accountId ? `${computed.accountCode} - ${computed.accountNameAr}` : ''}
                                     onKeyDown={e => {
                                       if (e.key === 'F9') {
@@ -1698,13 +1730,9 @@ export default function ReceiptVouchersWindow({
                                     value={computed.localAmount || ''}
                                     onChange={v => {
                                       const val = parseFloat(v) || 0;
-                                      const foreign = Number(line.amount) || 0;
-                                      const next = handleCurrencyFieldChange('local', val, {
-                                        foreignAmount: foreign,
-                                        exchangeRate: Number(line.exchangeRate) || 1,
-                                        localAmount: Number(computed.localAmount) || 0,
-                                      });
-                                      setLines(prev => prev.map(l => l.id === line.id ? { ...l, localAmount: next.localAmount, exchangeRate: next.exchangeRate } : l));
+                                      const rate = Number(line.exchangeRate) || 1;
+                                       const foreign = rate > 0 ? Math.round((val / rate) * 100) / 100 : 0;
+                                      setLines(prev => prev.map(l => l.id === line.id ? { ...l, localAmount: val, amount: foreign } : l));
                                     }}
                                     disabled={!currencyActive}
 
@@ -1866,14 +1894,26 @@ export default function ReceiptVouchersWindow({
               <div className="relative">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
+                  ref={f9SearchRef}
                   type="text"
                   autoFocus
                   value={f9Query}
-                  onChange={e => setF9Query(e.target.value)}
+                  onChange={e => { setF9Query(e.target.value); setF9ActiveIndex(0); }}
                   onKeyDown={e => {
-                    if (e.key === 'Escape') setF9Open(false);
+                    if (e.key === 'Escape') { e.preventDefault(); setF9Open(false); return; }
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setF9ActiveIndex(i => Math.min(i + 1, Math.max(0, f9List.length - 1)));
+                      return;
+                    }
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setF9ActiveIndex(i => Math.max(i - 1, 0));
+                      return;
+                    }
                     if (e.key === 'Enter' && f9List.length > 0) {
-                      applyF9Account(f9List[0]);
+                      e.preventDefault();
+                      applyF9Account(f9List[f9ActiveIndex] || f9List[0]);
                     }
                   }}
 
@@ -1892,11 +1932,14 @@ export default function ReceiptVouchersWindow({
                   </div>
                 </div>
               ) : (
-                f9List.map(account => (
+                f9List.map((account, accountIndex) => (
                   <button
                     key={account.id}
-                    onClick={() => applyF9Account(account)}
-                    className="w-full text-right flex items-center gap-3 px-4 py-2.5 border-b border-slate-800/60 hover:bg-sky-500/10 transition-colors cursor-pointer"
+                    type="button"
+                    data-f9-account-index={accountIndex}
+                    onMouseEnter={() => setF9ActiveIndex(accountIndex)}
+                    onMouseDown={e => { e.preventDefault(); applyF9Account(account); }}
+                    className={`w-full text-right flex items-center gap-3 px-4 py-2.5 border-b border-slate-800/60 transition-colors cursor-pointer ${accountIndex === f9ActiveIndex ? 'bg-sky-500/15 ring-1 ring-inset ring-sky-500/50' : 'hover:bg-sky-500/10'}`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -1975,11 +2018,18 @@ export default function ReceiptVouchersWindow({
                   { label: 'المدفوع منه', value: selectedReceipt.payerName },
                   { label: 'طريقة الاستلام', value: selectedReceipt.receiptMethod === 'CASH' ? 'نقداً إلى الصندوق' : selectedReceipt.receiptMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك بنكي' },
                   { label: 'المودع فيه', value: selectedReceipt.sourceAccountNameAr },
-                  ...(selectedReceipt.referenceNumber ? [{ label: 'رقم المرجع / الشيك', value: selectedReceipt.referenceNumber }] : []),
+                  {
+                    label: selectedReceipt.receiptMethod === 'CHEQUE'
+                      ? 'رقم الشيك'
+                      : selectedReceipt.receiptMethod === 'BANK_TRANSFER'
+                        ? 'رقم الحوالة / الإشعار البنكي'
+                        : 'رقم الإيصال / المرجع',
+                    value: selectedReceipt.referenceNumber || '—',
+                  },
                   ...(selectedReceipt.chequeBankName ? [{ label: 'بنك الشيك', value: selectedReceipt.chequeBankName }] : []),
                   ...(selectedReceipt.chequeDueDate ? [{ label: 'تاريخ الاستحقاق', value: formatDate(selectedReceipt.chequeDueDate) }] : []),
                   { label: 'سعر الصرف', value: String(selectedReceipt.exchangeRate || 1) },
-                  { label: 'البيان العام', value: selectedReceipt.narration },
+                  { label: 'البيان العام', value: selectedReceipt.narration || '—' },
                 ]}
                 tafqeetText={selectedReceipt.amountInWordsAr}
                 totalAmountText={`${selectedReceipt.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedReceipt.currency || 'YER'}`}
@@ -1998,7 +2048,7 @@ export default function ReceiptVouchersWindow({
                       <th>رقم الحساب</th>
                       <th>اسم الحساب المحاسبي</th>
                       <th>البيان / الشرح</th>
-                      <th>رقم المرجع</th>
+                      <th>رقم المرجع للطرف</th>
                       <th className="text-left">المبلغ ({selectedReceipt.currency || 'YER'})</th>
                     </tr>
                   </thead>
@@ -2007,7 +2057,7 @@ export default function ReceiptVouchersWindow({
                       <tr key={l.id}>
                         <td className="text-center font-mono">{idx + 1}</td>
                         <td className="font-mono">{l.accountCode}</td>
-                        <td className="font-semibold">{l.accountNameAr}</td>
+                        <td className="font-semibold">{reportAccountName(l)}</td>
                         <td className="text-slate-600">{l.description}</td>
                         <td className="font-mono">{l.referenceNumber || '—'}</td>
                         <td className="font-bold text-left font-mono whitespace-nowrap">{l.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {l.currency || selectedReceipt.currency || 'YER'}</td>

@@ -109,6 +109,7 @@ export default function SubLedgerLookup({ open, type, dataset, initialQuery = ''
             <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
             <input
               ref={inputRef}
+              autoFocus
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
@@ -167,6 +168,7 @@ export default function SubLedgerLookup({ open, type, dataset, initialQuery = ''
                 {results.map((entity, idx) => (
                    <tr
                      key={entity.id}
+                     onMouseDown={e => { e.preventDefault(); onSelect(entity); }}
                      onClick={() => onSelect(entity)}
                      onMouseEnter={() => setActiveIndex(idx)}
                      className={`cursor-pointer transition-colors ${activeIndex === idx ? 'bg-sky-500/20 ring-1 ring-sky-500/40' : 'hover:bg-sky-500/10'}`}

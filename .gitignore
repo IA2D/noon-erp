@@ -10,7 +10,7 @@ coverage/
 !.env.example
 .aider*
 # قاعدة بيانات SQLite المحلية لمحرك التقارير
-data/
+/data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

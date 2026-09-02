@@ -1,3 +1,4 @@
+import DateField from '../ui/DateField';
 import React, { useMemo, useState, useEffect } from 'react';
 import { FileText, Printer, Search } from 'lucide-react';
 import PageHeader from '../ui/PageHeader';
@@ -326,8 +327,8 @@ export default function StatementOfAccountView({
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <span className="block text-xs text-slate-500 mb-0.5">من</span>
-                <input
-                  type="date"
+                <DateField
+
                   value={fromDate}
                   onChange={e => setFromDate(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
@@ -335,8 +336,8 @@ export default function StatementOfAccountView({
               </div>
               <div>
                 <span className="block text-xs text-slate-500 mb-0.5">إلى</span>
-                <input
-                  type="date"
+                <DateField
+
                   value={toDate}
                   onChange={e => setToDate(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"

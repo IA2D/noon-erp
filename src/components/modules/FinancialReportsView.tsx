@@ -1,5 +1,8 @@
+import {openDesktopPrintPreview} from '../../utils/desktopPrintPreview';
+import { dateToIso, dateToDisplay, inDateRange } from '../../utils/dateInput';
+import { reportDocuments, lineCostCenterId, entityOpening, lineBelongsToEntity, isBeforeReport, voucherReportAmount } from '../../utils/reportData';
 import React, { useState, useMemo, useRef, Fragment, useEffect } from 'react';
-import { Account, JournalEntry, CostCenter, Currency, Employee, Customer, Vendor, CashBox, BankAccount, Trust, PaymentVoucher, ReceiptVoucher } from '../../types/erp';
+import { Account, JournalEntry, CostCenter, Currency, Employee, Customer, Vendor, CashBox, BankAccount, Trust, Custody, SubLedgerType, PaymentVoucher, ReceiptVoucher } from '../../types/erp';
 import {
   calculateIncomeStatement,
   calculateBalanceSheet,
@@ -56,7 +59,7 @@ import { tafqeet } from '../../utils/tafqeet';
 import FinancialReportPrintLayout from '../reports/FinancialReportPrintLayout';
 import { buildPeriodAccounts, calculatePeriodMovement, validateReportPeriod } from '../../utils/reportingPeriod';
 import { currencyDecimals, roundTo } from '../../utils/money';
-import { accountsWithCurrencyOpenings, projectPostedJournalsToCurrency } from '../../utils/currencyReporting';
+import { accountsWithCurrencyOpenings, projectJournalsToCurrency, projectPostedJournalsToCurrency } from '../../utils/currencyReporting';
 import { defaultReportToDate, toLocalIsoDate } from '../../utils/dateDefaults';
 
 interface Props {
@@ -71,6 +74,7 @@ interface Props {
   cashBoxes?: CashBox[];
   bankAccounts?: BankAccount[];
   trusts?: Trust[];
+  custodies?: Custody[];
   vouchers?: PaymentVoucher[];
   receiptVouchers?: ReceiptVoucher[];
   enableEnhancedView?: boolean;
@@ -84,7 +88,7 @@ const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2,
 const fmtP = (n: number) => n < 0 ? `(${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : fmt(n);
 
 const PrintSignatures = () => (
-  <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'space-between', gap: '24px', fontSize: '12px', color: '#000', pageBreakInside: 'avoid' }}>
+  <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'space-between', gap: '24px', fontSize: '9.6px', color: '#000', pageBreakInside: 'avoid' }}>
     {['إعداد المحاسب', 'مراجعة المدير المالي', 'اعتماد المدير العام'].map((role) => (
       <div key={role} style={{ flex: 1, textAlign: 'center' }}>
         <div style={{ borderTop: '2px solid #000', paddingTop: '4px', fontWeight: 'bold' }}>{role}</div>
@@ -98,10 +102,10 @@ const PrintSignatures = () => (
 const PrintTafqeet = ({ label, amount, currencyName, currencyCode }: { label: string; amount: number; currencyName: string; currencyCode: string }) => (
   <div style={{ marginTop: '8px', border: '2px solid #000', padding: '6px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9f8fc', pageBreakInside: 'avoid' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-      <span style={{ fontSize: '13px', fontWeight: 900, color: '#000' }}>{label} =</span>
-      <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#000' }}>{tafqeet(Math.abs(amount), currencyName, currencyCode)}</span>
+      <span style={{ fontSize: '10.4px', fontWeight: 900, color: '#000' }}>{label} =</span>
+      <span style={{ fontSize: '9.6px', fontWeight: 'bold', color: '#000' }}>{tafqeet(Math.abs(amount), currencyName, currencyCode)}</span>
     </div>
-    <div style={{ fontSize: '16px', fontWeight: 900, color: '#1d4ed8', direction: 'ltr', fontFamily: "'Consolas', monospace" }}>
+    <div style={{ fontSize: '12.8px', fontWeight: 900, color: '#1d4ed8', direction: 'ltr', fontFamily: "'Consolas', monospace" }}>
       {fmt(Math.abs(amount))}
     </div>
   </div>
@@ -416,6 +420,7 @@ export default function FinancialReportsView({
   cashBoxes = [],
   bankAccounts = [],
   trusts = [],
+  custodies = [],
   vouchers = [],
   receiptVouchers = [],
   enableEnhancedView = false,
@@ -490,20 +495,17 @@ export default function FinancialReportsView({
   const toReportCurrency = (n: number) => roundTo(n || 0, selectedDecimals);
 
   const baseJournals = useMemo(
-    () => projectPostedJournalsToCurrency(journals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals),
+    () => projectPostedJournalsToCurrency(journals.map(j => ({...j, date: dateToIso(j.date)})), isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals),
     [journals, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]
   );
 
   const reportJournals = useMemo(() => baseJournals, [baseJournals]);
 
-  const journalsInRange = useMemo(() => {
-    const from = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : -Infinity;
-    const to = toDate ? new Date(`${toDate}T23:59:59`).getTime() : Infinity;
-    return reportJournals.filter(j => {
-      const t = new Date(`${j.date}T00:00:00`).getTime();
-      return t >= from && t <= to;
-    });
-  }, [reportJournals, fromDate, toDate]);
+  const journalsInRange = useMemo(() => reportDocuments(reportJournals, fromDate, toDate), [reportJournals, fromDate, toDate]);
+  // Operational document reports include pending records, visibly labelled; financial statements remain POSTED-only.
+  const documentJournals = useMemo(() => reportDocuments(
+    projectJournalsToCurrency(journals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true), fromDate, toDate
+  ), [journals, fromDate, toDate, currency, baseCode, selectedDecimals, isOriginalCurrencyReport]);
 
   const allJournals = useMemo(() => reportJournals, [reportJournals]);
 
@@ -673,18 +675,19 @@ export default function FinancialReportsView({
 
   const costCenterActivity = useMemo(() => {
     const map: Record<string, { debit: number; credit: number; count: number }> = {};
-    journalsInRange.forEach(j =>
+    documentJournals.forEach(j =>
       j.lines.forEach(l => {
-        if (!l.costCenterId) return;
-        const cur = map[l.costCenterId] || { debit: 0, credit: 0, count: 0 };
+        const costCenterId = lineCostCenterId(l);
+        if (!costCenterId) return;
+        const cur = map[costCenterId] || { debit: 0, credit: 0, count: 0 };
         cur.debit = round2(cur.debit + (l.debit || 0));
         cur.credit = round2(cur.credit + (l.credit || 0));
         cur.count += 1;
-        map[l.costCenterId] = cur;
+        map[costCenterId] = cur;
       })
     );
     return map;
-  }, [journalsInRange]);
+  }, [documentJournals]);
 
   const openLedger = (accountId: string) => {
     const acc = accounts.find(a => a.id === accountId);
@@ -731,84 +734,8 @@ export default function FinancialReportsView({
   };
 
   const LANDSCAPE_REPORTS: ReportType[] = []; // All financial reports use A4 portrait for consistent Windows preview/output.
-  const buildDesktopPrintHtml = (printArea: HTMLElement) => {
-    const css = Array.from(document.styleSheets).map(sheet => {
-      try {
-        return Array.from(sheet.cssRules).map(rule => rule.cssText).join('\n');
-      } catch {
-        return '';
-      }
-    }).join('\n');
-    return `<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <base href="${document.baseURI}" />
-  <style>${css}</style>
-</head>
-<body class="printing-financial-report">
-  ${printArea.outerHTML}
-</body>
-</html>`;
-  };
-  const printReport = async (landscape = false) => {
-    const printArea = printAreaRef.current;
-    const screenContainer = document.querySelector('.report-screen-container') as HTMLElement | null;
-    const style = document.createElement('style');
-    style.setAttribute('data-print-orientation', '');
-    style.textContent = `@media print { @page { size: A4 ${landscape ? 'landscape' : 'portrait'} !important; margin: ${landscape ? '8mm 8mm 16mm' : '10mm 10mm 18mm'} !important; } }`;
-    document.head.appendChild(style);
-
-    if (printArea && screenContainer) {
-      document.body.classList.add('printing-financial-report');
-      printArea.classList.add('is-printing');
-      screenContainer.style.display = 'none';
-      printArea.style.position = 'relative';
-      printArea.style.left = '0';
-      printArea.style.top = '0';
-      printArea.style.zIndex = '99999';
-      printArea.style.width = '100%';
-
-      const cleanup = () => {
-          style.remove();
-          document.body.classList.remove('printing-financial-report');
-          printArea.classList.remove('is-printing');
-          printArea.style.position = 'fixed';
-          printArea.style.left = '-9999px';
-          printArea.style.top = '0';
-          printArea.style.zIndex = '';
-          printArea.style.width = LANDSCAPE_REPORTS.includes(reportType) ? '1122px' : '794px';
-          screenContainer.style.display = '';
-      };
-      await new Promise(resolve => setTimeout(resolve, 100));
-      try {
-        if (window.desktopPrint) {
-          await window.desktopPrint.preview({
-            landscape,
-            title: REPORT_META[reportType].ar,
-            html: buildDesktopPrintHtml(printArea),
-          });
-        } else {
-          window.print();
-        }
-      } finally {
-        cleanup();
-      }
-    } else {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      try {
-        if (window.desktopPrint) {
-          await window.desktopPrint.preview({
-            landscape,
-            title: REPORT_META[reportType].ar,
-          });
-        } else {
-          window.print();
-        }
-      } finally {
-        style.remove();
-      }
-    }
+  const printReport = async (_landscape = false) => {
+    await openDesktopPrintPreview(printAreaRef.current, REPORT_META[reportType].ar, 'portrait');
   };
 
   const applyQuickPeriod = (from: string, to: string) => { setFromDate(from); setToDate(to); };
@@ -879,8 +806,8 @@ export default function FinancialReportsView({
       case 'TRUSTS_REPORT': return employees.map(e => ({ id: e.id, code: e.code, name: e.nameAr }));
       case 'CUSTOMERS_REPORT': return customers.map(c => ({ id: c.id, code: c.code, name: c.nameAr }));
       case 'VENDORS_REPORT': return vendors.map(v => ({ id: v.id, code: v.code, name: v.nameAr }));
-      case 'CASHBOX_REPORT': return cashBoxPostingAccounts(accounts).map(a => ({ id: a.id, code: a.code, name: a.nameAr }));
-      case 'BANK_REPORT': return bankPostingAccounts(accounts).map(a => ({ id: a.id, code: a.code, name: a.nameAr }));
+      case 'CASHBOX_REPORT': return cashBoxes.map(a => ({ id: a.id, code: a.code, name: a.nameAr }));
+      case 'BANK_REPORT': return bankAccounts.map(a => ({ id: a.id, code: a.code, name: a.bankNameAr }));
       case 'COST_CENTERS': return costCenters.map(cc => ({ id: cc.id, code: cc.code, name: cc.nameAr }));
       default: return [];
     }
@@ -891,7 +818,8 @@ export default function FinancialReportsView({
     if (!list.length) return { rangeLo: 0, rangeHi: -1 };
     const f = list.findIndex(x => String(x.id) === String(fromEntityId));
     const t = list.findIndex(x => String(x.id) === String(toEntityId));
-    const lo = f === -1 ? 0 : f;
+    // Entity filter semantics: no filters = all; to-only = selected account; from-only = from through end; both = inclusive range.
+    const lo = f === -1 && t !== -1 ? t : (f === -1 ? 0 : f);
     const hi = t === -1 ? list.length - 1 : t;
     return { rangeLo: Math.min(lo, hi), rangeHi: Math.max(lo, hi) };
   }, [currentEntitiesList, fromEntityId, toEntityId]);
@@ -927,8 +855,8 @@ export default function FinancialReportsView({
       case 'EMPLOYEES_REPORT': return employees.find(e => e.id === enId)?.linkedAccountId;
       case 'CUSTOMERS_REPORT': return customers.find(c => c.id === enId)?.linkedAccountId;
       case 'VENDORS_REPORT': return vendors.find(v => v.id === enId)?.linkedAccountId;
-      case 'CASHBOX_REPORT':
-      case 'BANK_REPORT': return enId;
+      case 'CASHBOX_REPORT': return cashBoxes.find(e => e.id === enId)?.linkedAccountId;
+      case 'BANK_REPORT': return bankAccounts.find(e => e.id === enId)?.linkedAccountId;
       default: return undefined;
     }
   };
@@ -968,18 +896,20 @@ export default function FinancialReportsView({
     opening: number;
     showOpening: boolean;
     rows: PrintableStatementRow[];
+    currencyCode?: string;
   }
 
   const statementSpecs = useMemo<StatementSpec[]>(() => {
     const docType = (id: string) => docTypeByJournal[id] || 'قيد يومية';
-    const toRow = (j: JournalEntry, l: { debit?: number; credit?: number; description?: string }): PrintableStatementRow => ({
-      date: j.date,
-      docType: docType(j.id),
+    const toRow = (j: JournalEntry, l: { debit?: number; credit?: number; description?: string; currency?: string }): PrintableStatementRow => ({
+      date: dateToIso(j.date),
+      docType: docType(j.id) + (j.status === 'PENDING_POSTING' ? ' (بانتظار الترحيل)' : ''),
       docNumber: j.entryNumber,
       reference: j.reference || '—',
       description: l.description || j.narration || '—',
       debit: l.debit || 0,
       credit: l.credit || 0,
+      currency: l.currency || j.currency || baseCode,
     });
     const sortRows = (a: PrintableStatementRow, b: PrintableStatementRow) =>
       a.date.localeCompare(b.date) || a.docNumber.localeCompare(b.docNumber);
@@ -987,7 +917,10 @@ export default function FinancialReportsView({
     if (reportType === 'TRUSTS_REPORT') {
       const empIds = new Set(scopedEntities.map(e => e.id));
       const all = empIds.size === 0 || empIds.size >= employees.length;
-      const reportTrusts = trusts.filter(t => all || (t.employeeId && empIds.has(t.employeeId)));
+      const reportTrusts = [
+        ...trusts.filter(t => !custodies.some(c => c.id === t.id)).map(t => ({ ...t, currency: baseCode, exchangeRate: 1 })),
+        ...custodies.filter(c => c.status !== 'VOIDED').map(c => ({ ...c, date: c.requestedDate, trustNumber: c.custodyNumber, returnedAmount: c.refundedAmount + c.apTransferredAmount })),
+      ].filter(t => (all || (t.employeeId && empIds.has(t.employeeId))) && inDateRange(t.date, fromDate, toDate) && (!isOriginalCurrencyReport || t.currency === currency));
       const emp = employees.find(e => e.id === (fromEntityId || toEntityId));
       const first = scopedEntities[0];
       const last = scopedEntities[scopedEntities.length - 1];
@@ -1009,8 +942,8 @@ export default function FinancialReportsView({
           docNumber: t.trustNumber,
           reference: t.referenceNumber || '—',
           description: t.title,
-          debit: t.amount || 0,
-          credit: round2((t.settledAmount || 0) + (t.returnedAmount || 0)),
+          debit: round2((t.amount || 0) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
+          credit: round2(((t.settledAmount || 0) + (t.returnedAmount || 0)) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
         })),
       }];
     }
@@ -1021,9 +954,9 @@ export default function FinancialReportsView({
       const allRows: PrintableStatementRow[] = [];
 
       scopedCC.forEach(cc => {
-        journalsInRange.forEach(j =>
+        documentJournals.forEach(j =>
           j.lines.forEach(l => {
-            if (l.costCenterId !== cc.id) return;
+            if (lineCostCenterId(l) !== cc.id) return;
             allRows.push(toRow(j, l));
           })
         );
@@ -1043,6 +976,7 @@ export default function FinancialReportsView({
         key: 'COST_CENTERS',
         titleAr: 'كشف مراكز التكلفة التحليلي',
         titleEn: 'Cost Centers Analytical Statement',
+        subjectExtra: 'يشمل الحركات المرحلة والمعلقة؛ الحركات المعلقة موضحة ولا تدخل القوائم المالية',
         subjectCode: first?.code || '—',
         subjectName,
         opening: 0,
@@ -1060,22 +994,19 @@ export default function FinancialReportsView({
         BANK_REPORT: { titleAr: 'كشف حركة البنك / الصراف التحليلي', titleEn: 'Bank & Exchange Analytical Statement' },
       };
       const m = meta[reportType];
-      const isDirectGL = reportType === 'CASHBOX_REPORT' || reportType === 'BANK_REPORT';
       const allRows: PrintableStatementRow[] = [];
       let openingBalance = 0;
-
+      const entities = reportType === 'CASHBOX_REPORT' ? cashBoxes : reportType === 'BANK_REPORT' ? bankAccounts : reportType === 'EMPLOYEES_REPORT' ? employees : reportType === 'CUSTOMERS_REPORT' ? customers : vendors;
+      const types: SubLedgerType[] = reportType === 'CASHBOX_REPORT' ? ['CASH_BOX'] : reportType === 'BANK_REPORT' ? ['BANK','EXCHANGER'] : reportType === 'EMPLOYEES_REPORT' ? ['EMPLOYEE'] : reportType === 'CUSTOMERS_REPORT' ? ['CUSTOMER'] : ['SUPPLIER'];
       scopedEntities.forEach(en => {
-        const accId = linkedAccountIdOf(en.id);
-        const acc = accId ? reportAccounts.find(a => a.id === accId) : null;
-        if (!acc) return;
-        openingBalance += acc.openingBalance || 0;
-        journalsInRange.forEach(j =>
-          j.lines.forEach(l => {
-            if (l.accountId !== acc.id) return;
-            if (!isDirectGL && l.subLedgerId && l.subLedgerId !== en.id) return;
-            allRows.push(toRow(j, l));
-          })
-        );
+        const entity = entities.find(e => e.id === en.id);
+        if (!entity) return;
+        if (includeOpening) openingBalance += entityOpening(entity, isOriginalCurrencyReport ? currency : baseCode, baseCode);
+        reportJournals.forEach(j => j.lines.forEach(l => {
+          if (!lineBelongsToEntity(l, j, entity, entities, types, [...vouchers, ...receiptVouchers])) return;
+          if (includeOpening && isBeforeReport(j.date, fromDate)) openingBalance += (l.debit || 0) - (l.credit || 0);
+          else if (inDateRange(j.date, fromDate, toDate)) allRows.push(toRow(j, l));
+        }));
       });
 
       allRows.sort(sortRows);
@@ -1101,19 +1032,45 @@ export default function FinancialReportsView({
     }
 
     return [];
-  }, [reportType, journalsInRange, scopedEntities, reportAccounts, employees, trusts, costCenters, docTypeByJournal, fromEntityId, toEntityId]);
+  }, [reportType, journalsInRange, documentJournals, reportJournals, scopedEntities, reportAccounts, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, costCenters, docTypeByJournal, fromEntityId, toEntityId, fromDate, toDate, includeOpening, isOriginalCurrencyReport, currency, baseCode, vouchers, receiptVouchers]);
+
+  // When the report is not restricted to one original currency, render a full
+  // independent page per currency in the same print job.
+  // Build a full independent page per currency in the same print job.
+  const printableStatementSpecs = useMemo(() => {
+    const expanded: StatementSpec[] = [];
+    statementSpecs.forEach(spec => {
+      const groups = new Map<string, PrintableStatementRow[]>();
+      spec.rows.forEach(row => {
+        const code = row.currency || baseCode;
+        const bucket = groups.get(code) || [];
+        bucket.push(row);
+        groups.set(code, bucket);
+      });
+      if (groups.size <= 1) { expanded.push(spec); return; }
+      groups.forEach((rows, code) => expanded.push({
+        ...spec,
+        key: `${spec.key}-${code}`,
+        titleAr: `${spec.titleAr} — ${code}`,
+        subjectExtra: `${spec.subjectExtra ? `${spec.subjectExtra} — ` : ''}عملة ${code}`,
+        rows,
+        currencyCode: code,
+      }));
+    });
+    return expanded;
+  }, [statementSpecs, isOriginalCurrencyReport, baseCode]);
 
   const filteredPaymentVouchers = useMemo(() =>
-    (vouchers || []).filter(v => v.date >= fromDate && v.date <= toDate),
-    [vouchers, fromDate, toDate]
+    reportDocuments(vouchers || [], fromDate, toDate).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
+    [vouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
   );
   const filteredReceiptVouchers = useMemo(() =>
-    (receiptVouchers || []).filter(v => v.date >= fromDate && v.date <= toDate),
-    [receiptVouchers, fromDate, toDate]
+    reportDocuments(receiptVouchers || [], fromDate, toDate).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
+    [receiptVouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
   );
   const filteredJournalEntries = useMemo(() =>
-    journalsInRange.filter(j => j.status !== 'VOIDED'),
-    [journalsInRange]
+    documentJournals,
+    [documentJournals]
   );
 
   const currencyNameAr = currencyOptions.find(c => c.code === currency)?.label.split(' (')[0] || currency;
@@ -1136,12 +1093,12 @@ export default function FinancialReportsView({
       case 'LEDGER': {
         const rows: (string | number)[][] = [];
         if (selectedAccount && ledger) {
-          if (includeOpening) rows.push(['رصيد افتتاحي', '—', '—', '—', ledger.openingDebit || '', ledger.openingCredit || '', ledger.opening]);
-          if (!isSummary) ledger.rows.forEach(r => rows.push([r.date, r.entryNumber, r.reference, r.description || r.narration, r.debit || '', r.credit || '', r.running]));
-          rows.push(['الإجمالي', '—', '—', '—', ledger.totalDebit || '', ledger.totalCredit || '', '']);
-          rows.push(['الرصيد الختامي', '—', '—', '—', '—', '—', ledger.closing || '']);
+          if (includeOpening) rows.push(['رصيد افتتاحي', '—', '—', ledger.openingDebit || '', ledger.openingCredit || '', ledger.opening]);
+          if (!isSummary) ledger.rows.forEach(r => rows.push([dateToDisplay(r.date), r.entryNumber, r.description || r.narration, r.debit || '', r.credit || '', r.running]));
+          rows.push(['الإجمالي', '—', '—', ledger.totalDebit || '', ledger.totalCredit || '', '']);
+          rows.push(['الرصيد الختامي', '—', '—', '—', '—', ledger.closing || '']);
         }
-        return { columns: ['التاريخ', 'رقم القيد', 'المرجع', 'البيان', 'مدين', 'دائن', 'الرصيد'], rows };
+        return { columns: ['التاريخ', 'رقم المستند', 'البيان', 'مدين', 'دائن', 'الرصيد'], rows };
       }
       case 'INCOME_STATEMENT': {
         const rows: (string | number)[][] = [];
@@ -1190,7 +1147,7 @@ export default function FinancialReportsView({
       case 'RECEIPT_VOUCHERS_REPORT':
         return { columns: ['التاريخ', 'رقم السند', 'المدفوع منه', 'البيان', 'طريقة القبض', 'المبلغ', 'الحالة'], rows: filteredReceiptVouchers.map(v => [v.date, v.receiptNumber, v.payerName, v.narration, v.receiptMethod === 'CASH' ? 'نقداً' : v.receiptMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', v.totalAmount, v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
       case 'JOURNAL_ENTRIES_REPORT':
-        return { columns: ['التاريخ', 'رقم القيد', 'النوع', 'البيان', 'المرجع', 'مدين', 'دائن', 'الحالة'], rows: filteredJournalEntries.map(j => [j.date, j.entryNumber, j.type === 'PV' ? 'سند صرف' : j.type === 'RV' ? 'سند قبض' : 'قيد يدوي', j.narration, j.reference || '—', j.totalDebit, j.totalCredit, j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
+        return { columns: ['التاريخ', 'رقم المستند', 'النوع', 'البيان', 'مدين', 'دائن', 'الحالة'], rows: filteredJournalEntries.map(j => [j.date, j.entryNumber, j.type === 'PV' ? 'سند صرف' : j.type === 'RV' ? 'سند قبض' : 'قيد يدوي', j.narration, j.totalDebit, j.totalCredit, j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
       default:
         return { columns: ['البند', 'البيان'], rows: [] };
     }
@@ -1230,11 +1187,11 @@ export default function FinancialReportsView({
         <span className="w-8 h-px bg-slate-200 dark:bg-slate-700" />
       </div>
       <div className="flex items-center justify-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
-        <span className="font-mono">{fromDate} ← {toDate}</span>
+        <span className="font-mono">{dateToDisplay(fromDate)} ← {dateToDisplay(toDate)}</span>
         <span className="text-slate-300 dark:text-slate-600">•</span>
         <span>{currentUserName}</span>
         <span className="text-slate-300 dark:text-slate-600">•</span>
-        <span className="font-mono">{new Date().toLocaleDateString('ar-SA')}</span>
+        <span className="font-mono">{new Date().toLocaleDateString('en-GB')}</span>
       </div>
     </div>
   );
@@ -1570,7 +1527,7 @@ export default function FinancialReportsView({
                 type="button"
                 onClick={handleShowReport}
                 disabled={!reportPeriodValidation.valid}
-                className="flex items-center gap-2 px-7 py-2.5 text-xs font-extrabold rounded-xl bg-gradient-to-r from-[#006fba] to-blue-600 hover:from-[#0060aa] hover:to-blue-500 text-white border border-[#006fba] shadow-lg shadow-sky-500/20 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                className="financial-reports-show-button flex items-center gap-2 px-7 py-2.5 text-xs font-extrabold rounded-xl bg-gradient-to-r from-[#006fba] to-blue-600 hover:from-[#0060aa] hover:to-blue-500 text-white border border-[#006fba] shadow-lg shadow-sky-500/20 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Search className="w-4 h-4" />
                 عرض التقرير
@@ -1680,9 +1637,12 @@ export default function FinancialReportsView({
                       }
                     }
                     .tb-official-table {
-                      width: 100%;
+                      width: 96%;
+                      max-width: 96%;
+                      margin-left: auto;
+                      margin-right: auto;
                       border-collapse: collapse;
-                      font-size: 11px;
+                      font-size: 7.2px;
                       border: 1px solid #000;
                       color: #000;
                     }
@@ -1819,7 +1779,7 @@ export default function FinancialReportsView({
                     </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pr-5">
-                    <span>الفترة: <span className="font-mono text-slate-300">{fromDate} ← {toDate}</span></span>
+                    <span>الفترة: <span className="font-mono text-slate-300">{dateToDisplay(fromDate)} ← {dateToDisplay(toDate)}</span></span>
                     <span>العملة: <span className="text-slate-300">{curMeta.label}</span></span>
                     <span>أُعدّ بواسطة: <span className="font-semibold text-slate-300">{currentUserName}</span></span>
                   </div>
@@ -2061,7 +2021,7 @@ export default function FinancialReportsView({
                   <div className="mb-6 no-print flex items-center justify-between">
                     <div>
                       <h2 className="text-xl font-black text-slate-100">{REPORT_META[reportType].ar}</h2>
-                      <div className="text-xs text-slate-400">{fromDate} ← {toDate} · {curMeta.label}</div>
+                      <div className="text-xs text-slate-400">{dateToDisplay(fromDate)} ← {dateToDisplay(toDate)} · {curMeta.label}</div>
                     </div>
                     <button type="button" onClick={() => printReport(false)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-700 text-slate-200 cursor-pointer"><Printer className="w-3.5 h-3.5" />طباعة / PDF</button>
                   </div>
@@ -2146,8 +2106,8 @@ export default function FinancialReportsView({
                         <thead className="bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200 font-bold text-xs">
                           <tr>
                             <th className="py-2.5 px-3 border-b border-slate-200 dark:border-slate-700/40">التاريخ</th>
-                            <th className="py-2.5 px-3 border-b border-slate-200 dark:border-slate-700/40">رقم القيد</th>
-                            <th className="py-2.5 px-3 border-b border-slate-200 dark:border-slate-700/40">المرجع</th>
+                            <th className="py-2.5 px-3 border-b border-slate-200 dark:border-slate-700/40">رقم المستند</th>
+
                             <th className="py-2.5 px-3 border-b border-slate-200 dark:border-slate-700/40">البيان (Narration)</th>
                             <th className="py-2.5 px-3 border-b border-slate-200 dark:border-slate-700/40 text-left">مدين</th>
                             <th className="py-2.5 px-3 border-b border-slate-200 dark:border-slate-700/40 text-left">دائن</th>
@@ -2157,7 +2117,7 @@ export default function FinancialReportsView({
                         <tbody className="divide-y divide-slate-200">
                           {includeOpening && (
                             <tr className="bg-slate-100 dark:bg-slate-800/50">
-                              <td className="py-2 px-3 text-slate-400" colSpan={4}>
+                              <td className="py-2 px-3 text-slate-400" colSpan={3}>
                                 <span className="font-bold text-slate-200">رصيد افتتاحي — Opening Balance</span>
                               </td>
                               <td className="py-2 px-3 font-mono text-emerald-400 text-left">{ledger.openingDebit > 0 ? fmt(ledger.openingDebit) : '-'}</td>
@@ -2167,7 +2127,7 @@ export default function FinancialReportsView({
                           )}
                           {ledger.rows.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="py-8 text-center text-slate-400 text-sm">
+                              <td colSpan={6} className="py-8 text-center text-slate-400 text-sm">
                                 لا توجد حركات على هذا الحساب ضمن الفترة المحددة.
                               </td>
                             </tr>
@@ -2176,9 +2136,9 @@ export default function FinancialReportsView({
                               const b = balanceLabel(row.running);
                               return (
                                 <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-950 transition-colors">
-                                  <td className="py-2 px-3 text-slate-300">{row.date}</td>
+                                  <td className="py-2 px-3 text-slate-300">{dateToDisplay(row.date)}</td>
                                   <td className="py-2 px-3 font-mono font-bold text-sky-400">{row.entryNumber}</td>
-                                  <td className="py-2 px-3 font-mono text-slate-400">{row.reference}</td>
+
                                   <td className="py-2 px-3 text-slate-300">{row.description || row.narration}</td>
                                   <td className="py-2 px-3 font-mono text-emerald-400 text-left">{row.debit > 0 ? fmt(row.debit) : '-'}</td>
                                   <td className="py-2 px-3 font-mono text-sky-400 text-left">{row.credit > 0 ? fmt(row.credit) : '-'}</td>
@@ -2195,7 +2155,7 @@ export default function FinancialReportsView({
                         </tbody>
                         <tfoot className="bg-slate-100 dark:bg-slate-800/50 font-bold text-[14px] text-slate-800 dark:text-slate-200 border-t border-slate-200 dark:border-slate-700/40">
                           <tr>
-                            <td colSpan={4} className="py-2.5 px-3 text-left">الإجمالي (Totals):</td>
+                            <td colSpan={3} className="py-2.5 px-3 text-left">الإجمالي (Totals):</td>
                             <td className="py-2.5 px-3 font-mono text-emerald-400 text-left">{fmt(ledger.totalDebit)} {sym}</td>
                             <td className="py-2.5 px-3 font-mono text-sky-400 text-left">{fmt(ledger.totalCredit)} {sym}</td>
                             <td className="py-2.5 px-3 font-mono text-slate-100 text-left">
@@ -2262,7 +2222,7 @@ export default function FinancialReportsView({
                     <h2 className="text-xl font-black text-slate-100">سندات الصرف — Payment Vouchers</h2>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pr-5">
-                    <span>الفترة: <span className="font-mono text-slate-300">{fromDate} ← {toDate}</span></span>
+                    <span>الفترة: <span className="font-mono text-slate-300">{dateToDisplay(fromDate)} ← {dateToDisplay(toDate)}</span></span>
                     <span>عدد السندات: <span className="text-slate-300">{filteredPaymentVouchers.length}</span></span>
                     <span>العملة: <span className="text-slate-300">{curMeta.label}</span></span>
                   </div>
@@ -2285,7 +2245,7 @@ export default function FinancialReportsView({
                         <tr><td colSpan={7} className="py-8 text-center text-slate-400">لا توجد سندات صرف في هذه الفترة</td></tr>
                       ) : filteredPaymentVouchers.map(v => (
                         <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                          <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400">{v.date}</td>
+                          <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400">{dateToDisplay(v.date)}</td>
                           <td className="px-4 py-2 font-mono font-bold text-rose-600 dark:text-rose-400">{v.voucherNumber}</td>
                           <td className="px-4 py-2 text-slate-800 dark:text-slate-200">{v.payeeName}</td>
                           <td className="px-4 py-2 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{v.narration}</td>
@@ -2328,7 +2288,7 @@ export default function FinancialReportsView({
                     <h2 className="text-xl font-black text-slate-100">سندات القبض — Receipt Vouchers</h2>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pr-5">
-                    <span>الفترة: <span className="font-mono text-slate-300">{fromDate} ← {toDate}</span></span>
+                    <span>الفترة: <span className="font-mono text-slate-300">{dateToDisplay(fromDate)} ← {dateToDisplay(toDate)}</span></span>
                     <span>عدد السندات: <span className="text-slate-300">{filteredReceiptVouchers.length}</span></span>
                     <span>العملة: <span className="text-slate-300">{curMeta.label}</span></span>
                   </div>
@@ -2351,7 +2311,7 @@ export default function FinancialReportsView({
                         <tr><td colSpan={7} className="py-8 text-center text-slate-400">لا توجد سندات قبض في هذه الفترة</td></tr>
                       ) : filteredReceiptVouchers.map(v => (
                         <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                          <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400">{v.date}</td>
+                          <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400">{dateToDisplay(v.date)}</td>
                           <td className="px-4 py-2 font-mono font-bold text-emerald-600 dark:text-emerald-400">{v.receiptNumber}</td>
                           <td className="px-4 py-2 text-slate-800 dark:text-slate-200">{v.payerName}</td>
                           <td className="px-4 py-2 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{v.narration}</td>
@@ -2394,7 +2354,7 @@ export default function FinancialReportsView({
                     <h2 className="text-xl font-black text-slate-100">القيود اليومية — Journal Entries</h2>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pr-5">
-                    <span>الفترة: <span className="font-mono text-slate-300">{fromDate} ← {toDate}</span></span>
+                    <span>الفترة: <span className="font-mono text-slate-300">{dateToDisplay(fromDate)} ← {dateToDisplay(toDate)}</span></span>
                     <span>عدد القيود: <span className="text-slate-300">{filteredJournalEntries.length}</span></span>
                     <span>إجمالي المدين: <span className="text-emerald-400 font-mono">{fmt(filteredJournalEntries.reduce((s, j) => s + j.totalDebit, 0))} {sym}</span></span>
                     <span>إجمالي الدائن: <span className="text-sky-400 font-mono">{fmt(filteredJournalEntries.reduce((s, j) => s + j.totalCredit, 0))} {sym}</span></span>
@@ -2405,10 +2365,10 @@ export default function FinancialReportsView({
                     <thead>
                       <tr className="bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200 font-bold text-xs">
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">التاريخ</th>
-                        <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">رقم القيد</th>
+                        <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">رقم المستند</th>
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">النوع</th>
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">البيان</th>
-                        <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">المرجع</th>
+
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40 text-left">مدين</th>
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40 text-left">دائن</th>
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40 text-center">الحالة</th>
@@ -2416,10 +2376,10 @@ export default function FinancialReportsView({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                       {filteredJournalEntries.length === 0 ? (
-                        <tr><td colSpan={8} className="py-8 text-center text-slate-400">لا توجد قيود يومية في هذه الفترة</td></tr>
+                        <tr><td colSpan={7} className="py-8 text-center text-slate-400">لا توجد قيود يومية في هذه الفترة</td></tr>
                       ) : filteredJournalEntries.map(j => (
                         <tr key={j.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                          <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400">{j.date}</td>
+                          <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400">{dateToDisplay(j.date)}</td>
                           <td className="px-4 py-2 font-mono font-bold text-sky-600 dark:text-sky-400">{j.entryNumber}</td>
                           <td className="px-4 py-2">
                             <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${j.type === 'PV' ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400'
@@ -2430,7 +2390,7 @@ export default function FinancialReportsView({
                             </span>
                           </td>
                           <td className="px-4 py-2 text-slate-500 dark:text-slate-400 max-w-[220px] truncate">{j.narration}</td>
-                          <td className="px-4 py-2 font-mono text-slate-500 dark:text-slate-400">{j.reference || '—'}</td>
+
                           <td className="px-4 py-2 font-mono text-emerald-600 dark:text-emerald-400 text-left tabular-nums">{j.totalDebit > 0 ? fmt(j.totalDebit) : '—'}</td>
                           <td className="px-4 py-2 font-mono text-sky-600 dark:text-sky-400 text-left tabular-nums">{j.totalCredit > 0 ? fmt(j.totalCredit) : '—'}</td>
                           <td className="px-4 py-2 text-center">
@@ -2447,7 +2407,7 @@ export default function FinancialReportsView({
                     {filteredJournalEntries.length > 0 && (
                       <tfoot>
                         <tr className="font-bold bg-slate-50 dark:bg-slate-800/50 border-t-2 border-double border-slate-300 dark:border-slate-700/40">
-                          <td colSpan={5} className="px-4 py-2.5 text-slate-700 dark:text-slate-200">الإجمالي ({filteredJournalEntries.length} قيد)</td>
+                          <td colSpan={4} className="px-4 py-2.5 text-slate-700 dark:text-slate-200">الإجمالي ({filteredJournalEntries.length} قيد)</td>
                           <td className="px-4 py-2.5 font-mono text-emerald-600 dark:text-emerald-400 text-left tabular-nums">{fmt(filteredJournalEntries.reduce((s, j) => s + j.totalDebit, 0))} {sym}</td>
                           <td className="px-4 py-2.5 font-mono text-sky-600 dark:text-sky-400 text-left tabular-nums">{fmt(filteredJournalEntries.reduce((s, j) => s + j.totalCredit, 0))} {sym}</td>
                           <td className="px-4 py-2.5"></td>
@@ -2673,7 +2633,7 @@ export default function FinancialReportsView({
                           <tr>
                             <th className="py-2.5 px-3 border-b border-slate-200 dark:border-slate-700/40">التاريخ</th>
                             <th className="py-2.5 px-3 border-b border-slate-800/30">القيد</th>
-                            <th className="py-2.5 px-3 border-b border-slate-800/30">المرجع</th>
+
                             <th className="py-2.5 px-3 border-b border-slate-800/30">البيان</th>
                             <th className="py-2.5 px-3 border-b border-slate-800/30 text-left">مدين</th>
                             <th className="py-2.5 px-3 border-b border-slate-800/30 text-left">دائن</th>
@@ -2683,7 +2643,7 @@ export default function FinancialReportsView({
                         <tbody className="divide-y divide-slate-200">
                           {explorerLedger.rows.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="py-8 text-center text-slate-400 text-sm">
+                              <td colSpan={6} className="py-8 text-center text-slate-400 text-sm">
                                 لا توجد حركات على هذا الحساب ضمن الفترة ({fromDate} → {toDate}).
                               </td>
                             </tr>
@@ -2692,9 +2652,9 @@ export default function FinancialReportsView({
                               const b = balanceLabel(row.running);
                               return (
                                 <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-950 transition-colors">
-                                  <td className="py-2 px-3 text-slate-300">{row.date}</td>
+                                  <td className="py-2 px-3 text-slate-300">{dateToDisplay(row.date)}</td>
                                   <td className="py-2 px-3 font-mono font-bold text-sky-400">{row.entryNumber}</td>
-                                  <td className="py-2 px-3 font-mono text-slate-400">{row.reference}</td>
+
                                   <td className="py-2 px-3 text-slate-300">{row.description || row.narration}</td>
                                   <td className="py-2 px-3 font-mono text-emerald-400 text-left">{row.debit > 0 ? fmt(row.debit) : '-'}</td>
                                   <td className="py-2 px-3 font-mono text-sky-400 text-left">{row.credit > 0 ? fmt(row.credit) : '-'}</td>
@@ -2749,7 +2709,9 @@ export default function FinancialReportsView({
       >
         {statementSpecs.length > 0 ? (
           <div className="bg-white">
-            {statementSpecs.map(spec => {
+            {printableStatementSpecs.map(spec => {
+              const specCode = spec.currencyCode || currency;
+              const specCurrencyName = currencyOptions.find(c => c.code === specCode)?.label.split(' (')[0] || specCode;
               const totalDebit = spec.rows.reduce((s, r) => s + r.debit, 0);
               const totalCredit = spec.rows.reduce((s, r) => s + r.credit, 0);
               const closing = spec.opening + totalDebit - totalCredit;
@@ -2778,10 +2740,10 @@ export default function FinancialReportsView({
                     {[
                       { label: 'رقم الحساب', value: spec.subjectCode },
                       { label: 'اسم الحساب', value: spec.subjectName },
-                      { label: 'العملة', value: `${currencyNameAr || currency} (${sym})` },
+                      { label: 'العملة', value: `${specCurrencyName} (${specCode})` },
                       ...(spec.subjectExtra ? [{ label: 'ملاحظات', value: spec.subjectExtra }] : []),
                     ].map((info, i) => (
-                      <div key={i} style={{ flex: '1 1 140px', display: 'flex', justifyContent: 'space-between', gap: '6px', border: '1px solid #000', background: '#f9f8fc', padding: '3px 8px', fontSize: '9.5px', color: '#444' }}>
+                      <div key={i} style={{ flex: '1 1 140px', display: 'flex', justifyContent: 'space-between', gap: '6px', border: '1px solid #000', background: '#f9f8fc', padding: '3px 8px', fontSize: '7.6px', color: '#444' }}>
                         <span style={{ whiteSpace: 'nowrap' }}>{info.label}:</span>
                         <b style={{ color: '#000', fontWeight: 800 }}>{info.value}</b>
                       </div>
@@ -2795,7 +2757,7 @@ export default function FinancialReportsView({
                         <th>التاريخ</th>
                         <th>نوع المستند</th>
                         <th>رقم المستند</th>
-                        <th>المرجع</th>
+
                         <th>البيان</th>
                         <th>مدين</th>
                         <th>دائن</th>
@@ -2809,7 +2771,7 @@ export default function FinancialReportsView({
                           <td>—</td>
                           <td>رصيد افتتاحي</td>
                           <td>—</td>
-                          <td>—</td>
+
                           <td>رصيد افتتاحي {spec.subjectName}</td>
                           <td className="report-num">{openingDebit > 0 ? fmt(openingDebit) : ''}</td>
                           <td className="report-num">{openingCredit > 0 ? fmt(openingCredit) : ''}</td>
@@ -2821,10 +2783,10 @@ export default function FinancialReportsView({
                         return (
                           <tr key={i}>
                             <td style={{ textAlign: 'center' }}>{i + 1}</td>
-                            <td style={{ textAlign: 'center' }}>{row.date}</td>
+                            <td style={{ textAlign: 'center' }}>{dateToDisplay(row.date)}</td>
                             <td>{row.docType}</td>
                             <td style={{ textAlign: 'center' }}>{row.docNumber}</td>
-                            <td style={{ textAlign: 'center' }}>{row.reference}</td>
+
                             <td>{row.description}</td>
                             <td className="report-num">{row.debit > 0 ? fmt(row.debit) : ''}</td>
                             <td className="report-num">{row.credit > 0 ? fmt(row.credit) : ''}</td>
@@ -2835,13 +2797,13 @@ export default function FinancialReportsView({
                     </tbody>
                     <tfoot>
                       <tr style={{ background: '#c5c7f1', fontWeight: 900 }}>
-                        <td colSpan={6} style={{ textAlign: 'right', padding: '4px 8px' }}>إجمالي العمليات ({spec.rows.length} مستند)</td>
+                        <td colSpan={5} style={{ textAlign: 'right', padding: '4px 8px' }}>إجمالي العمليات ({spec.rows.length} مستند)</td>
                         <td className="report-num" style={{ fontWeight: 900 }}>{fmt(totalDebit)}</td>
                         <td className="report-num" style={{ fontWeight: 900 }}>{fmt(totalCredit)}</td>
                         <td></td>
                       </tr>
                       <tr style={{ background: '#e8e7fc', fontWeight: 900 }}>
-                        <td colSpan={6} style={{ textAlign: 'right', padding: '4px 8px' }}>الرصيد الختامي {closingTag}</td>
+                        <td colSpan={5} style={{ textAlign: 'right', padding: '4px 8px' }}>الرصيد الختامي {closingTag}</td>
                         <td className="report-num">{closing > 0 ? fmt(closing) : ''}</td>
                         <td className="report-num">{closing < 0 ? fmt(closingAbs) : ''}</td>
                         <td className="report-num" style={{ fontWeight: 900 }}>{fmt(closing)}</td>
@@ -2851,10 +2813,10 @@ export default function FinancialReportsView({
 
                   <div style={{ marginTop: '6px', border: '2px solid #000', padding: '6px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9f8fc' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 900, color: '#000' }}>{closingTag} :</span>
-                      <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#000' }}>{tafqeetText}</span>
+                      <span style={{ fontSize: '10.4px', fontWeight: 900, color: '#000' }}>{closingTag} :</span>
+                      <span style={{ fontSize: '9.6px', fontWeight: 'bold', color: '#000' }}>{tafqeetText}</span>
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#1d4ed8', direction: 'ltr', fontFamily: "'Consolas', monospace" }}>
+                    <div style={{ fontSize: '12.8px', fontWeight: 900, color: '#1d4ed8', direction: 'ltr', fontFamily: "'Consolas', monospace" }}>
                       {fmt(closingAbs)}
                     </div>
                   </div>
@@ -2897,7 +2859,7 @@ export default function FinancialReportsView({
             }}
           >
             <style>{`
-              .bs-table { width: 100%; border-collapse: collapse; font-size: 11px; color: #000; }
+              .bs-table { width: 96%; max-width: 96%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-size: 7.2px; color: #000; }
               .bs-table th, .bs-table td { border: 1px solid #000; padding: 4px 6px; }
               .bs-table thead th { background-color: #b4a7d6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: bold; }
               .bs-table thead tr:nth-child(2) th { background-color: #d9d2e9 !important; }
@@ -2988,7 +2950,7 @@ export default function FinancialReportsView({
             }}
           >
             <style>{`
-              .is-table { width: 100%; border-collapse: collapse; font-size: 11px; color: #000; }
+              .is-table { width: 96%; max-width: 96%; margin-left: auto; margin-right: auto; border-collapse: collapse; font-size: 7.2px; color: #000; }
               .is-table th, .is-table td { border: 1px solid #000; padding: 4px 8px; }
               .is-table thead th { background-color: #b4a7d6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: bold; }
               .is-table .num { text-align: left; font-family: 'Consolas','Courier New',monospace; }
@@ -3053,7 +3015,7 @@ export default function FinancialReportsView({
             companyInfo={{ name: company.companyNameAr || '—', branch: [company.branchNameAr, company.branchCode].filter(Boolean).join(' — ') || '—', address: company.addressAr || '', phone: company.phone || '', logoUrl: company.logoUrl || undefined }}
           >
             <style>{`
-              .tb-p { width:100%; border-collapse:collapse; font-size:11px; color:#000; }
+              .tb-p { width:96%; max-width:96%; margin-left:auto; margin-right:auto; border-collapse:collapse; font-size:7.2px; color:#000; }
               .tb-p th, .tb-p td { border:1px solid #000; padding:4px 6px; text-align:center; }
               .tb-p thead th { background-color:#b4a7d6 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; font-weight:bold; }
               .tb-p thead tr:nth-child(2) th { background-color:#d9d2e9 !important; }
@@ -3115,14 +3077,14 @@ export default function FinancialReportsView({
               companyInfo={{ name: company.companyNameAr || '—', branch: [company.branchNameAr, company.branchCode].filter(Boolean).join(' — ') || '—', address: company.addressAr || '', phone: company.phone || '', logoUrl: company.logoUrl || undefined }}
             >
               <style>{`
-                .lg-p { width:100%; border-collapse:collapse; font-size:11px; color:#000; }
+                .lg-p { width:96%; max-width:96%; margin-left:auto; margin-right:auto; border-collapse:collapse; font-size:7.2px; color:#000; }
                 .lg-p th, .lg-p td { border:1px solid #000; padding:4px 6px; }
                 .lg-p thead th { background-color:#b4a7d6 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; font-weight:bold; }
                 .lg-p .text-right { text-align:right; }
                 .lg-p .num { text-align:left; font-family:'Consolas','Courier New',monospace; }
                 .lg-p .tr-total td { background-color:#c5c7f1 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; font-weight:900; }
                 .lg-info { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
-                .lg-info > div { flex:1 1 140px; display:flex; justify-content:space-between; gap:6px; border:1px solid #000; background:#f9f8fc; padding:3px 8px; font-size:9.5px; color:#444; }
+                .lg-info > div { flex:1 1 140px; display:flex; justify-content:space-between; gap:6px; border:1px solid #000; background:#f9f8fc; padding:3px 8px; font-size:7.6px; color:#444; }
               `}</style>
               <div className="lg-info">
                 {[
@@ -3137,14 +3099,14 @@ export default function FinancialReportsView({
               <table className="lg-p">
                 <thead>
                   <tr>
-                    <th>التاريخ</th><th>رقم القيد</th><th>المرجع</th><th>البيان</th>
+                    <th>التاريخ</th><th>رقم المستند</th><th>البيان</th>
                     <th>مدين</th><th>دائن</th><th>الرصيد</th>
                   </tr>
                 </thead>
                 <tbody>
                   {includeOpening && (
                     <tr style={{ fontWeight: 'bold', background: '#e8e7fc' }}>
-                      <td>—</td><td>—</td><td>—</td><td>رصيد افتتاحي</td>
+                      <td>—</td><td>—</td><td>رصيد افتتاحي</td>
                       <td className="num">{ledger.openingDebit > 0 ? fmt(ledger.openingDebit) : ''}</td>
                       <td className="num">{ledger.openingCredit > 0 ? fmt(ledger.openingCredit) : ''}</td>
                       <td className="num" style={{ fontWeight: 700 }}>{fmt(ledger.opening)}</td>
@@ -3154,7 +3116,7 @@ export default function FinancialReportsView({
                     const b = balanceLabel(row.running);
                     return (
                       <tr key={idx}>
-                        <td>{row.date}</td><td>{row.entryNumber}</td><td>{row.reference}</td>
+                        <td>{dateToDisplay(row.date)}</td><td>{row.entryNumber}</td>
                         <td className="text-right">{row.description || row.narration}</td>
                         <td className="num">{row.debit > 0 ? fmt(row.debit) : ''}</td>
                         <td className="num">{row.credit > 0 ? fmt(row.credit) : ''}</td>
@@ -3165,7 +3127,7 @@ export default function FinancialReportsView({
                 </tbody>
                 <tfoot>
                   <tr className="tr-total">
-                    <td colSpan={4}>الإجمالي ({ledger.rows.length} حركة)</td>
+                    <td colSpan={3}>الإجمالي ({ledger.rows.length} حركة)</td>
                     <td className="num">{fmt(ledger.totalDebit)}</td>
                     <td className="num">{fmt(ledger.totalCredit)}</td>
                     <td className="num">{fmt(ledger.closing)}</td>
@@ -3176,7 +3138,7 @@ export default function FinancialReportsView({
               <PrintSignatures />
             </FinancialReportPrintLayout>
           ) : (
-            <p style={{ textAlign: 'center', padding: '32px 0', color: '#64748b', fontSize: '13px' }}>الرجاء اختيار حساب لعرض كشفه.</p>
+            <p style={{ textAlign: 'center', padding: '32px 0', color: '#64748b', fontSize: '10.4px' }}>الرجاء اختيار حساب لعرض كشفه.</p>
           )
         ) : (
           <FinancialReportPrintLayout
@@ -3195,9 +3157,6 @@ export default function FinancialReportsView({
           >
             {(() => {
               const { columns, rows } = buildReportData();
-              if (!rows.length) {
-                return <p style={{ textAlign: 'center', padding: '32px 0', color: '#64748b', fontSize: '13px' }}>لا توجد بيانات لعرضها في هذه الفترة.</p>;
-              }
               return (
                 <table className="report-table">
                   <thead>
@@ -3208,6 +3167,7 @@ export default function FinancialReportsView({
                     </tr>
                   </thead>
                   <tbody>
+                    {!rows.length && <tr><td colSpan={Math.max(1, columns.length)} style={{textAlign:"center",padding:16}}>لا توجد بيانات لعرضها في هذه الفترة.</td></tr>}
                     {rows.map((r: (string | number)[], i: number) => (
                       <tr key={i}>
                         {columns.map((_: string, ci: number) => (

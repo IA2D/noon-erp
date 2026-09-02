@@ -61,7 +61,7 @@ export default function JournalSearchBar({ items, value, onChange, onSelect, dis
       (j.createdBy || '').toLowerCase().includes(q) ||
       String(j.totalDebit).includes(q)
     );
-    return base.slice(0, 50);
+    return base;
   }, [items, value]);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -180,6 +180,7 @@ export default function JournalSearchBar({ items, value, onChange, onSelect, dis
                   key={entry.id}
                   type="button"
                   data-idx={idx}
+                  onMouseDown={e => { e.preventDefault(); selectItem(entry); }}
                   onClick={() => selectItem(entry)}
                   onMouseEnter={() => setActiveIndex(idx)}
                   className={`w-full px-4 py-3 border-b border-slate-100 dark:border-slate-800/60 hover:bg-sky-50/80 dark:hover:bg-sky-950/40 cursor-pointer transition-colors flex items-center justify-between gap-4 text-xs text-right ${

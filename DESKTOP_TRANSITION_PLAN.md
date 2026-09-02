@@ -75,6 +75,39 @@ Keep the React/Vite renderer unchanged, wrap it with Electron, and persist ERP s
   - [x] Migrate legacy persisted journal, payment, receipt, contract, and custody statuses idempotently in SQLite-backed state.
   - [x] Preserve and verify individual/daily batch posting and month/year close guards against pending documents.
 
+- [x] **Task K — System-wide report, date, and approval repair (P0/P1)**
+  - [x] Route preview, print, PDF download, and PDF sharing through one A4 portrait renderer based on the `حركة الصندوق` master scheme.
+  - [x] Reserve the physical page footer margin and render real page numbers at the bottom of every page without creating a footer-only page.
+  - [x] Remove duplicate reference/source-document/currency columns, enlarge the report logo, and fit long values and headings inside their cells.
+  - [x] Keep empty reports printable and verify all 16 report paths with actual Chromium-generated PDFs.
+  - [x] Repair cost-center, journal, cash, bank, customer, supplier, employee, trust, and custody report data sources, including pending operational documents and posted-only financial statements.
+  - [x] Bind cash/bank helper selectors to configured cash boxes and bank accounts rather than the chart of accounts.
+  - [x] Standardize editable dates on `DD/MM/YYYY`, preserve calendar selection, accept full keyboard entry, and persist ISO dates internally.
+  - [x] Reduce custody approval to one stage, migrate legacy pending approvals, remove custody guidance/notes, and preserve the approval audit trail.
+  - [x] Simplify payment-voucher captions to `سعر الصرف` and `المبلغ المحلي`.
+  - [x] Verify the changed system through 20 non-build suites plus browser UI, keyboard-date, and actual PDF evidence.
+
+- [x] **Task L — Simplify chart-of-accounts maintenance (P1)**
+  - [x] Remove instructional notes from account, cash-box, bank/exchange, customer, supplier, and employee add/edit forms.
+  - [x] Remove account-currency management and sub-ledger-type input from the chart-of-accounts form; assign the base currency automatically and retain existing account currency metadata.
+  - [x] Keep sub-ledger selection in transaction/master-data workflows and verify that linked customers, suppliers, employees, cash boxes, and banks still derive their sub-ledger type.
+  - [x] Rename the shipped level-five accounts to `الصندوق العام`, `البنوك`, `الصرافات`, and `رأس المال`.
+  - [x] Migrate only the known shipped legacy names in persisted data while preserving user-customized names.
+
+- [x] **Task M — Currency, tables, opening balances, and operational UI repair (P1)**
+  - [x] Keep only `YER`, `SAR`, and `USD` in the default currency directory and migrate legacy `GBP` master-data references out safely.
+  - [x] Make every interactive table collapse control a direct, full-hit-area single-click action at the visual top-right of its header, including React-replaced table sections, with a minimum `0.5rem` inset on all four sides.
+  - [x] Restore readable light-theme contrast for the chart-of-accounts currency inclusion/toggle controls while preserving their dark-theme colors.
+  - [x] Restore inline account currency inclusion/toggling while keeping the removed account-level sub-ledger selector and separate currency-manager button absent.
+  - [x] Load saved opening balances into the same primary editable entry table—without a modal or second table—while retaining autosave and incomplete-row decisions.
+  - [x] Keep report values at the largest measured font that fits, reserve wider opening-balance columns for financial totals, and prevent mixed Arabic labels and LTR amounts from overlapping.
+  - [x] Measure mixed-direction report pairs from their intrinsic child glyph widths and retain a two-pixel PDF rounding reserve, balancing readable sizing against edge clipping.
+  - [x] Force printed report headings and values onto one line and shrink measured font size rather than wrapping cells.
+  - [x] Measure left/right glyph overflow in addition to scroll width and isolate mixed RTL labels/LTR amounts so summary values remain inside their printed cells.
+  - [x] Remove the data-quality/duplicate-merge section from permissions, navigation, and module rendering.
+  - [x] Prevent Enter navigation across derived read-only journal amounts from writing zero to the debit/credit source field.
+  - [x] Reflow the custody register to a 1540px fixed layout with isolated, generously sized columns, controlled horizontal overflow, non-wrapping values, and `DD/MM/YYYY` dates.
+
 ## Commands
 - Development desktop: `npm run desktop:dev`
 - SQLite smoke test: `npm run desktop:smoke`
@@ -84,4 +117,4 @@ Keep the React/Vite renderer unchanged, wrap it with Electron, and persist ERP s
 - Windows installer/portable: `npm run desktop:package`
 
 ## Current checkpoint
-P0 and P1 functional remediation gates are complete. The final Windows test release includes the SQLite desktop runtime, duplicate review/merge, contract lifecycle and obligations, unified reporting/printing, scoped shortcuts, authentication/settings fixes, prior-period comparison, the consolidated accounting/migration/recovery/printing/performance gate, and packaged-runtime smoke verification. Installer signing remains dependent on a publisher certificate.
+Tasks A–M are complete. The source now includes the repaired report data paths, shared portrait print/PDF pipeline, bottom-of-page repeatable footers, keyboard-friendly dates, one-stage custody approval, simplified account maintenance, reliable top-right full-hit-area table collapsing, saved opening balances loaded into the primary editable grid, measured print-cell fitting, and the repaired custody/journal workflows. The current patches passed their non-build regression suites. Per the current workflow, no new installer was built; Windows packaging/signing remains a later release step.

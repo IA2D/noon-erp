@@ -61,7 +61,10 @@
     "report-to-date-today:regression": "tsx scripts/report-to-date-today-regression.mts",
     "workflow-status:regression": "tsx scripts/workflow-status-regression.mts",
     "shortcuts:regression": "tsx scripts/scoped-shortcuts-regression.mts",
-    "p1:verify": "npm run lint && npm run engine:unit && npm run contracts:regression && npm run entity-merge:regression && npm run p1-ui:regression && npm run p1-workflow:regression && npm run performance:regression && npm run migration:regression && npm run posting:regression && npm run daily-posting:regression && npm run accounting:regression && npm run domain:regression && npm run lifecycle:regression && npm run period:regression && npm run currency:regression && npm run control-transfer:regression && npm run command:regression && npm run recovery:regression && npm run auth:regression && npm run audit:regression && npm run documents:regression && npm run relational:smoke && npm run print:smoke && npm run print:orientation && npm run print:unified-preview && npm run print:empty-reports && npm run build"
+    "first-patch:regression": "tsx scripts/first-patch-regression.mts",
+    "no-seed-master-data:regression": "tsx scripts/no-seed-master-data-regression.mts",
+    "p1:verify": "npm run lint && npm run engine:unit && npm run contracts:regression && npm run entity-merge:regression && npm run p1-ui:regression && npm run p1-workflow:regression && npm run performance:regression && npm run migration:regression && npm run posting:regression && npm run daily-posting:regression && npm run accounting:regression && npm run domain:regression && npm run lifecycle:regression && npm run period:regression && npm run currency:regression && npm run control-transfer:regression && npm run command:regression && npm run recovery:regression && npm run auth:regression && npm run audit:regression && npm run documents:regression && npm run relational:smoke && npm run print:smoke && npm run print:orientation && npm run print:unified-preview && npm run print:empty-reports && npm run build",
+    "opening-interaction:regression": "tsx scripts/opening-balances-interaction-regression.mts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

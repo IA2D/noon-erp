@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 
 const FIELD_SELECTOR = [
-  'input:not([disabled]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"])',
+  'input:not([disabled]):not([readonly]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"])',
   'select:not([disabled])',
   'textarea:not([disabled])',
-  '[tabindex="0"]:not(button):not(a):not(select):not(input):not(textarea)'
+  '[tabindex="0"]:not(button):not(a):not(select):not(input):not(textarea)',
+  '[data-enter-nav-field]:not([disabled])'
 ].join(',');
 
 const ADD_LINE_RE = /(إضافة سطر|اضافة سطر|إضافة خط|اضافة خط|إضافة بند|اضافة بند|إضافة طرف|سطر جديد|خط جديد|بند جديد|add line|add row|add item)/i;

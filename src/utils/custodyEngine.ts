@@ -44,27 +44,11 @@ export interface ApprovalLevelInfo {
 }
 
 export const APPROVAL_LEVEL_ROLES: ApprovalLevelInfo[] = [
-  {level: 1, roleName: 'المشرف المباشر / مدير الإدارة'},
-  {level: 2, roleName: 'المدير المالي'},
-  {level: 3, roleName: 'الإدارة العليا (مدير عام / رئيس تنفيذي)'},
+  {level: 1, roleName: 'المعتمد المسؤول'},
 ];
 
-const STAFF_LOW = 10000;
-const STAFF_HIGH = 50000;
-const MANAGER_HIGH = 100000;
-
-export function requiredApprovalLevel(amount: number, employee?: Employee): number {
-  const title = (employee?.jobTitle || '').trim();
-  const isManager =
-    title.includes('مدير') || title.includes('مديرة') || title.includes('مشرف') || title.includes('رئيس') || title.includes('نائب');
-  if (isManager) {
-    if (amount > MANAGER_HIGH) return 3;
-    return amount > STAFF_LOW ? 2 : 1;
-  }
-  if (amount > STAFF_HIGH) return 3;
-  if (amount > STAFF_LOW) return 2;
-  return 1;
-}
+/** One explicit approval for every amount; historical approval entries remain auditable. */
+export function requiredApprovalLevel(_amount: number, _employee?: Employee): number { return 1; }
 
 export function canTransition(from: CustodyStatus, to: CustodyStatus): boolean {
   return TRANSITIONS[from]?.includes(to) ?? false;
@@ -76,8 +60,7 @@ export function canSubmit(c: Custody): boolean {
 
 export function canApprove(c: Custody, requiredLevel: number): boolean {
   if (c.status !== 'PENDING_APPROVAL') return false;
-  const nextPending = c.approvals.find(a => a.action === 'PENDING');
-  return nextPending ? nextPending.level === requiredLevel : false;
+  return requiredLevel === 1;
 }
 
 export function canDisburse(c: Custody): boolean {

@@ -23,9 +23,8 @@ import EmptyState from '../ui/EmptyState';
 import F9SearchInput from '../ui/F9SearchInput';
 import ModalShell from '../ui/ModalShell';
 
-/** العملات الثابتة النظام ( غير قابلة للحذف أو الإضافة فوق العدد المحدد ) */
+/** العملات الأساسية المهيأة مع النظام وغير القابلة للحذف. */
 const FIXED_CURRENCY_CODES = ['YER', 'SAR', 'USD'];
-const MAX_CURRENCIES = 3;
 
 interface Props {
  currencies: Currency[];
@@ -49,11 +48,10 @@ interface CurrencyForm {
  minExchangeRate: number;
  maxExchangeRate: number;
  isActive: boolean;
- notes: string;
 }
 
 function emptyForm(code: string): CurrencyForm {
- return { code, nameAr: '', nameEn: '', symbol: '', decimals: 2, isBase: false, exchangeRate: 1, minExchangeRate: 1, maxExchangeRate: 1, isActive: true, notes: '' };
+ return { code, nameAr: '', nameEn: '', symbol: '', decimals: 2, isBase: false, exchangeRate: 1, minExchangeRate: 1, maxExchangeRate: 1, isActive: true };
 }
 
 const fmtRate = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 4 });
@@ -125,8 +123,7 @@ export default function CurrenciesView({ currencies, accounts, cashBoxes, bankAc
     exchangeRate: c.exchangeRate,
     minExchangeRate: typeof c.minExchangeRate === 'number' ? c.minExchangeRate : 1,
     maxExchangeRate: typeof c.maxExchangeRate === 'number' ? c.maxExchangeRate : 1,
-    isActive: c.isActive,
-    notes: c.notes || ''
+    isActive: c.isActive
    }
   });
  };
@@ -159,8 +156,7 @@ export default function CurrenciesView({ currencies, accounts, cashBoxes, bankAc
     exchangeRate: f.isBase ? 1 : rate,
     minExchangeRate: f.isBase ? 1 : minRate,
     maxExchangeRate: f.isBase ? 1 : maxRate,
-    isActive: f.isActive,
-    notes: f.notes.trim() || undefined
+    isActive: f.isActive
    });
    toast('success', `تمت إضافة العملة ${code} - ${f.nameAr.trim()}`);
   } else if (modal.id) {
@@ -174,8 +170,7 @@ export default function CurrenciesView({ currencies, accounts, cashBoxes, bankAc
     exchangeRate: f.isBase ? 1 : rate,
     minExchangeRate: f.isBase ? 1 : minRate,
     maxExchangeRate: f.isBase ? 1 : maxRate,
-    isActive: f.isActive,
-    notes: f.notes.trim() || undefined
+    isActive: f.isActive
    });
    toast('success', `تم تحديث العملة ${code}`);
   }
@@ -219,18 +214,16 @@ export default function CurrenciesView({ currencies, accounts, cashBoxes, bankAc
    <PageHeader
     icon={<CircleDollarSign className="w-6 h-6" />}
     title="دليل العملات"
-    subtitle="إدارة العملات المعتمدة في النظام — رمزها وأسماؤها وسعر صرفها مقابل العملة الأساسية"
+    subtitle="إدارة العملات المعتمدة في النظام ورموزها وأسعار التحويل"
     actions={
-     currencies.length < MAX_CURRENCIES ? (
       <button
        type="button"
        onClick={openAdd}
-       className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-400 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+       className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
       >
        <Plus className="w-4 h-4" />
-       إضافة عملة
+       إضافة عملة جديدة
       </button>
-     ) : undefined
     }
    />
 
@@ -313,7 +306,7 @@ export default function CurrenciesView({ currencies, accounts, cashBoxes, bankAc
          <td colSpan={8} className="p-6">
           <EmptyState
            title="لا توجد عملات مطابقة"
-           description={searchTerm.trim() ? 'جرّب تغيير نص البحث.' : 'ابدأ بإضافة أول عملة عبر زر (إضافة عملة).'}
+           description={searchTerm.trim() ? 'جرّب تغيير نص البحث.' : 'ابدأ بإضافة أول عملة عبر زر (إضافة عملة جديدة).'}
            compact
            icon={<CircleDollarSign className="w-5 h-5" />}
           />
@@ -520,7 +513,7 @@ export default function CurrenciesView({ currencies, accounts, cashBoxes, bankAc
            />
           </div>
           <div>
-           <label className="block text-xs font-semibold text-slate-300 mb-1">سعر الصرف (مقابل الأساسية) *</label>
+           <label className="block text-xs font-semibold text-slate-300 mb-1">سعر التحويل *</label>
            <input
             type="number"
             min="0.0001"
@@ -577,17 +570,6 @@ export default function CurrenciesView({ currencies, accounts, cashBoxes, bankAc
          </div>
         )}
 
-        <div>
-         <label className="block text-xs font-semibold text-slate-300 mb-1">ملاحظات</label>
-         <textarea
-          value={modal.form.notes}
-          onChange={e => setModal({ ...modal, form: { ...modal.form, notes: e.target.value } })}
-          rows={2}
-
-          className="w-full px-3 py-2 text-sm glass-input rounded-xl"
-         />
-        </div>
-
         <p className="text-sm text-slate-500 flex items-center gap-2">
          <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-sky-400" />
          العملات النشطة تظهر كخيارات في الحسابات والصناديق والبنوك والقيود. تأكد من صحة النطاق: أدنى سعر ≤ سعر التحويل ≤ أعلى سعر.
@@ -604,7 +586,7 @@ export default function CurrenciesView({ currencies, accounts, cashBoxes, bankAc
         </button>
         <button
          type="submit"
-         className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-500/15 hover:bg-sky-400 text-white shadow-lg transition-all cursor-pointer"
+         className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-500 text-[#ffffff] shadow-lg transition-all cursor-pointer"
         >
          {modal.mode === 'add' ? 'حفظ العملة' : 'حفظ التعديلات'}
         </button>

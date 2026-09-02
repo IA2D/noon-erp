@@ -92,7 +92,7 @@ export default function HomePageView({ onNavigate }: Props) {
   const Arrow = lang === 'ar' ? ChevronLeft : ChevronRight;
 
   return (
-    <div className="w-full space-y-6 px-2 md:px-4 py-2 animate-fade-in min-h-full">
+    <div className="w-full h-full min-h-0 flex flex-col gap-[clamp(0.65rem,1.5vh,1.5rem)] px-2 md:px-4 py-2 animate-fade-in overflow-hidden">
       <PageHeader
         icon={<Home className="w-6 h-6" />}
         title="الصفحة الرئيسية"
@@ -115,7 +115,7 @@ export default function HomePageView({ onNavigate }: Props) {
       </div>
 
       {/* Sections Grid */}
-      <section>
+      <section className="flex-1 min-h-0 flex flex-col">
         <div className="section-head">
           <div className="section-icon">
             <Home className="w-5 h-5" />
@@ -127,20 +127,20 @@ export default function HomePageView({ onNavigate }: Props) {
           <div className="section-line" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full">
+        <div className="grid flex-1 min-h-0 w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr gap-[clamp(0.65rem,1.5vh,1.25rem)]">
           {BOXES.map(box => {
             const Icon = box.icon;
             return (
               <div
                 key={box.id}
                 onClick={() => onNavigate(box.module)}
-                className="group relative text-right glass rounded-2xl p-7 border border-slate-700/50 hover:border-sky-500/50 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-sky-500/10 cursor-pointer overflow-hidden"
+                className="group relative min-h-0 text-right glass rounded-2xl p-[clamp(0.8rem,2vh,1.75rem)] border border-slate-700/50 hover:border-sky-500/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-500/10 cursor-pointer overflow-hidden flex flex-col justify-center"
               >
-                <div className="w-14 h-14 rounded-2xl bg-sky-500/20 border border-white/10 shadow-lg text-sky-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <Icon className="w-7 h-7" />
+                <div className="size-[clamp(2.5rem,6vh,3.5rem)] rounded-2xl bg-sky-500/20 border border-white/10 shadow-lg text-sky-400 flex items-center justify-center mb-[clamp(0.4rem,1vh,1rem)] group-hover:scale-105 transition-transform duration-300">
+                  <Icon className="size-[clamp(1.25rem,3vh,1.75rem)]" />
                 </div>
-                <h3 className="font-black text-white text-xl">{box.title}</h3>
-                <div className="mt-5 flex items-center justify-between gap-2">
+                <h3 className="font-black text-white text-[clamp(1rem,2.2vh,1.5rem)] leading-tight">{box.title}</h3>
+                <div className="mt-[clamp(0.45rem,1.4vh,1.25rem)] flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-xs font-semibold text-slate-500 bg-slate-800/50 rounded-full px-3 py-1">{box.meta}</span>
                   <div className="flex items-center gap-2 text-sky-400 text-sm font-bold whitespace-nowrap">
                     <span>افتح القسم</span>

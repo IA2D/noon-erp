@@ -22,6 +22,8 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import PageHeader from '../ui/PageHeader';
 import { useToast } from '../ui/Toast';
@@ -51,6 +53,7 @@ interface SettingsState {
   decimalPlaces: string;
   showRefreshButton: boolean;
   attachmentRequirementsJson: string;
+  uiScalePercent: string;
 }
 
 const DEFAULT_SETTINGS: SettingsState = {
@@ -62,6 +65,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   decimalPlaces: '2',
   showRefreshButton: true,
   attachmentRequirementsJson: '[]',
+  uiScalePercent: '100',
 };
 
 interface IdentityState {
@@ -239,6 +243,8 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
         if (!configured.ok) throw new Error(configured.error || 'SESSION_TIMEOUT_INVALID');
       }
       setPersistentItem(SETTINGS_KEY, JSON.stringify(settings));
+      const scaleResult = window.desktopWindow?.setUiScalePercent(Number(settings.uiScalePercent));
+      if (scaleResult && !scaleResult.ok) throw new Error('UI_SCALE_APPLY_FAILED');
 
       const branches = loadBranchesLocal();
       const main: CompanyBranch = branches[0] ?? { ...DEFAULT_COMPANY_BRANCH, id: 'br-main' };
@@ -817,6 +823,46 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                       </div>
                     </button>
                   </div>
+                </div>
+
+                <div className="mt-6 border-t border-slate-800 pt-6">
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                      <label htmlFor="ui-scale-range" className={labelCls}>حجم واجهة النظام</label>
+                      <p className="text-xs text-slate-500 leading-relaxed">القيمة 100% هنا تساوي مستوى تصغير المتصفح 70%. يمكنك اختيار حجم أصغر أو أكبر ثم حفظ التغييرات.</p>
+                    </div>
+                    <span className="shrink-0 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2 font-black text-sky-400" dir="ltr">
+                      {settings.uiScalePercent}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3" dir="ltr">
+                    <ZoomOut className="h-5 w-5 shrink-0 text-slate-500" />
+                    <input
+                      id="ui-scale-range"
+                      type="range"
+                      min="50"
+                      max="200"
+                      step="5"
+                      value={settings.uiScalePercent}
+                      onChange={event => set('uiScalePercent', event.target.value)}
+                      className="h-2 w-full cursor-pointer accent-sky-500"
+                      aria-valuetext={`${settings.uiScalePercent}% من الحجم الافتراضي الجديد`}
+                    />
+                    <ZoomIn className="h-5 w-5 shrink-0 text-slate-500" />
+                  </div>
+                  <div className="mt-4 grid grid-cols-4 gap-2" dir="ltr">
+                    {['75', '100', '125', '150'].map(value => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => set('uiScalePercent', value)}
+                        className={`rounded-lg border px-3 py-2 text-xs font-bold transition cursor-pointer ${settings.uiScalePercent === value ? 'border-sky-500 bg-sky-500/15 text-sky-400' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'}`}
+                      >
+                        {value}%
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">مستوى التكبير الفعلي الحالي بعد الحفظ: {Math.round(Number(settings.uiScalePercent) * 0.7)}% من تكبير Chromium الأصلي.</p>
                 </div>
 
                 <div className="mt-6">

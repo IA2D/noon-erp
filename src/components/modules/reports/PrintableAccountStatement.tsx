@@ -6,7 +6,7 @@ import { tafqeetAmount } from '../../../utils/tafqeetHelper';
 import BaseReportTemplate from '../../ui/BaseReportTemplate';
 import { openDesktopPrintPreview } from '../../../utils/desktopPrintPreview';
 
-export interface PrintableStatementRow { id?: string; date: string; docType: string; docNumber: string; reference: string; description: string; debit: number; credit: number; running?: number; seq?: number; }
+export interface PrintableStatementRow { id?: string; date: string; docType: string; docNumber: string; reference: string; description: string; debit: number; credit: number; currency?: string; running?: number; seq?: number; }
 export interface PrintableAccountStatementProps { titleAr: string; titleEn?: string; subjectCode: string; subjectName: string; subjectExtra?: string; fromDate: string; toDate: string; currencyCode: string; currencyNameAr?: string; currencySymbol?: string; opening: number; rows: PrintableStatementRow[]; isSummary?: boolean; showOpening?: boolean; currentUserName?: string; company?: CompanyBranch | null; rowsPerPage?: number; onClose?: () => void; }
 const round2=(n:number)=>Math.round((n||0)*100)/100;
 const fmt=(n:number)=>n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -24,10 +24,10 @@ export default function PrintableAccountStatement({ titleAr,titleEn='Statement o
     </div>
     <div ref={ref} className="paper print-area" style={{width:794,margin:'0 auto'}}>
       <BaseReportTemplate reportTitleAr={titleAr} reportTitleEn={titleEn} fromDate={fromDate} toDate={toDate} currentUserName={currentUserName} company={co}
-        entityInfo={[{label:'الكود',value:subjectCode},{label:'الاسم',value:subjectName},{label:'البيان',value:subjectExtra||'—'},{label:'العملة',value:`${curName} (${curSym})`}]} totalDebit={totalDebit} totalCredit={totalCredit} docCount={movements.length} openingBalance={opening} closingBalance={closing} tafqeetText={tafqeetAmount(Math.abs(closing),curName,currencyCode)} balanceTag={closing>=0?'مدين':'دائن'} currencyNameAr={curName} currencySymbol={curSym}>
-        <table className="report-table" style={{width:'100%',borderCollapse:'collapse',fontSize:10}}><thead><tr><th>#</th><th>التاريخ</th><th>المستند</th><th>الرقم</th><th>المرجع</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>
-          {showOpening&&<tr><td></td><td>—</td><td>رصيد افتتاحي</td><td>—</td><td>—</td><td>الرصيد الافتتاحي</td><td>{opening>0?fmt(opening):''}</td><td>{opening<0?fmt(Math.abs(opening)):''}</td><td>{fmt(opening)}</td></tr>}
-          {movements.map(m=><tr key={m.id||m.seq}><td>{m.seq}</td><td>{fmtDate(m.date)}</td><td>{m.docType}</td><td>{m.docNumber}</td><td>{m.reference}</td><td>{m.description}</td><td>{m.debit?fmt(m.debit):''}</td><td>{m.credit?fmt(m.credit):''}</td><td>{fmt(m.running||0)}</td></tr>)}
+        entityInfo={[{label:'الكود',value:subjectCode},{label:'الاسم',value:subjectName},{label:'البيان',value:subjectExtra||'—'},{label:'العملة',value:curName===curSym?curName:`${curName} (${curSym})`}]} totalDebit={totalDebit} totalCredit={totalCredit} docCount={movements.length} openingBalance={opening} closingBalance={closing} tafqeetText={tafqeetAmount(Math.abs(closing),curName,currencyCode)} balanceTag={closing>=0?'مدين':'دائن'} currencyNameAr={curName} currencySymbol={curSym}>
+        <table className="report-table" style={{width:'96%',maxWidth:'96%',marginLeft:'auto',marginRight:'auto',borderCollapse:'collapse',fontSize:8}}><thead><tr><th>#</th><th>التاريخ</th><th>نوع المستند</th><th>رقم المستند</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>
+          {showOpening&&<tr><td></td><td>—</td><td>رصيد افتتاحي</td><td>—</td><td>الرصيد الافتتاحي</td><td>{opening>0?fmt(opening):''}</td><td>{opening<0?fmt(Math.abs(opening)):''}</td><td>{fmt(opening)}</td></tr>}
+          {movements.map(m=><tr key={m.id||m.seq}><td>{m.seq}</td><td>{fmtDate(m.date)}</td><td>{m.docType}</td><td>{m.docNumber}</td><td>{m.description}</td><td>{m.debit?fmt(m.debit):''}</td><td>{m.credit?fmt(m.credit):''}</td><td>{fmt(m.running||0)}</td></tr>)}
         </tbody></table>
       </BaseReportTemplate>
     </div>

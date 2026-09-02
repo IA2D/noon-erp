@@ -1,3 +1,4 @@
+import DateField from '../../ui/DateField';
 import {useEffect, useMemo, useRef, type KeyboardEvent, type InputHTMLAttributes} from 'react';
 import {Trash2, CheckCircle2, Info, Plus, Layers} from 'lucide-react';
 import type {Account} from '../../../types/erp';
@@ -260,8 +261,8 @@ export default function OpeningBalancesGrid({
           <tr className="bg-slate-900/70 text-slate-300 text-xs font-bold border-b border-slate-800">
               <th className={`${thCls} w-10 text-center`}>#</th>
               <th className={`${thCls} w-40`}>رقم الحساب (F9)</th>
-              <th className={thCls}>اسم الحساب</th>
-              <th className={thCls}>الحساب المساعد</th>
+              <th className={`${thCls} w-44 max-w-44`}>اسم الحساب</th>
+              <th className={`${thCls} w-72 min-w-72`}>الحساب المساعد (F8)</th>
               <th className={`${thCls} w-24`}>العملة</th>
               <th className={`${thCls} w-28`}>سعر التحويل</th>
               <th className={`${thCls} w-28`}>مدين</th>
@@ -317,9 +318,9 @@ export default function OpeningBalancesGrid({
                     </td>
                     <td className={tdCls}>
                       {resolved ? (
-                        <div className={`flex items-center gap-1.5 ${l.isControl ? 'pr-4' : ''}`}>
+                        <div className={`flex items-center gap-1.5 max-w-44 overflow-hidden ${l.isControl ? 'pr-4' : ''}`}>
                           {l.isControl && <span className="inline-block w-2.5 h-2.5 border-b border-r border-sky-500/50 rounded-br shrink-0" />}
-                          <div className="text-slate-50 font-bold whitespace-nowrap">{l.account!.nameAr}</div>
+                          <div className="text-slate-50 font-bold truncate">{l.account!.nameAr}</div>
                           {l.isControl && (
                             <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-sky-500/10 text-sky-300 border border-sky-500/30 whitespace-nowrap">مساعد</span>
                           )}
@@ -346,7 +347,8 @@ export default function OpeningBalancesGrid({
                             )},
                           ]}
                           searchText={e => `${e.code} ${e.nameAr} ${SUB_LEDGER_KIND_LABEL[e.kind]}`}
-                          browseTitle="اختيار الحساب المساعد (F9)"
+                          browseTitle="اختيار الحساب المساعد (F8)"
+                          shortcutKey="F8"
                           emptyMessage="لا توجد كيانات مساعدة مرتبطة بهذا الحساب."
                           onSelect={entity => onSelectEntity(l.key, entity)}
                           inputProps={{
@@ -466,10 +468,9 @@ export default function OpeningBalancesGrid({
                     </td>
                     <td className={tdCls}>
                       {editable ? (
-                        <input
+                        <DateField
                           data-ob-field
                           data-enter-field="dueDate"
-                          type="text"
                           value={l.row!.dueDate || ''}
                           onChange={e => onSetDueDate(l.key, e.target.value)}
                           onKeyDown={handleNavKey}

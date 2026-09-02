@@ -1,3 +1,4 @@
+import { openDesktopPrintPreview } from './desktopPrintPreview';
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
 
@@ -72,30 +73,5 @@ export async function generateReportPdf(
 }
 
 export function printReport(element: HTMLElement, orientation: 'portrait' | 'landscape' = 'portrait'): void {
-  const printWindow = window.open('', '_blank', 'width=1100,height=800');
-  if (!printWindow) return;
-
-  const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-    .map(el => el.outerHTML)
-    .join('\n');
-
-  printWindow.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <title>تقرير</title>
-  ${styles}
-  <style>
-    @page { size: ${orientation}; margin: 10mm; }
-    body { margin: 0; padding: 0; font-family: 'Tajawal', 'Cairo', sans-serif; }
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-    .no-print, .no-print * { display: none !important; }
-  </style>
-</head>
-<body>
-  ${element.outerHTML}
-  <script>window.onload = () => { window.print(); window.close(); }<\/script>
-</body>
-</html>`);
-  printWindow.document.close();
+  void openDesktopPrintPreview(element, 'تقرير', orientation);
 }

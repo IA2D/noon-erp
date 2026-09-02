@@ -58,7 +58,7 @@ export default function LoginView({ onLogin, fiscalYears, defaultFiscalYear }: P
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
 
-                  className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#f8fafc]/50 text-slate-900 caret-sky-600 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:caret-sky-400 dark:placeholder:text-slate-500 focus:bg-white focus:text-slate-950 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none dark:focus:bg-slate-900 dark:focus:text-white dark:focus:border-sky-400 dark:focus:ring-sky-500/20 transition-all duration-200 pr-10"
+                  className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#f8fafc]/50 text-[#0f172a] caret-sky-600 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-[#f8fafc] dark:caret-sky-400 dark:placeholder:text-slate-500 focus:bg-[#ffffff] focus:text-[#0f172a] focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none dark:focus:bg-[#0f172a] dark:focus:text-[#ffffff] dark:focus:border-sky-400 dark:focus:ring-sky-500/20 transition-all duration-200 pr-10"
                   required
                 />
               </div>
@@ -74,7 +74,7 @@ export default function LoginView({ onLogin, fiscalYears, defaultFiscalYear }: P
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
 
-                  className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#f8fafc]/50 text-slate-900 caret-sky-600 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:caret-sky-400 dark:placeholder:text-slate-500 focus:bg-white focus:text-slate-950 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none dark:focus:bg-slate-900 dark:focus:text-white dark:focus:border-sky-400 dark:focus:ring-sky-500/20 transition-all duration-200 pr-10 pl-10"
+                  className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#f8fafc]/50 text-[#0f172a] caret-sky-600 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-[#f8fafc] dark:caret-sky-400 dark:placeholder:text-slate-500 focus:bg-[#ffffff] focus:text-[#0f172a] focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none dark:focus:bg-[#0f172a] dark:focus:text-[#ffffff] dark:focus:border-sky-400 dark:focus:ring-sky-500/20 transition-all duration-200 pr-10 pl-10"
                   required
                 />
                 <button
@@ -94,7 +94,7 @@ export default function LoginView({ onLogin, fiscalYears, defaultFiscalYear }: P
                 <select
                   value={fiscalYear}
                   onChange={(e) => setFiscalYear(e.target.value)}
-                  className="w-full appearance-none text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#f8fafc]/50 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 focus:bg-white focus:text-slate-950 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none dark:focus:bg-slate-900 dark:focus:text-white dark:focus:border-sky-400 dark:focus:ring-sky-500/20 transition-all duration-200 pr-10"
+                  className="w-full appearance-none text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#f8fafc]/50 text-[#0f172a] dark:border-slate-700 dark:bg-slate-800 dark:text-[#f8fafc] focus:bg-[#ffffff] focus:text-[#0f172a] focus:border-sky-500 focus:ring-2 focus:ring-sky-100 focus:outline-none dark:focus:bg-[#0f172a] dark:focus:text-[#ffffff] dark:focus:border-sky-400 dark:focus:ring-sky-500/20 transition-all duration-200 pr-10"
                   required
                 >
                   {fiscalYears.map(year => <option key={year} value={year}>{year}</option>)}
@@ -117,7 +117,7 @@ export default function LoginView({ onLogin, fiscalYears, defaultFiscalYear }: P
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 bg-[#006fba] hover:bg-sky-700 text-white font-bold text-sm rounded-xl shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="light-primary-button w-full py-2.5 bg-[#006fba] hover:bg-sky-700 text-white font-bold text-sm rounded-xl shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">

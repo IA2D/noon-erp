@@ -6,14 +6,15 @@ import { roundTo } from './money';
  * stored original-currency debit/credit. It never divides historical local
  * values by today's currency master rate.
  */
-export function projectPostedJournalsToCurrency(
+export function projectJournalsToCurrency(
   journals: JournalEntry[],
   currency: string,
   baseCurrency: string,
-  decimals: number
+  decimals: number,
+  includePending = false
 ): JournalEntry[] {
   const original = currency !== baseCurrency;
-  return journals.filter(entry => entry.status === 'POSTED').map(entry => {
+  return journals.filter(entry => entry.status === 'POSTED' || (includePending && entry.status === 'PENDING_POSTING')).map(entry => {
     if (!original) return {
       ...entry,
       currency: baseCurrency,
@@ -24,8 +25,8 @@ export function projectPostedJournalsToCurrency(
     };
     const lines = entry.lines.filter(line => (line.currency || entry.currency) === currency).map(line => ({
       ...line,
-      debit: roundTo(line.debitForeign || 0, decimals),
-      credit: roundTo(line.creditForeign || 0, decimals),
+      debit: roundTo(line.debitForeign ?? ((line.exchangeRate || entry.exchangeRate) > 0 ? (line.debit || 0) / (line.exchangeRate || entry.exchangeRate) : 0), decimals),
+      credit: roundTo(line.creditForeign ?? ((line.exchangeRate || entry.exchangeRate) > 0 ? (line.credit || 0) / (line.exchangeRate || entry.exchangeRate) : 0), decimals),
     }));
     return {
       ...entry,
@@ -44,4 +45,8 @@ export function accountsWithCurrencyOpenings(accounts: Account[], currency: stri
     ...account,
     openingBalance: roundTo((account.openingBalances || []).filter(row => row.currency === currency).reduce((sum, row) => sum + (row.debit || 0) - (row.credit || 0), 0), decimals),
   }));
+}
+
+export function projectPostedJournalsToCurrency(journals: JournalEntry[], currency: string, baseCurrency: string, decimals: number): JournalEntry[] {
+  return projectJournalsToCurrency(journals, currency, baseCurrency, decimals);
 }

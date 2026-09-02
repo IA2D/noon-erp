@@ -12,6 +12,7 @@ import JournalEntriesView from './components/modules/JournalEntriesView';
 import PaymentVouchersView from './components/modules/PaymentVouchersView';
 import ReceiptVouchersWindow from './components/modules/ReceiptVouchersWindow';
 import GlobalEnterNav from './components/ui/GlobalEnterNav';
+import TableCollapseController from './components/ui/TableCollapseController';
 import ChartOfAccountsView from './components/modules/ChartOfAccountsView';
 import OpeningBalancesView from './components/modules/OpeningBalancesView';
 import CashBoxesView from './components/modules/CashBoxesView';
@@ -28,7 +29,6 @@ import AuditAndSecurityView from './components/modules/AuditAndSecurityView';
 import SettingsView from './components/modules/SettingsView';
 import AboutUs from './components/modules/AboutUs';
 import ContractsView from './components/modules/ContractsView';
-import DuplicateReviewView from './components/modules/DuplicateReviewView';
 import { ToastProvider } from './components/ui/Toast';
 import RateViolationToastBridge from './components/ui/RateViolationToastBridge';
 import StorageConflictToastBridge from './components/ui/StorageConflictToastBridge';
@@ -77,6 +77,7 @@ import { buildControlAccountTransfer, hasPostedEntityMovement, type ControlEntit
 import { AUTH_USERS, AuthUser, CAN_OVERRIDE_EXCHANGE_LIMITS, ERPModule, permissionsFor, ROLES, SESSION_KEY } from './constants/permissions';
 import { loadBranchesLocal } from './utils/companyStore';
 import { migrateLegacyWorkflowStatuses } from './utils/statusMigration';
+import { normalizeStandardLevelFiveAccountNames } from './utils/accountNaming';
 
 const REPORTING_YEAR_SESSION_KEY = 'fullerp-reporting-year';
 
@@ -297,12 +298,13 @@ function AppInner() {
 
   useEffect(() => {
     setAccounts(prev => {
-      const migrated = prev.map(a =>
+      const subLedgerMigrated = prev.map(a =>
         (a.code === '1101020002' || a.nameAr.includes('صراف'))
           ? { ...a, subLedgerType: 'EXCHANGER' as SubLedgerType }
           : a
       );
-      return migrated.some((a, i) => a.subLedgerType !== prev[i].subLedgerType) ? migrated : prev;
+      const migrated = normalizeStandardLevelFiveAccountNames(subLedgerMigrated);
+      return migrated.some((a, i) => a.subLedgerType !== prev[i].subLedgerType || a.nameAr !== prev[i].nameAr || a.nameEn !== prev[i].nameEn) ? migrated : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -414,28 +416,65 @@ function AppInner() {
   }, []);
 
   useEffect(() => {
-    setCurrencies(prev => prev.map(c => ({
-      ...c,
-      minExchangeRate: typeof c.minExchangeRate === 'number' ? c.minExchangeRate : (c.isBase ? 1 : Number((c.exchangeRate * 0.98).toFixed(4))),
-      maxExchangeRate: typeof c.maxExchangeRate === 'number' ? c.maxExchangeRate : (c.isBase ? 1 : Number((c.exchangeRate * 1.02).toFixed(4)))
-    })));
+    if (typeof window === 'undefined') return;
+    const MIG_KEY = 'noon-erp-remove-shipped-party-records-v1';
+    if (window.localStorage.getItem(MIG_KEY) === '1') return;
+
+    // Remove only the exact demonstration rows shipped by older releases.
+    // Matching the complete identity signature prevents deletion of user-created
+    // or user-edited master data that happens to reuse a similar sequence code.
+    const shippedEmployees = new Set([
+      'emp-001|EMP-001|عبدالله محمد الأحمدي|2020-01-15',
+      'emp-002|EMP-002|سارة خالد العتيبي|2021-03-01',
+      'emp-003|EMP-003|ياسر عبدالله الشهري|2022-06-20'
+    ]);
+    const shippedCustomers = new Set([
+      'cus-001|CUST-001|شركة النخبة للتجارة|2023-01-10',
+      'cus-002|CUST-002|مؤسسة الأفق للمقاولات|2023-03-22',
+      'cus-003|CUST-003|فهد سعد القحطاني|2024-05-11'
+    ]);
+    const shippedVendors = new Set([
+      'sup-001|SUP-001|مصنع الرائدة للمواد الغذائية|2023-02-01',
+      'sup-002|SUP-002|شركة الخليج للتقنية|2023-04-18',
+      'sup-003|SUP-003|مؤسسة التميز للقرطاسية|2024-01-08'
+    ]);
+    const signature = (entity: { id: string; code: string; nameAr: string; createdAt: string }) =>
+      `${entity.id}|${entity.code}|${entity.nameAr}|${entity.createdAt}`;
+
+    setEmployees(prev => prev.filter(entity => !shippedEmployees.has(signature(entity))));
+    setCustomers(prev => prev.filter(entity => !shippedCustomers.has(signature(entity))));
+    setVendors(prev => prev.filter(entity => !shippedVendors.has(signature(entity))));
+    window.localStorage.setItem(MIG_KEY, '1');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setCurrencies(prev => prev.map(c => {
+      const { notes: _legacyNotes, ...currency } = c as Currency & { notes?: string };
+      return {
+        ...currency,
+        minExchangeRate: typeof c.minExchangeRate === 'number' ? c.minExchangeRate : (c.isBase ? 1 : Number((c.exchangeRate * 0.98).toFixed(4))),
+        maxExchangeRate: typeof c.maxExchangeRate === 'number' ? c.maxExchangeRate : (c.isBase ? 1 : Number((c.exchangeRate * 1.02).toFixed(4)))
+      };
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const MIG_KEY = 'elite-erp-remove-aed-v1';
+    const MIG_KEY = 'elite-erp-remove-unused-currencies-v3';
     if (window.localStorage.getItem(MIG_KEY) === '1') return;
 
     const baseCode = currencies.find(c => c.isBase)?.code ?? 'YER';
+    const removedCodes = new Set(['AED', 'EUR', 'GBP']);
 
-    const stripAed = <T extends { currencies?: AccountCurrency[]; defaultCurrency?: string }>(list: T[]): T[] => {
+    const stripRemovedCurrencies = <T extends { currencies?: AccountCurrency[]; defaultCurrency?: string }>(list: T[]): T[] => {
       let changed = false;
       const next = list.map(x => {
-        if (!x.currencies || (!x.currencies.some(c => c.code === 'AED') && x.defaultCurrency !== 'AED')) return x;
+        if (!x.currencies || (!x.currencies.some(c => removedCodes.has(c.code)) && !removedCodes.has(x.defaultCurrency ?? ''))) return x;
         changed = true;
-        const kept = x.currencies.filter(c => c.code !== 'AED');
-        if (x.defaultCurrency !== 'AED' && kept.length > 0) return { ...x, currencies: kept };
+        const kept = x.currencies.filter(c => !removedCodes.has(c.code));
+        if (!removedCodes.has(x.defaultCurrency ?? '') && kept.length > 0) return { ...x, currencies: kept };
         const withBase = kept.some(c => c.code === baseCode)
           ? kept.map(c => (c.code === baseCode ? { ...c, isDefault: true } : c))
           : [{ id: `cur-mig-${baseCode}`, code: baseCode, isDefault: true, isActive: true }, ...kept];
@@ -444,13 +483,13 @@ function AppInner() {
       return changed ? next : list;
     };
 
-    const accountsNext = stripAed(accounts);
-    const banksNext = stripAed(bankAccounts);
-    const boxesNext = stripAed(cashBoxes);
-    const employeesNext = stripAed(employees);
-    const customersNext = stripAed(customers);
-    const vendorsNext = stripAed(vendors);
-    const currenciesNext = currencies.filter(c => c.code !== 'AED');
+    const accountsNext = stripRemovedCurrencies(accounts);
+    const banksNext = stripRemovedCurrencies(bankAccounts);
+    const boxesNext = stripRemovedCurrencies(cashBoxes);
+    const employeesNext = stripRemovedCurrencies(employees);
+    const customersNext = stripRemovedCurrencies(customers);
+    const vendorsNext = stripRemovedCurrencies(vendors);
+    const currenciesNext = currencies.filter(c => !removedCodes.has(c.code));
 
     if (accountsNext !== accounts) setAccounts(accountsNext);
     if (banksNext !== bankAccounts) setBankAccounts(banksNext);
@@ -1751,6 +1790,7 @@ function AppInner() {
       case 'OPENING_BALANCES':
         return (
           <OpeningBalancesView
+            currentUserName={currentUserName}
             accounts={accounts}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
@@ -1894,6 +1934,7 @@ function AppInner() {
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
             trusts={trusts}
+            custodies={custodies}
             vouchers={vouchers}
             receiptVouchers={receiptVouchers}
             fiscalYear={reportingYear}
@@ -1958,8 +1999,6 @@ function AppInner() {
             onChange={handleContractsChange}
           />
         );
-      case 'DATA_QUALITY':
-        return <DuplicateReviewView customers={customers} vendors={vendors} employees={employees} contracts={contracts} currentUserName={currentUserName} onMerge={(result, details) => { setCustomers(result.customers); setVendors(result.vendors); setEmployees(result.employees); setContracts(result.contracts); addAuditLog('GENERAL_LEDGER', 'UPDATE', details); }} />;
       case 'AUDIT_SECURITY':
         return <AuditAndSecurityView auditLogs={auditLogs} />;
       case 'SETTINGS':
@@ -1974,6 +2013,7 @@ function AppInner() {
   return (
     <div dir={dir} className={`min-h-screen bg-transparent ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'} font-sans antialiased ${dir === 'rtl' ? 'dir-rtl' : ''} selection:bg-sky-500/15 selection:text-white`}>
       <GlobalEnterNav />
+      <TableCollapseController />
       <div className="relative z-10 h-screen flex flex-col overflow-hidden">
         <Navbar
           user={currentUser}

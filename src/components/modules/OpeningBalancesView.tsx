@@ -1,3 +1,5 @@
+import BaseReportTemplate from '../ui/BaseReportTemplate';
+import {dateToDisplay} from '../../utils/dateInput';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Coins, Printer, Scale, AlertTriangle } from 'lucide-react';
 import type { Account, CashBox, BankAccount, Employee, Customer, Vendor, Currency } from '../../types/erp';
@@ -10,7 +12,6 @@ import type { EntryLine, BrowseRow, RowState, SavePayload, RowEditField } from '
 import { zeroRow, localOf, round2, uid, SUB_LEDGER_KIND_LABEL, compositeKey, aggregateOpeningTotals } from './opening/types';
 import OpeningBalancesToolbar from './opening/OpeningBalancesToolbar';
 import OpeningBalancesGrid, { type GridLine } from './opening/OpeningBalancesGrid';
-import SavedBalancesModal from './opening/SavedBalancesModal';
 import ModalShell from '../ui/ModalShell';
 import { useTabDirty } from '../../tabs/TabsContext';
 import { selectPostingAccounts, buildLinkedEntities, buildOpeningBalancesPayload, type LinkedEntity } from '../../services/openingBalancesService';
@@ -22,6 +23,7 @@ import type { SupportingDocument } from '../../types/supportingDocuments';
 import { openDesktopPrintPreview } from '../../utils/desktopPrintPreview';
 
 interface Props {
+  currentUserName?: string;
   accounts: Account[];
   cashBoxes: CashBox[];
   bankAccounts: BankAccount[];
@@ -34,15 +36,15 @@ interface Props {
   onPost: (payload: SavePayload) => void;
 }
 
-export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts, employees, customers, vendors, currencies = [], status, onSaveDraft, onPost }: Props) {
+export default function OpeningBalancesView({ currentUserName = '—', accounts, cashBoxes, bankAccounts, employees, customers, vendors, currencies = [], status, onSaveDraft, onPost }: Props) {
   const toast = useToast();
 
   const [lines, setLines] = useState<EntryLine[]>([]);
   const [saving, setSaving] = useState(false);
   const [attachments, setAttachments] = useState<SupportingDocument[]>([]);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
-  const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [isPostConfirmOpen, setIsPostConfirmOpen] = useState(false);
+  const [incompleteBrowseKeys, setIncompleteBrowseKeys] = useState<string[]>([]);
   const [autoFocusKey, setAutoFocusKey] = useState<string | null>(null);
   // حالة تتبع السطور المحذوفة لضمان الاختفاء الفوري وتحديث المجاميع
   const [deletedKeys, setDeletedKeys] = useState<Set<string>>(new Set());
@@ -149,12 +151,20 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
   const handleAccountEnter = (key: string, text: string) => {
     const t = String(text || '').trim();
     if (!t) return;
+    const current = lines.find(line => line.key === key);
+    // Enter للتنقل فقط: لا تُعِد تهيئة السطر إذا كان الحساب نفسه محسومًا بالفعل.
+    if (current?.account?.code === t) return;
     const hit = postingAccounts.find(a => a.code === t);
     if (hit) handleSelectAccount(key, hit);
     else toast('info', `لا يوجد حساب تشغيلي برقم "${t}" — اضغط F9 للاستعراض.`);
   };
 
   const handleSelectAccount = (key: string, account: Account) => {
+    const current = lines.find(line => line.key === key);
+    if (current?.account?.id === account.id) {
+      patchLine(key, { codeText: account.code });
+      return;
+    }
     const ctrl = isControl(account.id);
     const currency = ctrl ? baseCode : pickAvailableCurrency(account, null, key);
     patchLine(key, {
@@ -168,6 +178,8 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
   const handleSelectEntity = (key: string, entity: LinkedEntity) => {
     const l = lines.find(x => x.key === key);
     if (!l || !l.account) return;
+    // إعادة اختيار نفس المساعد لا تمسح المبالغ أو الحقول اللاحقة.
+    if (l.entity?.id === entity.id) return;
     if (l.kind === 'fetched') {
       const nextRow = initEntityRow(entity.openingCurrency || entity.defaultCurrency, entity.openingBalance, entity.openingBalanceForeign, entity.openingRate, entity.openingDocumentRef, entity.openingDueDate);
       patchLine(key, { entity, row: nextRow });
@@ -272,7 +284,16 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
   };
 
   const clearLine = (key: string) => {
+    const line = lines.find(item => item.key === key);
+    if (line?.account && line.editKey) {
+      const savedRow = browseRows.find(row => compositeKey(row.accountId, row.entity?.id || null, row.currency) === line.editKey);
+      if (savedRow?.saved) {
+        setDeletedKeys(prev => new Set(prev).add(line.editKey!));
+        onSaveDraft(buildDeletePayload(savedRow));
+      }
+    }
     setLines(prev => prev.filter(l => l.key !== key));
+    savedLinesRef.current = savedLinesRef.current.filter(l => l.key !== key);
   };
 
   const currencyOptionsForAccount = (acc: Account): string[] => {
@@ -323,14 +344,8 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
   };
 
   const gridLines = useMemo<GridLine[]>(() => {
-    const withAccount: EntryLine[] = [];
-    const withoutAccount: EntryLine[] = [];
-    lines.forEach(l => {
-      if (l.account) withAccount.push(l);
-      else withoutAccount.push(l);
-    });
-    const ordered = [...withAccount, ...withoutAccount];
-    return ordered.map(l => ({
+    // حافظ على ترتيب الإدخال؛ إعادة فرز السطور أثناء Enter كانت تنقل التركيز إلى سجل آخر.
+    return lines.map(l => ({
       key: l.key,
       codeText: l.codeText,
       account: l.account,
@@ -404,9 +419,9 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
   const canPost = canSaveDraft && allBalanced.balanced && status !== 'POSTED';
   const isPosted = status === 'POSTED';
 
-  const buildPayload = (): SavePayload => {
-    const accountLines = lines.filter(l => l.account && !isControl(l.account.id));
-    const controlLines = lines.filter(l => l.account && isControl(l.account.id) && l.entity);
+  const buildPayload = (sourceLines: EntryLine[] = lines): SavePayload => {
+    const accountLines = sourceLines.filter(l => l.account && !isControl(l.account.id));
+    const controlLines = sourceLines.filter(l => l.account && isControl(l.account.id) && l.entity);
 
     const subLedgerTotals: Record<string, RowState> = {};
     controlLines.forEach(l => {
@@ -496,8 +511,8 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
     return true;
   };
 
-  const stampEditKeys = (): EntryLine[] => {
-    const stamped = lines.map(l => l.account ? { ...l, editKey: compositeKey(l.account.id, l.entity?.id || null, l.row.currency) } : l);
+  const stampEditKeys = (sourceLines: EntryLine[] = lines): EntryLine[] => {
+    const stamped = sourceLines.map(l => l.account ? { ...l, editKey: compositeKey(l.account.id, l.entity?.id || null, l.row.currency) } : l);
     setLines(stamped);
     savedLinesRef.current = stamped;
     return stamped;
@@ -732,7 +747,6 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
 
     if (matchKey) {
       setAutoFocusKey(matchKey);
-      setIsBrowseOpen(false);
       return;
     }
     const acc = accountById.get(row.accountId);
@@ -757,42 +771,17 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
     };
     setLines(prev => [...prev, newLine]);
     setAutoFocusKey(key);
-    setIsBrowseOpen(false);
     toast('info', `تم تحميل رصيد ${acc.code} — ${acc.nameAr} إلى وضع التحرير.`);
   };
 
-  /** دالة الحذف المباشر والسريع للأرصدة مع إخفائها من الشاشة فوراً وإلغائها من قاعدة البيانات */
-  const handleDeleteFromBrowse = (row: BrowseRow) => {
-    const k = compositeKey(row.accountId, row.entity?.id || null, row.currency);
-
-    // 1. إضافة المفتاح لقائمة المحذوفات ليختفي فوراً من النافذة ومن ورقة العمل
-    setDeletedKeys(prev => new Set(prev).add(k));
-
-    // 2. مسح أي أسطر موجودة داخل الجدول الرئيسي بصفحة العرض
-    setLines(prev => prev.filter(l => l.key !== row.key && l.editKey !== k));
-    savedLinesRef.current = savedLinesRef.current.filter(l => l.key !== row.key && l.editKey !== k);
-
-    // 3. تصفير السطر وإلغاؤه من قاعدة البيانات
-    if (row.saved) {
-      onSaveDraft(buildDeletePayload(row));
-    }
-
-    toast('success', 'تم حذف الرصيد من قاعدة البيانات وإعادة حساب المجاميع بنجاح.');
-  };
-
-  const handleLoadAllSaved = () => {
-    if (savedRows.length === 0) {
-      toast('info', 'لا توجد أرصدة محفوظة مسبقاً لتنزيلها.');
-      return;
-    }
-
+  const loadSavedIntoMainGrid = (sourceLines: EntryLine[]): EntryLine[] => {
     const newLines: EntryLine[] = [];
     let loaded = 0;
     let skipped = 0;
 
     savedRows.forEach(row => {
       const k = compositeKey(row.accountId, row.entity?.id || null, row.currency);
-      const alreadyOnWorksheet = lines.some(l => l.account && compositeKey(l.account.id, l.entity?.id || null, l.row.currency) === k);
+      const alreadyOnWorksheet = sourceLines.some(l => l.account && compositeKey(l.account.id, l.entity?.id || null, l.row.currency) === k);
       if (alreadyOnWorksheet) { skipped++; return; }
 
       const acc = accountById.get(row.accountId);
@@ -816,27 +805,62 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
       loaded++;
     });
 
-    if (newLines.length > 0) {
-      setLines(prev => [...prev, ...newLines]);
-    }
+    const merged = [...sourceLines, ...newLines];
+    setLines(merged);
+    savedLinesRef.current = merged;
 
     const parts = [];
     if (loaded > 0) parts.push(`تم تحميل ${loaded} رصيد`);
     if (skipped > 0) parts.push(`تم تخطي ${skipped} (موجود مسبقاً)`);
-    toast(loaded > 0 ? 'success' : 'info', parts.length > 0 ? parts.join(' — ') : 'جميع الأرصدة موجودة مسبقاً في ورقة العمل.');
+    toast(loaded > 0 ? 'success' : 'info', parts.length > 0 ? parts.join(' — ') : 'جميع الأرصدة موجودة بالفعل في جدول الإدخال الرئيسي.');
+    return merged;
   };
 
-  const handleToggleSavedBalances = () => {
-    if (lines.length > 0) {
-      setLines([]);
-      toast('info', 'تم طي الأرصدة وإفراغ الجدول.');
+  const isIncompleteBrowseLine = (line: EntryLine): boolean => {
+    if (!line.account) return true;
+    if (isControl(line.account.id) && !line.entity) return true;
+    const row = line.row;
+    return !row || ((row.debit || 0) === 0 && (row.credit || 0) === 0 && (row.debitForeign || 0) === 0 && (row.creditForeign || 0) === 0);
+  };
+
+  const autoSaveThenPopulateMainGrid = (sourceLines: EntryLine[]) => {
+    const sourceRateBlocked = sourceLines.some(line => line.account && (!isControl(line.account.id) || line.entity)
+      && line.row.currency !== baseCode && rateGuard.outOfBounds(Number(line.row.rate) || 0, line.row.currency));
+    const sourceCompositeKeys = sourceLines
+      .filter(line => line.account && (!isControl(line.account.id) || line.entity))
+      .map(line => compositeKey(line.account!.id, line.entity?.id || null, line.row.currency));
+    const sourceHasDuplicates = new Set(sourceCompositeKeys).size !== sourceCompositeKeys.length;
+    if (sourceRateBlocked || sourceHasDuplicates) {
+      toast('error', 'تعذر فتح الاستعراض: راجع أسعار التحويل والأسطر المكررة أولاً.');
       return;
     }
-    handleLoadAllSaved();
+    if (status !== 'POSTED' && sourceLines.length > 0) {
+      const payload = buildPayload(sourceLines);
+      onSaveDraft({ ...payload, attachments });
+      sourceLines = sourceLines.map(l => l.account ? { ...l, editKey: compositeKey(l.account.id, l.entity?.id || null, l.row.currency) } : l);
+      toast('success', 'تم حفظ التغييرات تلقائياً قبل استعراض الأرصدة المدخلة.');
+    }
+    loadSavedIntoMainGrid(sourceLines);
+  };
+
+  const handleBrowseWithAutoSave = () => {
+    const incomplete = lines.filter(isIncompleteBrowseLine).map(line => line.key);
+    if (incomplete.length > 0) {
+      setIncompleteBrowseKeys(incomplete);
+      return;
+    }
+    autoSaveThenPopulateMainGrid(lines);
+  };
+
+  const discardIncompleteAndBrowse = () => {
+    const keys = new Set(incompleteBrowseKeys);
+    const completeLines = lines.filter(line => !keys.has(line.key));
+    setIncompleteBrowseKeys([]);
+    autoSaveThenPopulateMainGrid(completeLines);
   };
 
   const companyBranch = useMemo(() => loadBranchesLocal()[0], []);
-  const formatPrintDate = (d?: string): string => (d ? new Date(d).toLocaleDateString('ar-EG') : '—');
+  const formatPrintDate = (d?: string): string => (dateToDisplay(d || '') || '—');
 
   return (
     <div className="space-y-4">
@@ -869,7 +893,7 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
       <OpeningBalancesToolbar
         savedRows={savedRows}
         onPickSaved={handleEditFromBrowse}
-        onLoadAll={handleToggleSavedBalances}
+        onLoadAll={handleBrowseWithAutoSave}
         onAddLine={addLine}
         canSaveDraft={canSaveDraft}
         canPost={canPost}
@@ -878,7 +902,7 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
         onSaveDraft={handleSaveDraft}
         onPost={handlePostClick}
         onPrint={() => setIsPrintOpen(true)}
-        onBrowse={() => setIsBrowseOpen(true)}
+        onBrowse={handleBrowseWithAutoSave}
       />
       <AttachmentPicker documents={attachments} onChange={setAttachments} uploadedBy="current-user" documentType="OPENING_SUPPORT" />
 
@@ -919,18 +943,24 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
         onEnterLastField={addLine}
       />
 
-      {/* نافذة استعراض الأرصدة المدخلة */}
-      <SavedBalancesModal
-        open={isBrowseOpen}
-        onClose={() => setIsBrowseOpen(false)}
-        rows={browseRows}
-        totalDebit={browseTotals.debit}
-        totalCredit={browseTotals.credit}
-        isBalanced={browseBalanced}
-        baseCode={baseCode}
-        onEdit={handleEditFromBrowse}
-        onDelete={handleDeleteFromBrowse}
-      />
+      <ModalShell
+        id="opening-balances-incomplete-rows"
+        open={incompleteBrowseKeys.length > 0}
+        onClose={() => setIncompleteBrowseKeys([])}
+        title="توجد سطور غير مكتملة"
+        subtitle={`عدد السطور غير المكتملة: ${incompleteBrowseKeys.length}`}
+        icon={AlertTriangle}
+        size="sm"
+        footer={null}
+      >
+        <div className="space-y-5 p-1 text-right">
+          <p className="text-sm text-slate-300">يجب اختيار الحساب والحساب المساعد عند الحاجة وإدخال قيمة غير صفرية. هل تريد تجاهل السطور غير المكتملة ثم حفظ الباقي تلقائياً؟</p>
+          <div className="flex items-center justify-end gap-3">
+            <button type="button" onClick={() => setIncompleteBrowseKeys([])} className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-bold text-slate-200">إلغاء والعودة للإدخال</button>
+            <button type="button" onClick={discardIncompleteAndBrowse} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-[#ffffff] hover:bg-red-500">تجاهل السطور غير المكتملة والمتابعة</button>
+          </div>
+        </div>
+      </ModalShell>
 
       {isPrintOpen && (
         <ModalShell
@@ -956,56 +986,51 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
           }
         >
           <div ref={printablePaperRef} className="paper print-area bg-white text-slate-900 text-right overflow-y-auto" dir="rtl">
-            <div className="p-8 space-y-6">
-              <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
-                <div>
-                  {companyBranch?.logoUrl && (
-                    <img src={companyBranch.logoUrl} alt="logo" className="w-14 h-14 object-contain mb-1" />
-                  )}
-                  <div className="text-xs text-slate-600 font-bold">{companyBranch?.companyNameAr || 'شركة سبأ للمقاولات'}</div>
-                  <div className="text-xs text-slate-500">
-                    {companyBranch?.branchNameAr}{companyBranch?.taxNumber ? ` — الرقم الضريبي: ${companyBranch.taxNumber}` : ''}
-                  </div>
-                  <h2 className="text-xl font-black text-slate-900 mt-2">تقرير الأرصدة الافتتاحية</h2>
-                  <p className="text-xs text-slate-600 mt-1 font-semibold">Opening Balances Report</p>
-                </div>
-                <div className="text-left">
-                  <div className="text-xs text-slate-600 mt-0.5">تاريخ الطباعة: {new Date().toLocaleDateString('ar-EG')}</div>
-                  <div className="text-xs text-slate-400 mt-1">الأرصدة الافتتاحية — الحسابات والكيانات المساعدة</div>
-                </div>
-              </div>
-
-              <table className="w-full text-xs border border-slate-300">
+            <BaseReportTemplate reportTitleAr="تقرير الأرصدة الافتتاحية" reportTitleEn="Opening Balances Report" company={companyBranch || undefined} currentUserName={currentUserName}>
+              <table className="w-full border border-slate-300">
+                <colgroup>
+                  <col style={{ width: '4%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '29%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '10%' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-300 text-slate-700 font-black">
                     <th className="p-2 border-b border-slate-300">#</th>
                     <th className="p-2 border border-slate-300">رقم الحساب</th>
                     <th className="p-2 border border-slate-300">اسم الحساب</th>
-                    <th className="p-2 border border-slate-300">الحساب المساعد</th>
                     <th className="p-2 border border-slate-300">العملة</th>
-                    <th className="p-2 border border-slate-300">المدين ({baseCode})</th>
-                    <th className="p-2 border border-slate-300">الدائن ({baseCode})</th>
+                    <th className="p-2 border border-slate-300">المدين المحلي</th>
+                    <th className="p-2 border border-slate-300">الدائن المحلي</th>
                     <th className="p-2 border border-slate-300">الصافي</th>
-                    <th className="p-2 border border-slate-300">المرجع</th>
+
                     <th className="p-2 border border-slate-300">الاستحقاق</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {gridLines.filter(l => l.row).map((l, idx) => {
-                    const row = l.row!;
-                    const local = localOf(row, baseCode, rateOf);
-                    const net = round2(local.debit - local.credit);
+                  {browseRows.length === 0 ? (
+                    <tr><td colSpan={8} className="p-8 text-center text-slate-500">لا توجد أرصدة افتتاحية مسجلة.</td></tr>
+                  ) : browseRows.map((row, idx) => {
+                    const net = round2(row.debit - row.credit);
                     return (
-                      <tr key={l.key} className={idx % 2 ? 'bg-slate-50' : ''}>
+                      <tr key={row.key} className={idx % 2 ? 'bg-slate-50' : ''}>
                         <td className="p-2 text-center">{idx + 1}</td>
-                        <td className="p-2 font-mono">{l.account!.code}</td>
-                        <td className="p-2">{l.account!.nameAr}</td>
-                        <td className="p-2">{l.entity ? l.entity.nameAr : '—'}</td>
+                        <td className="p-2 font-mono">{row.accountCode}</td>
+                        <td className="p-2">{row.entity ? `${row.accountName} - ${row.entity.nameAr}` : row.accountName}</td>
                         <td className="p-2 font-mono">{row.currency}</td>
-                        <td className="p-2 font-mono text-left text-emerald-700 font-bold">{local.debit > 0 ? fmtAmountCur(local.debit, baseCode) : '—'}</td>
-                        <td className="p-2 font-mono text-left text-amber-700 font-bold">{local.credit > 0 ? fmtAmountCur(local.credit, baseCode) : '—'}</td>
-                        <td className="p-2 font-mono text-left">{net === 0 ? '—' : `${fmtAmountCur(Math.abs(net), baseCode)} ${net > 0 ? 'مدين' : 'دائن'}`}</td>
-                        <td className="p-2">{row.documentRef || '—'}</td>
+                        <td className="p-2 font-mono text-left text-emerald-700 font-bold">{row.debit > 0 ? fmtAmount(row.debit) : '—'}</td>
+                        <td className="p-2 font-mono text-left text-amber-700 font-bold">{row.credit > 0 ? fmtAmount(row.credit) : '—'}</td>
+                        <td className="p-2 font-mono text-left">{net === 0 ? '—' : (
+                          <span className="inline-flex w-full items-center justify-between gap-1" dir="rtl">
+                            <span>{net > 0 ? 'مدين' : 'دائن'}</span>
+                            <span dir="ltr">{fmtAmount(Math.abs(net))}</span>
+                          </span>
+                        )}</td>
+
                         <td className="p-2">{formatPrintDate(row.dueDate)}</td>
                       </tr>
                     );
@@ -1013,25 +1038,22 @@ export default function OpeningBalancesView({ accounts, cashBoxes, bankAccounts,
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-black">
-                    <td className="p-2 text-center" colSpan={5}>الإجمالي</td>
-                    <td className="p-2 font-mono text-left text-emerald-800">{fmtAmountCur(totals.debit, baseCode)}</td>
-                    <td className="p-2 font-mono text-left text-amber-800">{fmtAmountCur(totals.credit, baseCode)}</td>
-                    <td className="p-2 font-mono text-left" colSpan={3}>
-                      {isBalanced ? 'متوازن' : `الفرق: ${fmtAmountCur(Math.abs(round2(totals.debit - totals.credit)), baseCode)}`}
+                    <td className="p-2 text-center" colSpan={4}>الإجمالي</td>
+                    <td className="p-2 font-mono text-left text-emerald-800">{fmtAmount(browseTotals.debit)}</td>
+                    <td className="p-2 font-mono text-left text-amber-800">{fmtAmount(browseTotals.credit)}</td>
+                    <td className="p-2 font-mono" colSpan={2}>
+                      {browseBalanced ? 'متوازن' : (
+                        <span className="inline-flex w-full items-center justify-between gap-1" dir="rtl">
+                          <span>الفرق:</span>
+                          <span dir="ltr">{fmtAmount(Math.abs(round2(browseTotals.debit - browseTotals.credit)))}</span>
+                        </span>
+                      )}
                     </td>
                   </tr>
                 </tfoot>
               </table>
 
-              <div className="grid grid-cols-2 gap-8 pt-8">
-                <div className="text-center">
-                  <div className="border-t border-slate-400 pt-2 text-sm text-slate-600">أُعدّ بواسطة</div>
-                </div>
-                <div className="text-center">
-                  <div className="border-t border-slate-400 pt-2 text-sm text-slate-600">المراجع / المدير المالي</div>
-                </div>
-              </div>
-            </div>
+            </BaseReportTemplate>
           </div>
         </ModalShell>
       )}

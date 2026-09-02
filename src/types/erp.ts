@@ -102,7 +102,6 @@ export interface Currency {
   minExchangeRate: number; // أدنى سعر تحويل (حد سفلي للنطاق)
   maxExchangeRate: number; // أعلى سعر تحويل (حد علوي للنطاق)
   isActive: boolean;     // إيقاف بدلاً من الحذف
-  notes?: string;
   createdAt: string;
 }
 

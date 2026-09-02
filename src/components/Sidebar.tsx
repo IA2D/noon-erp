@@ -100,7 +100,11 @@ export default function Sidebar({ activeModule, setActiveModule, allowedModules 
           <div className={`p-1.5 rounded-lg transition-colors duration-150 ${isActive ? 'bg-sky-100 dark:bg-white/20' : 'bg-sky-100 dark:bg-sky-950 group-hover:bg-sky-200 dark:group-hover:bg-sky-900'}`}>
             <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-[#006fba] dark:text-white' : 'text-sky-500 dark:text-slate-400 group-hover:text-sky-900 dark:group-hover:text-slate-200'}`} />
           </div>
-          {!collapsed && <span className="truncate">{lang === 'ar' ? item.titleAr : item.titleEn}</span>}
+          {!collapsed && (
+            <span className={`truncate ${isActive ? 'sidebar-nav-label-active' : 'sidebar-nav-label'}`}>
+              {lang === 'ar' ? item.titleAr : item.titleEn}
+            </span>
+          )}
         </div>
 
         {!collapsed && item.badge && (
@@ -113,7 +117,7 @@ export default function Sidebar({ activeModule, setActiveModule, allowedModules 
   };
 
   return (
-    <aside className={`border-l border-sky-200 dark:border-slate-800 bg-[#f0f9ff] dark:bg-slate-900 text-slate-600 dark:text-slate-400 flex flex-col p-4 min-h-0 transition-all duration-300 ${collapsed ? 'w-20' : 'w-80'}`}>
+    <aside className={`border-l border-sky-200 dark:border-slate-800 bg-[#f0f9ff] dark:bg-slate-900 text-slate-600 dark:text-slate-400 flex flex-col p-4 min-h-0 transition-all duration-300 ${collapsed ? 'w-20' : 'w-64'}`}>
       {/* Sidebar control; product branding lives in the top navbar. */}
       <div className={`flex items-center pt-1 pb-2 shrink-0 ${collapsed ? 'justify-center' : 'justify-start px-2'}`}>
         <button

@@ -4,6 +4,7 @@ import { SubLedgerDataset, SubLedgerEntity } from '../../utils/subLedger';
 import { subLedgerTypeOf, subLedgerEntityById, subLedgerBadge, resolveSubLedgerName } from '../../utils/subLedger';
 import { Account } from '../../types/erp';
 import SubLedgerLookup from './SubLedgerLookup';
+import { registerScopedShortcut } from '../../utils/scopedShortcutRegistry';
 
 interface Props {
   dataset: SubLedgerDataset;
@@ -41,19 +42,14 @@ export default function SubLedgerF9Cell({
     window.setTimeout(() => cellRef.current?.focus(), 40);
   };
 
-  // مفتاح F9 يفتح البحث الموحد (مع أي مدخلات في النافذة الحالية)
-  useEffect(() => {
-    if (!cellRef.current || type === 'NONE' || disabled) return;
-    const el = cellRef.current;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F9') {
-        e.preventDefault();
-        setOpen(true);
-      }
-    };
-    el.addEventListener('keydown', onKeyDown);
-    return () => el.removeEventListener('keydown', onKeyDown);
-  }, [type, disabled]);
+  // شارك سجل الاختصارات العام حتى تفوز خلية الحساب المساعد المركزة على
+  // حقول F9 الموجودة خلف النافذة، بدلاً من فتح مستعرض السندات الخارجي.
+  useEffect(() => registerScopedShortcut({
+    key: 'F9',
+    getElement: () => cellRef.current,
+    run: () => setOpen(true),
+    enabled: () => type !== 'NONE' && !disabled && !open,
+  }), [type, disabled, open]);
 
   // عودة الوضع إلى "بدون مساعد" عند تغيير الحساب لنوع مختلف،
   // وإعادة ضبط الخلية تلقائياً إذا لم يعد المعرّف المحفوظ ينتمي لنوع المساعد الجديد

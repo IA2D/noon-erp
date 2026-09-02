@@ -1,3 +1,4 @@
+import { desktopReportPdfBytes } from './desktopPrintPreview';
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
 
@@ -35,13 +36,19 @@ export async function elementToPdf(element: HTMLElement, orientation: 'portrait'
 }
 
 export async function downloadVoucherPdf(element: HTMLElement, fileName: string, orientation: 'portrait' | 'landscape' = 'portrait'): Promise<void> {
+  const bytes = await desktopReportPdfBytes(element, fileName);
+  if (bytes) {
+    const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], {type:'application/pdf'}));
+    const link = document.createElement('a'); link.href=url; link.download=fileName; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000); return;
+  }
   const pdf = await elementToPdf(element, orientation);
   pdf.save(fileName);
 }
 
 export async function shareVoucherPdf(element: HTMLElement, fileName: string, title: string): Promise<boolean> {
-  const pdf = await elementToPdf(element);
-  const blob = pdf.output('blob');
+  const bytes = await desktopReportPdfBytes(element, fileName);
+  const blob = bytes ? new Blob([new Uint8Array(bytes)], {type:'application/pdf'}) : (await elementToPdf(element)).output('blob');
   const file = new File([blob], fileName, { type: 'application/pdf' });
   const nav = navigator as Navigator & {
     canShare?: (data: ShareData) => boolean;

@@ -191,7 +191,7 @@ export default function CostCentersView({ costCenters, journals, onAddCostCenter
           <button
             type="button"
             onClick={openAdd}
-            className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-400 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+            className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             إضافة مركز تكلفة
@@ -413,7 +413,7 @@ export default function CostCentersView({ costCenters, journals, onAddCostCenter
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-500/15 hover:bg-sky-400 text-white shadow-lg transition-all cursor-pointer"
+                  className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-500 text-[#ffffff] shadow-lg transition-all cursor-pointer"
                 >
                   {modal.mode === 'add' ? 'حفظ المركز' : 'حفظ التعديلات'}
                 </button>

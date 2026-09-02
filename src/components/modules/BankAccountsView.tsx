@@ -18,7 +18,7 @@ import {
   Coins
 } from'lucide-react';
 import { Account, AccountCurrency, Currency, JournalEntry, BankAccount, BankEntityType} from'../../types/erp';
-import { calculateAccountActivity, aggregateAccountBalance, bankPostingAccounts, isLinkedOutOfDomain, nextEntityCode} from'../../utils/accountingEngine';
+import { bankPostingAccounts, isLinkedOutOfDomain, nextEntityCode} from'../../utils/accountingEngine';
 import { useActiveCurrencies, defaultIncludedCodes } from '../../hooks/useActiveCurrencies';
 import { useToast} from'../ui/Toast';
 import PageHeader from'../ui/PageHeader';
@@ -134,8 +134,6 @@ function emptyForm(code: string, includedCurrencies: string[]): BankForm {
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 function nextBankCode(banks: BankAccount[], type: BankEntityType): string {
- // يُولّد تلقائياً بادئة وفق نوع الكيان: BNK-### للبنوك و EXC-### لشركات الصرافة
- // — يُحتسب MAX(code) للأنواع المطابقة ويُزاد بمقدار 1 (EXC-001 -> EXC-002).
  return type === 'EXCHANGE'
    ? nextEntityCode(banks, 'EXC')
    : nextEntityCode(banks, 'BNK', ['BANK']);
@@ -147,17 +145,18 @@ export default function BankAccountsView({ bankAccounts, accounts, journals, cur
  const [modal, setModal] = useState<{ mode:'add' |'edit'; id?: string; form: BankForm} | null>(null);
  const [formError, setFormError] = useState('');
  const [deleteTarget, setDeleteTarget] = useState<BankAccount | null>(null);
-
- const activity = calculateAccountActivity(accounts, journals);
  const { options: availableCurrencies } = useActiveCurrencies(currencies);
  const defaultCodes = defaultIncludedCodes(currencies);
 
  const bankBalance = (bank: BankAccount): number => {
- if (!bank.linkedAccountId) return bank.openingBalance;
- const linked = accounts.find(a => a.id === bank.linkedAccountId);
- if (!linked) return bank.openingBalance;
- return aggregateAccountBalance(linked, accounts, activity);
-};
+   // Entity opening balance is authoritative; add posted linked-account movements only.
+   const opening = Number(bank.openingBalance) || 0;
+   if (!bank.linkedAccountId) return opening;
+   const linked = accounts.find(a => a.id === bank.linkedAccountId);
+   if (!linked) return opening;
+   const movement = journals.filter(j => j.status === 'POSTED').reduce((sum, j) => sum + j.lines.filter(line => line.accountId === linked.id).reduce((lineSum, line) => lineSum + (linked.nature === 'DEBIT' ? (line.debit || 0) - (line.credit || 0) : (line.credit || 0) - (line.debit || 0)), 0), 0);
+   return Math.round((opening + movement) * 100) / 100;
+ };
 
  const linkedName = (id?: string): string => {
  if (!id) return'—';
@@ -342,7 +341,7 @@ export default function BankAccountsView({ bankAccounts, accounts, journals, cur
  actions={
  <button
  onClick={openAdd}
- className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-400 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+ className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
  >
  <Plus className="w-4 h-4" />
  إضافة بنك / صراف
@@ -518,7 +517,6 @@ export default function BankAccountsView({ bankAccounts, accounts, journals, cur
   <div className="w-full px-3 py-2 text-sm rounded-xl bg-slate-900/60 border border-slate-700/60 font-mono font-bold text-center" dir="ltr">
   <span className={modal.form.entityType ==='BANK' ?'text-sky-400' :'text-amber-400'}>{modal.form.code || '—'}</span>
   </div>
-  <p className="text-sm text-slate-500 mt-1">يُولّد تلقائياً بادئة حسب النوع: BNK-### للبنوك و EXC-### لشركات الصرافة — يتغير الكود تلقائياً عند تغيير النوع.</p>
   </div>
   <div>
   <label className="block text-xs font-semibold text-slate-300 mb-1">نوع الكيان</label>
@@ -573,9 +571,6 @@ export default function BankAccountsView({ bankAccounts, accounts, journals, cur
   );
 })}
   </div>
-  <p className="text-sm text-slate-500 mt-2">
-  أول عملة مضمّنة تُعتبر الافتراضية للبنك / الصراف — تُوقف العملات بدلاً من حذفها لضمان سلامة السجل المحاسبي.
-  </p>
   </div>
 
  <div className="grid grid-cols-2 gap-4">
@@ -706,15 +701,9 @@ export default function BankAccountsView({ bankAccounts, accounts, journals, cur
   <option key={acc.id} value={acc.id}>{acc.code} - {acc.nameAr}</option>
   ))}
   </select>
-  {isLinkedOutOfDomain(accounts, 'BANK', modal.form.linkedAccountId) ? (
-  <p className="text-sm text-amber-400 mt-1">
+  {isLinkedOutOfDomain(accounts, 'BANK', modal.form.linkedAccountId) && (<p className="text-sm text-amber-400 mt-1">
   الحساب المرتبط حالياً خارج مجموعة البنوك الرئيسية — اختر حساباً من القائمة أعلاه.
-  </p>
-  ) : (
-  <p className="text-sm text-slate-500 mt-1">
-  إجباري — تعرض القائمة حسابات البنوك الرئيسية (المستوى الخامس)، وإن لم توجد تُعرض كل الحسابات النشطة.
-  </p>
-  )}
+  </p>)}
   </div>
  </div>
 
@@ -796,7 +785,7 @@ export default function BankAccountsView({ bankAccounts, accounts, journals, cur
  </button>
  <button
  type="submit"
- className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-500/15 hover:bg-sky-400 text-white shadow-lg transition-all cursor-pointer"
+ className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-500 text-[#ffffff] shadow-lg transition-all cursor-pointer"
  >
  {modal.mode ==='add' ?'حفظ البنك / الصراف' :'حفظ التعديلات'}
  </button>

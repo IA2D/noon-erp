@@ -70,7 +70,12 @@ declare global {
         landscape?: boolean;
         title?: string;
         html?: string;
-      }): Promise<{ opened: boolean; landscape: boolean; previewPath: string }>;
+        returnPdf?: boolean;
+      }): Promise<{ opened: boolean; landscape: boolean; previewPath?: string; bytes?: Uint8Array }>;
+    };
+    desktopWindow?: {
+      getUiScale(): { percent: number; zoomFactor: number };
+      setUiScalePercent(percent: number): { ok: boolean; percent: number; zoomFactor: number };
     };
   }
 }

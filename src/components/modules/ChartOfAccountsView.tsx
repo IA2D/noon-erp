@@ -5,7 +5,6 @@ import {
   AccountNature,
   AccountCategory,
   AccountCurrency,
-  SubLedgerType,
   BankAccount,
   CashBox,
   Customer,
@@ -17,11 +16,9 @@ import {
   Currency
 } from'../../types/erp';
 import {
-  SUB_LEDGER_META,
-  SUB_LEDGER_TYPES,
   subLedgerBadge
 } from'../../utils/subLedger';
-import { useActiveCurrencies, defaultIncludedCodes } from '../../hooks/useActiveCurrencies';
+import { defaultIncludedCodes, useActiveCurrencies } from '../../hooks/useActiveCurrencies';
 import {
  childrenOf,
  ancestorChain,
@@ -32,7 +29,6 @@ import {
  getReportType,
  validateAccountCode,
  expectedCodeLength,
- canPromoteToParent,
  hasAccountTransactions
 } from'../../utils/accountingEngine';
 import {
@@ -46,14 +42,13 @@ import {
  ShieldAlert,
  Pencil,
  Trash2,
- Coins,
  Power,
  CheckCircle2,
  AlertTriangle,
- Lock,
  Scale,
  Hash,
  List
+ ,Coins
 } from'lucide-react';
 import PageHeader from'../ui/PageHeader';
 import { useToast} from'../ui/Toast';
@@ -81,8 +76,7 @@ interface FormState {
  category: AccountCategory;
  isActive: boolean;
  openingBalance: number;
- subLedgerType: SubLedgerType;
- includedCurrencies: string[]; // رموز العملات المضمّنة (نشطة) — الباقي موقوف
+ includedCurrencies: string[];
 }
 
 interface ModalState {
@@ -120,9 +114,8 @@ function defaultForm(baseCodes: string[]): FormState {
  nature:'DEBIT',
  category:'BALANCE_SHEET',
  isActive: true,
- openingBalance: 0,
- subLedgerType:'NONE',
- includedCurrencies: baseCodes
+  openingBalance: 0,
+  includedCurrencies: baseCodes
 };
 }
 
@@ -136,19 +129,10 @@ function buildCurrencies(codes: string[]): AccountCurrency[] {
 }));
 }
 
-/** دمج العملات عند تعديل حساب: تضمين/إيقاف مع الحفاظ على السجل (إيقاف بدلاً من الحذف) */
 function mergeCurrencies(existing: AccountCurrency[], included: string[]): AccountCurrency[] {
  const ts = Date.now();
- const next: AccountCurrency[] = [];
- existing.forEach(c => {
- const active = included.includes(c.code);
- next.push({ ...c, isActive: active, isDefault: included[0] === c.code });
-});
- included.forEach(code => {
- if (!existing.some(c => c.code === code)) {
- next.push({ id: `cur-${ts}-${code}`, code, isActive: true, isDefault: included[0] === code });
-}
-});
+ const next = existing.map(currency => ({ ...currency, isActive: included.includes(currency.code), isDefault: included[0] === currency.code }));
+ included.forEach(code => { if (!next.some(currency => currency.code === code)) next.push({ id:`cur-${ts}-${code}`, code, isDefault:included[0] === code, isActive:true }); });
  return next;
 }
 
@@ -158,12 +142,8 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  const [selectedRoot, setSelectedRoot] = useState<string>('ALL');
  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
- const { options: currencyOptions } = useActiveCurrencies(currencies);
  const defaultCodes = defaultIncludedCodes(currencies);
- const currencyLabel = (code: string): string => {
-   const found = currencyOptions.find(c => c.code === code);
-   return found ? `${found.label} (${code})` : code;
- };
+ const { options: currencyOptions } = useActiveCurrencies(currencies);
 
  const [f9ListOpen, setF9ListOpen] = useState(false);
  const [f9Query, setF9Query] = useState('');
@@ -172,8 +152,6 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  const [modal, setModal] = useState<ModalState | null>(null);
  const [formError, setFormError] = useState('');
 
- const [currencyTarget, setCurrencyTarget] = useState<Account | null>(null);
- const [currencyError, setCurrencyError] = useState('');
  const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
 
  const toggleExpand = (id: string) => {
@@ -217,13 +195,9 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
   category: account.category,
   isActive: account.isActive,
   openingBalance: account.openingBalance,
-  subLedgerType: account.subLedgerType ||'NONE',
-  includedCurrencies:
- account.level === 5
- ? (account.currencies.filter(c => c.isActive).map(c => c.code).length > 0
- ? account.currencies.filter(c => c.isActive).map(c => c.code)
- : [account.defaultCurrency ||'YER'])
- : ['YER']
+  includedCurrencies: account.level === 5
+    ? (() => { const active = account.currencies.filter(currency => currency.isActive && currency.code !== 'GBP').map(currency => currency.code); return active.length ? active : defaultCodes; })()
+    : defaultCodes
 }
 });
 };
@@ -245,15 +219,11 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  return;
 }
 
- if (modal.level === 5 && modal.form.includedCurrencies.length === 0) {
- setFormError('يرجى تضمين عملة واحدة على الأقل للحساب التشغيلي.');
- return;
-}
-
  if (modal.mode ==='add') {
  const isPosting = modal.level === 5;
  const parentAccount = modal.parentId ? accounts.find(a => a.id === modal.parentId) : undefined;
- const currencies = isPosting ? buildCurrencies(modal.form.includedCurrencies) : [];
+  const selectedCodes = modal.form.includedCurrencies.length ? modal.form.includedCurrencies : defaultCodes;
+  const currencies = isPosting ? buildCurrencies(selectedCodes) : [];
   const newAccount: Omit<Account,'id'> = {
   code: modal.code,
   nameAr,
@@ -266,9 +236,9 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
   parentId: modal.parentId || undefined,
   nature: modal.form.nature,
   category: modal.form.category,
-  subLedgerType: isPosting ? modal.form.subLedgerType :'NONE',
+   subLedgerType:'NONE',
   currencies,
- defaultCurrency: isPosting ? (modal.form.includedCurrencies[0] ||'YER') :'YER',
+  defaultCurrency: isPosting ? (selectedCodes[0] ||'YER') :'YER',
  openingBalance: isPosting ? Number(modal.form.openingBalance) || 0 : 0,
  isActive: true
 };
@@ -276,21 +246,15 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  toast('success', `تم إضافة الحساب ${modal.code} - ${nameAr}`);
 } else if (modal.accountId) {
  const editing = accounts.find(a => a.id === modal.accountId);
- const isPosting = modal.level === 5;
   onUpdateAccount(modal.accountId, {
   nameAr,
   nameEn: modal.form.nameEn.trim() || nameAr,
   nature: modal.form.nature,
   category: modal.form.category,
-  subLedgerType: modal.level === 5 ? modal.form.subLedgerType :'NONE',
-  isActive: modal.form.isActive,
- defaultCurrency: isPosting
- ? (modal.form.includedCurrencies[0] || editing?.defaultCurrency ||'YER')
- : (editing?.defaultCurrency ||'YER'),
- currencies:
- isPosting && editing
- ? mergeCurrencies(editing.currencies, modal.form.includedCurrencies)
- : editing?.currencies,
+   subLedgerType: modal.level === 5 ? (editing?.subLedgerType ||'NONE') :'NONE',
+   isActive: modal.form.isActive,
+   defaultCurrency: modal.level === 5 ? (modal.form.includedCurrencies[0] || editing?.defaultCurrency ||'YER') : (editing?.defaultCurrency ||'YER'),
+   currencies: modal.level === 5 && editing ? mergeCurrencies(editing.currencies, modal.form.includedCurrencies) : editing?.currencies,
  openingBalance: modal.level === 5 ? Number(modal.form.openingBalance) || 0 : 0
 });
  toast('success', `تم حفظ تعديلات الحساب ${modal.code} - ${nameAr}`);
@@ -536,7 +500,7 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  <PageHeader
  icon={<Layers className="w-6 h-6" />}
  title="دليل الحسابات الشجري المتكامل"
- subtitle="شجرة من 5 مستويات — المستوى 5 فقط يقبل القيود، مع إدارة عملات الحسابات التشغيلية"
+ subtitle="شجرة من 5 مستويات — المستوى الخامس فقط يقبل القيود اليومية"
   actions={null}
 />
 
@@ -728,14 +692,6 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  </div>
  )}
 
- {modal.mode ==='add' && (
- <div className={`rounded-xl p-3 border text-sm ${modal.level <= 4 ?'bg-amber-500/10 border-amber-500/30 text-amber-200' :'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'}`}>
- {modal.level <= 4
- ?'حساب تجميعي — لا يقبل القيود اليومية، أضف حساباً فرعياً تحته حتى المستوى الخامس.'
- :'حساب تشغيلي — يقبل القيود اليومية ويمكن إدارة عملاته.'}
- </div>
- )}
-
  <div>
  <label className="block text-xs font-semibold text-slate-300 mb-1">اسم الحساب باللغة العربية *</label>
  <input
@@ -787,7 +743,7 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  </div>
 
  {modal.level === 5 && (
- <div className="grid grid-cols-2 gap-4">
+ <div className="space-y-4">
   <div>
   <label className="block text-xs font-semibold text-slate-300 mb-1">الرصيد الافتتاحي (Op. Balance)</label>
    <AmountInput
@@ -797,109 +753,23 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
    />
   </div>
   <div>
-  <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-  <List className="w-4 h-4 text-sky-400" />
-  نوع الحساب المساعد (Sub-Ledger)
-  </label>
-  <select
-  value={modal.form.subLedgerType}
-  onChange={e => setModal({ ...modal, form: { ...modal.form, subLedgerType: e.target.value as SubLedgerType }})}
-  className="w-full px-3 py-2 text-sm glass-input rounded-xl bg-slate-900 text-white"
-  >
-  {SUB_LEDGER_TYPES.map(t => (
-  <option key={t} value={t}>{SUB_LEDGER_META[t].label} ({SUB_LEDGER_META[t].labelEn})</option>
-  ))}
-  </select>
-  <p className="text-sm text-slate-500 mt-1.5">
-  {SUB_LEDGER_META[modal.form.subLedgerType].hint}
-  </p>
+   <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"><Coins className="h-4 w-4 text-sky-500 dark:text-sky-400" />العملات (تضمين / توقيف)</label>
+   <div className="flex flex-wrap gap-2">
+    {currencyOptions.filter(currency => currency.code !== 'GBP').map(currency => {
+      const included = modal.form.includedCurrencies.includes(currency.code);
+      return (
+       <button key={currency.code} type="button" onClick={() => {
+         if (included && modal.form.includedCurrencies.length === 1) return;
+         const includedCurrencies = included ? modal.form.includedCurrencies.filter(code => code !== currency.code) : [...modal.form.includedCurrencies, currency.code];
+         setModal({ ...modal, form:{ ...modal.form, includedCurrencies } });
+       }} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition-colors ${included ? 'border-sky-500/50 bg-sky-100 text-sky-700 hover:bg-sky-200 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-200 dark:hover:bg-sky-500/25' : 'border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'}`}>
+        <span className="font-mono">{currency.code}</span><span>{included ? 'تضمين' : 'توقيف'}</span>{included ? <CheckCircle2 className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+       </button>
+      );
+    })}
+   </div>
   </div>
-  <div className="col-span-2">
- <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
- <Coins className="w-4 h-4 text-emerald-400" />
- العملات (تضمين / توقيف)
- </label>
- <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-  {currencyOptions.map(c => {
-  const included = modal.form.includedCurrencies.includes(c.code);
- return (
- <button
- key={c.code}
- type="button"
- onClick={() => {
- const includedCurrencies = included
- ? modal.form.includedCurrencies.filter(code => code !== c.code)
- : [...modal.form.includedCurrencies, c.code];
- setModal({ ...modal, form: { ...modal.form, includedCurrencies}});
-}}
- className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${
- included
- ?'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
- :'border-slate-700 bg-slate-900/40 text-slate-400 hover:bg-slate-800/60'
-}`}
- >
- <span className="flex items-center gap-1.5">
- {included
- ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
- : <Power className="w-4 h-4" />}
- <span className="font-mono font-bold">{c.code}</span>
- </span>
- <span className={`text-xs px-1.5 py-0.5 rounded-full border ${included
- ?'text-emerald-300 border-emerald-500/40 bg-emerald-500/15'
- :'text-slate-500 border-slate-700 bg-slate-800/60'
-}`}>
- {included ?'تضمين' :'توقيف'}
- </span>
- </button>
- );
-})}
  </div>
- <p className="text-sm text-slate-500 mt-2">
- أول عملة مضمّنة تُعتبر الافتراضية للحساب — تُوقف العملات بدلاً من حذفها لضمان سلامة السجل المحاسبي.
- </p>
- </div>
- </div>
- )}
-
- {modal.level === 5 && modal.mode ==='edit' && (
- <button
- type="button"
- onClick={() => {
- const editing = accounts.find(a => a.id === modal.accountId);
- if (editing) {
- setCurrencyError('');
- setModal(null);
- setCurrencyTarget(editing);
-}
-}}
- className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 text-sm font-semibold transition-colors cursor-pointer"
- >
- <Coins className="w-4 h-4" />
- إدارة عملات الحساب
- </button>
- )}
-
- {modal.mode ==='edit' && modal.accountId && modal.level === 5 && (
- (() => {
- const editing = accounts.find(a => a.id === modal.accountId);
- if (!editing) return null;
- const txCount = journals.filter(j => j.status ==='POSTED' && j.lines.some(l => l.accountId === editing.id)).length;
- const promotion = canPromoteToParent(editing, journals);
- return (
- <div className={`rounded-xl p-3 border text-xs flex items-start gap-2 ${txCount > 0
- ?'bg-red-500/10 border-red-500/30 text-red-200'
- :'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-}`}>
- {txCount > 0 ? <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" /> : <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />}
- <span>
- <span className="font-bold">Rule B — حماية التحويل:</span>{''}
- {txCount > 0
- ? `الحساب عليه ${txCount} قيد مرحلة — يمنع نهائياً تحويله إلى حساب رئيسي. (${promotion.reason})`
- :'الحساب التشغيلي لا يحمل حركات مالية — يمكن تحويله إلى حساب رئيسي إذا لزم.'}
- </span>
- </div>
- );
-})()
  )}
 
  {modal.mode ==='edit' && (
@@ -920,9 +790,6 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  </div>
 
  <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/70 flex-shrink-0 flex items-center justify-between gap-3">
- <p className="text-sm text-slate-500">
- {modal.mode ==='add' ?'سيُضاف الحساب بعد الضغط على موافق.' :'تُحفظ تعديلاتك فور الضغط على موافق.'}
- </p>
  <div className="flex gap-3">
  <button
  type="button"
@@ -940,142 +807,6 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  </div>
  </div>
  </form>
- </ModalShell>
- )}
-
- {currencyTarget && (
- <ModalShell
-  id="account-currency-manager"
-  open={!!currencyTarget}
-  onClose={() => setCurrencyTarget(null)}
-  title={`إدارة عملات الحساب: ${currencyTarget.code} - ${currencyTarget.nameAr}`}
-  icon={Coins}
-  size="md"
-  footer={null}
-  closeOnBackdrop={false}
-  bodyClassName="p-6 space-y-4"
- >
- {currencyError && (
- <div className="rounded-xl p-3 border border-red-500/30 bg-red-500/10 text-red-300 text-sm flex items-center gap-2">
- <ShieldAlert className="w-4 h-4 flex-shrink-0" />
- <span>{currencyError}</span>
- </div>
- )}
-
- <div className="space-y-2">
- {currencyTarget.currencies.length === 0 && (
- <div className="text-sm text-slate-400">لا توجد عملات مرتبطة — أضف أول عملة.</div>
- )}
- {currencyTarget.currencies.map(cur => (
- <div key={cur.id} className="flex items-center justify-between rounded-xl p-3 border border-slate-700/60 bg-slate-900/40">
- <div className="flex items-center gap-2">
- <span className="font-mono font-bold text-white">{cur.code}</span>
- <span className="text-xs text-slate-400">{currencyLabel(cur.code)}</span>
- {cur.isDefault && (
- <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40">
- افتراضية
- </span>
- )}
- <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${cur.isActive
- ?'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
- :'bg-slate-800 text-slate-400 border-slate-700'
-}`}>
- {cur.isActive ?'نشطة' :'موقفة'}
- </span>
- </div>
-
- <div className="flex items-center gap-1.5">
- {cur.isActive && !cur.isDefault && (
- <button
- onClick={() => {
- const updatedCurrencies = currencyTarget.currencies.map(c => ({
- ...c,
- isDefault: c.id === cur.id
-}));
- onUpdateAccount(currencyTarget.id, {
- currencies: updatedCurrencies,
- defaultCurrency: cur.code
-});
- setCurrencyTarget({ ...currencyTarget, currencies: updatedCurrencies, defaultCurrency: cur.code});
-}}
- className="text-xs font-bold px-2.5 py-1 rounded-lg bg-sky-500/15 text-sky-400 hover:bg-sky-500/30 transition-colors cursor-pointer"
- >
- تعيين كافتراضي
- </button>
- )}
- {cur.isActive ? (
- <button
- onClick={() => {
- if (cur.isDefault) {
- setCurrencyError('لا يمكن إيقاف العملة الافتراضية — انقل الافتراضية أولاً.');
- return;
-}
- const updatedCurrencies = currencyTarget.currencies.map(c =>
- c.id === cur.id ? { ...c, isActive: false} : c
- );
- onUpdateAccount(currencyTarget.id, { currencies: updatedCurrencies});
- setCurrencyTarget({ ...currencyTarget, currencies: updatedCurrencies});
- setCurrencyError('');
-}}
- className="text-xs font-bold px-2.5 py-1 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
- >
- إيقاف
- </button>
- ) : (
- <button
- onClick={() => {
- const updatedCurrencies = currencyTarget.currencies.map(c =>
- c.id === cur.id ? { ...c, isActive: true} : c
- );
- onUpdateAccount(currencyTarget.id, { currencies: updatedCurrencies});
- setCurrencyTarget({ ...currencyTarget, currencies: updatedCurrencies});
- setCurrencyError('');
-}}
- className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/30 transition-colors cursor-pointer"
- >
- تفعيل
- </button>
- )}
- </div>
- </div>
- ))}
- </div>
-
- <div className="flex items-center gap-2 pt-3 border-t border-slate-800">
- <select
- id="new-currency"
- className="w-full px-3 py-2 text-sm glass-input rounded-xl bg-slate-900 text-white"
- value=""
- onChange={e => {
- const code = e.target.value;
- if (!code) return;
- if (currencyTarget.currencies.some(c => c.code === code)) {
- setCurrencyError(`العملة ${code} مضافة مسبقاً لهذا الحساب.`);
- return;
-}
- const newCurrency: AccountCurrency = {
- id: `cur-${Date.now()}`,
- code,
- isDefault: false,
- isActive: true
-};
- const updatedCurrencies = [...currencyTarget.currencies, newCurrency];
- onUpdateAccount(currencyTarget.id, { currencies: updatedCurrencies});
- setCurrencyTarget({ ...currencyTarget, currencies: updatedCurrencies});
- setCurrencyError('');
- e.target.value ='';
-}}
- >
- <option value="">— اختر عملة لإضافتها —</option>
-  {currencyOptions.map(c => (
-  <option key={c.code} value={c.code}>{c.label} ({c.code})</option>
-  ))}
- </select>
- </div>
-
- <p className="text-sm text-slate-500">
- ملاحظة: تُدار العملات بإضافة/إيقاف فقط ولا تُحذف نهائياً لضمان سلامة السجل المحاسبي.
- </p>
  </ModalShell>
  )}
 
@@ -1175,8 +906,8 @@ export default function ChartOfAccountsView({ accounts, journals, cashBoxes, ban
  }}
 
  className="w-full px-9 py-2.5 text-sm glass-input rounded-xl"
- />
- </div>
+   />
+  </div>
  </div>
 
  <div className="overflow-y-auto custom-scrollbar flex-1 min-h-0">

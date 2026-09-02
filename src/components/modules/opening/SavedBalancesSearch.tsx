@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {Search, Eye, Pencil} from 'lucide-react';
+import {Search, Pencil} from 'lucide-react';
 import type {BrowseRow} from './types';
 import {fmtAmountCur} from '../../../utils/format';
 
@@ -8,14 +8,14 @@ interface Props {
   rows: BrowseRow[];
   /** تحميل الرصيد المختار إلى ورقة العمل للتعديل */
   onPick: (row: BrowseRow) => void;
-  /** فتح نافذة الاستعراض الكاملة (تعديل/حذف) */
-  onBrowseAll: () => void;
+  /** retained for API compatibility; the old standalone عرض action is removed */
+  onBrowseAll?: () => void;
 }
 
 const searchTextOf = (r: BrowseRow): string =>
   `${r.accountCode} ${r.accountName} ${r.entity?.code || ''} ${r.entity?.nameAr || ''} ${r.currency}`;
 
-export default function SavedBalancesSearch({rows, onPick, onBrowseAll}: Props) {
+export default function SavedBalancesSearch({rows, onPick}: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -103,16 +103,6 @@ export default function SavedBalancesSearch({rows, onPick, onBrowseAll}: Props) 
           />
         </div>
 
-        {/* زر عرض — واضح وواضح بالكامل */}
-        <button
-          type="button"
-          onClick={onBrowseAll}
-          title="فتح نافذة استعراض جميع الأرصدة المحفوظة"
-          className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-blue-500/40 bg-blue-600 text-white hover:bg-blue-500 shadow-md shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap"
-        >
-          <Eye className="w-4 h-4" />
-          عرض
-        </button>
       </div>
 
       {open && filtered.length > 0 && (

@@ -344,7 +344,7 @@ export default function CustomersView({ customers, accounts, journals, currencie
           <button
             type="button"
             onClick={openAdd}
-            className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-400 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+            className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-[#ffffff] font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             إضافة عميل جديد
@@ -412,14 +412,14 @@ export default function CustomersView({ customers, accounts, journals, currencie
                     {customers.indexOf(cus) + 1}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 flex-1 min-w-[260px]">
+                <div className="flex items-center gap-3 w-80 flex-shrink-0 min-w-0">
                   <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]} text-white flex items-center justify-center font-black text-sm shadow-lg flex-shrink-0`}>
                     {initials(cus.nameAr)}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-sky-400 text-sm">{cus.code}</span>
-                      <span className="font-bold text-white whitespace-nowrap">{cus.nameAr}</span>
+                      <span className="font-bold text-white truncate block">{cus.nameAr}</span>
                     </div>
                     <div className="text-sm text-slate-400 font-mono whitespace-nowrap">{cus.nameEn || '—'}</div>
                   </div>
@@ -554,7 +554,6 @@ export default function CustomersView({ customers, accounts, journals, currencie
                   <div className="w-full px-3 py-2 text-sm rounded-xl bg-slate-900/60 border border-slate-700/60 font-mono font-bold text-sky-400 text-center" dir="ltr">
                     {modal.form.code || '—'}
                   </div>
-                  <p className="text-sm text-slate-500 mt-1">يولّد تلقائياً بدلالة التسلسل CUST-### لحسابات العملاء.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">نوع العميل</label>
@@ -737,9 +736,6 @@ export default function CustomersView({ customers, accounts, journals, currencie
                     );
                   })}
                 </div>
-                <p className="text-sm text-slate-500 mt-2">
-                  أول عملة مضمّنة تُعتبر الافتراضية للعميل — تُوقف العملات بدلاً من حذفها لضمان سلامة السجل المحاسبي.
-                </p>
               </div>
 
               <div>
@@ -754,15 +750,9 @@ export default function CustomersView({ customers, accounts, journals, currencie
                     <option key={acc.id} value={acc.id}>{acc.code} - {acc.nameAr}</option>
                   ))}
                 </select>
-                {isLinkedOutOfDomain(accounts, 'RECEIVABLE', modal.form.linkedAccountId) ? (
-                  <p className="text-sm text-amber-400 mt-1">
+                {isLinkedOutOfDomain(accounts, 'RECEIVABLE', modal.form.linkedAccountId) && (<p className="text-sm text-amber-400 mt-1">
                     الحساب المرتبط حالياً خارج مجموعة ذمم العملاء — اختر حساباً من القائمة أعلاه.
-                  </p>
-                ) : (
-                  <p className="text-sm text-slate-500 mt-1">
-                    إجباري — تعرض القائمة حسابات ذمم العملاء الرئيسية (المستوى الخامس)، وإن لم توجد تُعرض كل الحسابات النشطة.
-                  </p>
-                )}
+                  </p>)}
               </div>
 
               <div>
@@ -801,7 +791,7 @@ export default function CustomersView({ customers, accounts, journals, currencie
               <button
                 type="submit"
                 form="customer-form"
-                className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-500/15 hover:bg-sky-400 text-white shadow-lg transition-all cursor-pointer"
+                className="px-5 py-2 text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-500 text-[#ffffff] shadow-lg transition-all cursor-pointer"
               >
                 {modal.mode === 'add' ? 'حفظ العميل' : 'حفظ التعديلات'}
               </button>

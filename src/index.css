@@ -3,6 +3,11 @@
 /* ربط متغير dark: بسمة النظام (data-theme) بدلاً من تفضيلات نظام التشغيل */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
+/* Keep every system table's column titles aligned consistently. */
+:where(table) thead th {
+  text-align: center !important;
+}
+
 /* ============================================================
    التعديل الإجباري للخطوط (Forced Typography Overhaul)
    فرض الأحجام الاحترافية الدنيا على كلاسات الخطوط الأساسية
@@ -943,6 +948,44 @@ html.theme-transition *::after {
   color: #ffffff;
 }
 
+/* Light mode: all solid/gradient primary action buttons keep white foreground text.
+   The theme remaps --color-white for readable surfaces, so scope this correction to buttons. */
+[data-theme="light"] button.light-primary-button,
+[data-theme="light"] button[class~="from-sky-500"],
+[data-theme="light"] button[class~="bg-sky-500"],
+[data-theme="light"] button[class~="bg-sky-600"],
+[data-theme="light"] button[class~="bg-blue-500"],
+[data-theme="light"] button[class~="bg-blue-600"],
+[data-theme="light"] button[class~="bg-emerald-500"],
+[data-theme="light"] button[class~="bg-emerald-600"],
+[data-theme="light"] button[class~="bg-[#006fba]"] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Financial reports' Show Report action uses an arbitrary gradient token, so it
+   receives its own foreground contract instead of widening generic button rules. */
+[data-theme="light"] button.financial-reports-show-button,
+[data-theme="light"] button.financial-reports-show-button svg {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  stroke: currentColor;
+}
+
+/* Sidebar labels are intentionally independent from primary button foreground rules.
+   Hover utility classes contain bg-sky tokens, so the generic primary selector must
+   never be allowed to turn navigation labels white on the light surface. */
+[data-theme="light"] .sidebar-nav-label {
+  color: #334155 !important;
+  -webkit-text-fill-color: #334155 !important;
+}
+[data-theme="light"] .sidebar-nav-label-active {
+  color: #006fba !important;
+  -webkit-text-fill-color: #006fba !important;
+}
+[data-theme="dark"] .sidebar-nav-label { color: #94a3b8; }
+[data-theme="dark"] .sidebar-nav-label-active { color: #ffffff; }
+
 [data-theme="light"] .btn-primary:hover {
   box-shadow: 0 6px 18px rgba(2, 132, 199, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
@@ -1671,6 +1714,77 @@ textarea {
   background: #0f172a;
   color: #f1f5f9;
 }
+
+/* زر موحّد لطي جداول الواجهة مع بقاء رأس الجدول ظاهراً. */
+.table-collapse-anchor {
+  position: relative;
+  box-sizing: border-box;
+  height: 3.5rem !important;
+  padding-top: 0.5rem !important;
+  padding-right: 3.5rem !important;
+  padding-bottom: 0.5rem !important;
+  padding-left: 0.5rem !important;
+}
+
+.table-collapse-toggle {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.table-collapse-toggle svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  pointer-events: none;
+}
+
+.table-collapse-toggle:hover,
+.table-collapse-toggle:focus-visible {
+  border-color: #38bdf8;
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.16);
+  outline: none;
+}
+
+[data-theme="light"] .table-collapse-toggle {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+}
+
+[data-theme="light"] .table-collapse-toggle:hover,
+[data-theme="light"] .table-collapse-toggle:focus-visible {
+  border-color: #0284c7;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+@media print {
+  table[data-collapsible-table="true"] > tbody {
+    display: table-row-group !important;
+  }
+  table[data-collapsible-table="true"] > tfoot {
+    display: table-footer-group !important;
+  }
+}
 [data-theme="light"] .enhanced-sticky-header thead th {
   background: #f1f5f9;
   color: #0f172a;
@@ -1684,7 +1798,7 @@ textarea {
 .print-report-header {
   margin-bottom: 8px;
   color: #000;
-  font-size: 11px;
+  font-size: 8.8px;
   line-height: 1.4;
 }
 .rpt-header-row {
@@ -1699,29 +1813,32 @@ textarea {
 .rpt-col-right { width: 33%; text-align: right; }
 .rpt-col-center { width: 34%; display: flex; justify-content: center; }
 .rpt-col-left { width: 33%; text-align: left; direction: ltr; }
-.rpt-company-ar { font-size: 14px; font-weight: 900; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rpt-company-en { font-size: 12px; font-weight: 800; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rpt-sub { font-size: 9px; color: #555; margin-top: 2px; }
+.rpt-company-ar { font-size: 11.2px; font-weight: 900; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rpt-company-en { font-size: 9.6px; font-weight: 800; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rpt-sub { font-size: 7.2px; color: #555; margin-top: 2px; }
 .rpt-logo {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
   object-fit: cover;
-  border: 1.5px solid #ccc;
+  border: 0;
 }
 .rpt-logo-fallback {
   background: linear-gradient(135deg, #c6c7f8, #8b8cf8);
 }
 .rpt-title {
   text-align: center;
-  font-size: 18px;
+  font-size: 14.4px;
   font-weight: 900;
   color: #000;
-  margin: 6px 0 2px;
+  margin: 8px 0 2px;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
 }
 .rpt-title-en {
   text-align: center;
-  font-size: 11px;
+  font-size: 8.8px;
   color: #666;
   font-weight: 700;
   margin-bottom: 4px;
@@ -1731,7 +1848,7 @@ textarea {
   justify-content: center;
   align-items: center;
   gap: 12px;
-  font-size: 11px;
+  font-size: 8.8px;
   color: #333;
   font-weight: 700;
   margin-bottom: 8px;
@@ -1749,7 +1866,7 @@ textarea {
   background-color: #f9f8fc;
   border: 1px solid #000;
   padding: 4px 10px;
-  font-size: 10px;
+  font-size: 8px;
   margin-bottom: 12px;
   color: #444;
 }
@@ -1806,7 +1923,7 @@ textarea {
 
 /* اسم الشركة */
 .report-company-name {
-  font-size: 14px;
+  font-size: 11.2px;
   font-weight: 900;
   color: #0F3D6E;
   margin: 0 0 3px;
@@ -1816,7 +1933,7 @@ textarea {
   text-overflow: ellipsis;
 }
 .report-company-detail {
-  font-size: 10.5px;
+  font-size: 8.4px;
   color: #475569;
   margin: 1px 0;
   line-height: 1.4;
@@ -1834,25 +1951,26 @@ textarea {
   color: #ffffff;
   padding: 8px 24px;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(15, 61, 110, 0.25);
+  box-shadow: none;
+  border: 0;
   min-width: 200px;
 }
 .report-title-ar {
-  font-size: 16px;
+  font-size: 12.8px;
   font-weight: 900;
   color: #ffffff;
   margin: 0;
   line-height: 1.3;
 }
 .report-title-en {
-  font-size: 11px;
+  font-size: 8.8px;
   font-weight: 600;
   color: rgba(255,255,255,0.85);
   margin-top: 1px;
   direction: ltr;
 }
 .report-subtitle {
-  font-size: 10px;
+  font-size: 8px;
   color: #64748b;
   margin-top: 4px;
   font-weight: 500;
@@ -1868,7 +1986,7 @@ textarea {
   border: 1px solid #CBD5E1;
   border-left: 4px solid #2A75D3;
   padding: 6px 14px;
-  font-size: 10.5px;
+  font-size: 8.4px;
   margin-bottom: 14px;
   color: #334155;
   border-radius: 4px;
@@ -1895,14 +2013,14 @@ textarea {
 .report-content table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 8.8px;
   line-height: 1.5;
 }
 .report-content thead th {
   background: #0F3D6E;
   color: #ffffff;
   font-weight: 700;
-  font-size: 10px;
+  font-size: 8px;
   padding: 7px 8px;
   text-align: right;
   border-bottom: 2px solid #1B4D89;
@@ -1924,7 +2042,7 @@ textarea {
   background: #0F3D6E;
   color: #ffffff;
   font-weight: 800;
-  font-size: 11px;
+  font-size: 8.8px;
   padding: 8px;
   border-top: 3px solid #1B4D89;
 }
@@ -1937,7 +2055,7 @@ textarea {
   padding-top: 10px;
   margin-top: 16px;
   border-top: 2px solid #CBD5E1;
-  font-size: 10px;
+  font-size: 8px;
   color: #64748b;
   gap: 12px;
 }
@@ -1962,12 +2080,12 @@ textarea {
 }
 .report-footer-timestamp {
   font-family: 'Courier New', monospace;
-  font-size: 9.5px;
+  font-size: 7.6px;
   direction: ltr;
 }
 .report-footer-page-num {
   font-weight: 800;
-  font-size: 12px;
+  font-size: 9.6px;
   color: #0F3D6E;
   min-width: 20px;
   text-align: center;
@@ -1989,7 +2107,7 @@ textarea {
 .voucher-body table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 8.8px;
   line-height: 1.5;
   direction: rtl;
 }
@@ -1997,7 +2115,7 @@ textarea {
   background: #0F3D6E;
   color: #ffffff;
   font-weight: 700;
-  font-size: 10px;
+  font-size: 8px;
   padding: 7px 8px;
   text-align: right;
   border-bottom: 2px solid #1B4D89;
@@ -2019,7 +2137,7 @@ textarea {
   background: #0F3D6E;
   color: #ffffff;
   font-weight: 800;
-  font-size: 11px;
+  font-size: 8.8px;
   padding: 8px;
   border-top: 3px solid #1B4D89;
 }
@@ -2044,12 +2162,12 @@ textarea {
   text-align: right;
 }
 .voucher-tafqeet-label {
-  font-size: 10.5px;
+  font-size: 8.4px;
   font-weight: 700;
   color: #0F3D6E;
 }
 .voucher-tafqeet-value {
-  font-size: 12px;
+  font-size: 9.6px;
   font-weight: 600;
   color: #1e293b;
   line-height: 1.6;
@@ -2060,7 +2178,7 @@ textarea {
   flex-shrink: 0;
 }
 .voucher-tafqeet-total {
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 900;
   color: #0F3D6E;
   padding: 6px 16px;
@@ -2090,10 +2208,11 @@ textarea {
   gap: 4px;
 }
 .voucher-sig-title {
-  font-size: 11px;
+  font-size: 8px;
   font-weight: 800;
   color: #0F3D6E;
   margin-bottom: 2px;
+  white-space: nowrap;
 }
 .voucher-sig-line {
   width: 100%;
@@ -2105,12 +2224,12 @@ textarea {
   border-bottom: 1px solid #94a3b8;
 }
 .voucher-sig-name {
-  font-size: 11px;
+  font-size: 8.8px;
   font-weight: 600;
   color: #334155;
 }
 .voucher-sig-placeholder {
-  font-size: 9.5px;
+  font-size: 7.6px;
   color: #94a3b8;
   font-style: italic;
 }
@@ -2137,10 +2256,12 @@ textarea {
   }
   .print-area td,
   .print-area th {
-    overflow-wrap: normal !important;
-    word-break: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    white-space: normal !important;
     max-width: none !important;
     padding: 4px 6px !important;
+    height: auto !important;
   }
   /* الحفاظ على نصوص الترويسة بدون التفاف */
   .print-report-header,
@@ -2215,7 +2336,7 @@ textarea {
   #trial-balance-table {
     width: 100% !important;
     table-layout: fixed !important;
-    font-size: 9.5px !important;
+    font-size: 7.6px !important;
   }
   #trial-balance-table colgroup col { width: auto; }
   #trial-balance-table colgroup col:nth-child(1) { width: 9%; }
@@ -2228,19 +2349,19 @@ textarea {
     color: #0f172a !important;
     border-bottom: 2px solid #64748b !important;
     padding: 5px 6px !important;
-    font-size: 9px !important;
+    font-size: 7.2px !important;
   }
   #trial-balance-table thead tr:last-child th {
     background: #e2e8f0 !important;
     color: #1e293b !important;
     border-bottom: 1.5px solid #94a3b8 !important;
     padding: 3px 6px !important;
-    font-size: 8.5px !important;
+    font-size: 6.8px !important;
   }
   #trial-balance-table tbody td {
     padding: 3px 5px !important;
     color: #1e293b !important;
-    font-size: 9px !important;
+    font-size: 7.2px !important;
     border-bottom: 0.5px solid #e2e8f0 !important;
   }
   #trial-balance-table tbody tr.tb-print-group-header td {
@@ -2254,7 +2375,7 @@ textarea {
     font-weight: bold !important;
     border-top: 1px solid #94a3b8 !important;
     border-bottom: 1.5px solid #94a3b8 !important;
-    font-size: 8.5px !important;
+    font-size: 6.8px !important;
   }
   #trial-balance-table tfoot tr {
     background: #cbd5e1 !important;
@@ -2263,7 +2384,7 @@ textarea {
     background: #cbd5e1 !important;
     color: #0f172a !important;
     font-weight: bold !important;
-    font-size: 9.5px !important;
+    font-size: 7.6px !important;
     padding: 5px 6px !important;
     border-top: 2px solid #64748b !important;
   }
@@ -2280,7 +2401,7 @@ textarea {
     border: 1px solid #94a3b8 !important;
     border-radius: 4px !important;
     background: #f1f5f9 !important;
-    font-size: 9px !important;
+    font-size: 7.2px !important;
     color: #1e293b !important;
     margin-top: 4px !important;
   }
@@ -2552,7 +2673,7 @@ textarea {
   .voucher-body table {
     width: 100% !important;
     table-layout: fixed !important;
-    font-size: 10px !important;
+    font-size: 8px !important;
     border-collapse: collapse !important;
   }
   .voucher-body thead th {
@@ -2627,7 +2748,10 @@ textarea {
 
   /* تنسيق الجداول المحاسبية للطباعة — report-table */
   table.report-table {
-    width: 100% !important;
+    width: 96% !important;
+    max-width: 96% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
     border-collapse: collapse !important;
     page-break-inside: auto;
   }
@@ -2639,13 +2763,13 @@ textarea {
     border: 1px solid #000 !important;
     color: #000 !important;
     font-weight: bold;
-    font-size: 11px;
+    font-size: 8.8px;
     padding: 6px 4px;
   }
 
   table.report-table td {
     border: 1px solid #000 !important;
-    font-size: 10px;
+    font-size: 8px;
     padding: 4px;
     color: #000 !important;
   }
@@ -2678,4 +2802,20 @@ textarea {
     font-family: 'Consolas', 'Courier New', monospace;
     font-weight: 700;
   }
+}
+
+/* Date text stays readable during keyboard entry and calendar selection in both themes. */
+input.erp-date-input, input.erp-date-input:focus {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+  caret-color: #f1f5f9;
+  color-scheme: dark;
+}
+[data-theme="light"] input.erp-date-input, [data-theme="light"] input.erp-date-input:focus {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a;
+  color-scheme: light;
 }

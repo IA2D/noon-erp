@@ -29,6 +29,8 @@ interface Props<T> {
   inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
   /** عرض زر التكبير/الاستعادة في رأس النافذة — الافتراضي false. */
   maximize?: boolean;
+  /** مفتاح الاختصار لهذا الحقل — الافتراضي F9. */
+  shortcutKey?: string;
 }
 
 /** خانة بحث تعمل بزر F9 من الكيبورد — تفتح نافذة استعراض للنتائج المطابقة */
@@ -47,6 +49,7 @@ export default function F9SearchInput<T>({
   onBlur,
   inputProps,
   maximize = false,
+  shortcutKey = 'F9',
 }: Props<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -54,8 +57,7 @@ export default function F9SearchInput<T>({
   const [maximized, setMaximized] = useState(false);
   const activeRowRef = useRef<HTMLTableRowElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  /** العنصر الذي كان مركّزاً قبل فتح النافذة — يُستعاد عند الإغلاق. */
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const modalSearchRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -75,38 +77,14 @@ export default function F9SearchInput<T>({
     }
   }, [activeIndex, open]);
 
-  // حفظ التركيز الحالي عند فتح النافذة + عزل Tab داخل النافذة
+  // ModalShell يعزل التركيز؛ ثبّت البداية في حقل بحث النافذة بعد تركيبها.
   useEffect(() => {
     if (!open) return;
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    window.setTimeout(() => inputRef.current?.focus(), 60);
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      // العثور على النافذة الحالية عبر role="dialog"
-      const dialog = document.querySelector<HTMLElement>('[role="dialog"]:not([style*="display: none"])');
-      if (!dialog) return;
-      const focusable = dialog.querySelectorAll<HTMLElement>(
-        'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    const focusTimer = window.setTimeout(() => modalSearchRef.current?.focus(), 60);
+    return () => window.clearTimeout(focusTimer);
   }, [open]);
 
-  const closeBrowse = useCallback(() => {
-    setOpen(false);
-    // إعادة التركيز للعنصر السابق بعد إغلاق النافذة
-    window.setTimeout(() => previousFocusRef.current?.focus(), 0);
-  }, []);
+  const closeBrowse = useCallback(() => setOpen(false), []);
 
   const openBrowse = useCallback(() => {
     setQuery(value);
@@ -114,19 +92,22 @@ export default function F9SearchInput<T>({
     setOpen(true);
   }, [value]);
 
-  // F9 is local to the focused lookup. When no lookup is focused, the shared
+  // The configured shortcut is local to the focused lookup. When no lookup is focused, the shared
   // registry activates it only if this is the sole visible F9 target.
   useEffect(() => registerScopedShortcut({
-    key: 'F9',
+    key: shortcutKey,
     getElement: () => inputRef.current,
     run: () => openBrowse(),
     enabled: () => !open,
-  }), [open, openBrowse]);
+  }), [open, openBrowse, shortcutKey]);
 
   const selectItem = (item: T) => {
     if (!onSelect) return;
     onSelect(item);
     closeBrowse();
+    // Return focus to the originating field after the modal closes so Enter-as-Tab
+    // continues into the next field (including sub-ledger selectors).
+    window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
   };
 
   const handleModalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -166,7 +147,7 @@ export default function F9SearchInput<T>({
         onKeyDown={e => {
           inputProps?.onKeyDown?.(e);
           if (e.defaultPrevented) return;
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && onEnter) {
             e.preventDefault();
             if (onEnter) onEnter(value);
           }
@@ -176,11 +157,11 @@ export default function F9SearchInput<T>({
         <button
           type="button"
           onClick={openBrowse}
-          title="فتح نافذة الاستعراض — يعمل F9 عند تركيز هذا الحقل أو عندما يكون هدف F9 الوحيد في الواجهة"
+          title={`فتح نافذة الاستعراض — يعمل ${shortcutKey} عند تركيز هذا الحقل أو عندما يكون هدفه الوحيد في الواجهة`}
           tabIndex={-1}
           className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20 shadow-2xs transition-colors cursor-pointer"
         >
-          F9
+          {shortcutKey}
         </button>
       )}
 
@@ -210,6 +191,7 @@ export default function F9SearchInput<T>({
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
+                ref={modalSearchRef}
                 autoFocus
                 type="text"
                 value={query}
@@ -244,6 +226,7 @@ export default function F9SearchInput<T>({
                     <tr
                       key={idx}
                       ref={idx === activeIndex ? activeRowRef : undefined}
+                      onMouseDown={e => { e.preventDefault(); selectItem(item); }}
                       onClick={() => selectItem(item)}
                       onMouseEnter={() => setActiveIndex(idx)}
                       className={`transition-colors cursor-pointer ${

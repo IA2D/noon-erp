@@ -1,3 +1,4 @@
+import { renderReportPdf } from './report-pdf.mjs';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
@@ -22,6 +23,29 @@ let activeSessionToken = null;
 const printPreviewWindows = new Set();
 const smokeResultPath = process.env.FULLERP_SMOKE_RESULT || '';
 const smokeMode = process.env.FULLERP_SMOKE_TEST === '1' && Boolean(smokeResultPath);
+const SETTINGS_STORAGE_KEY = 'elite-erp-settings-v6';
+const UI_ZOOM_BASE_FACTOR = 0.7;
+const UI_SCALE_MIN_PERCENT = 50;
+const UI_SCALE_MAX_PERCENT = 200;
+
+function normalizeUiScalePercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 100;
+  return Math.min(UI_SCALE_MAX_PERCENT, Math.max(UI_SCALE_MIN_PERCENT, Math.round(numeric / 5) * 5));
+}
+
+function uiScaleToZoomFactor(percent) {
+  return Number((UI_ZOOM_BASE_FACTOR * normalizeUiScalePercent(percent) / 100).toFixed(3));
+}
+
+function readUiScalePercent() {
+  try {
+    const raw = db?.prepare('SELECT value FROM kv_store WHERE key = ?').get(SETTINGS_STORAGE_KEY)?.value;
+    return normalizeUiScalePercent(raw ? JSON.parse(raw)?.uiScalePercent : 100);
+  } catch {
+    return 100;
+  }
+}
 
 // Keep the existing on-disk database location stable after the product name
 // changed from FULLERP to NOON ERP.
@@ -176,6 +200,21 @@ function registerStorageIpc() {
   ipcMain.on('auth:logout', (event, token) => { const result = authStore.logout(token || activeSessionToken); activeSessionToken = null; event.returnValue = result; });
   ipcMain.on('auth:change-password', (event, token, currentPassword, nextPassword) => { event.returnValue = authStore.changePassword(token || activeSessionToken, currentPassword, nextPassword); });
   ipcMain.on('auth:configure-security', (event, options) => { event.returnValue = authStore.configureSecurity(options); });
+  ipcMain.on('desktop-window:get-ui-scale', event => {
+    const percent = readUiScalePercent();
+    event.returnValue = { percent, zoomFactor: uiScaleToZoomFactor(percent) };
+  });
+  ipcMain.on('desktop-window:set-ui-scale', (event, requestedPercent) => {
+    const percent = normalizeUiScalePercent(requestedPercent);
+    const zoomFactor = uiScaleToZoomFactor(percent);
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (!owner || owner.isDestroyed()) {
+      event.returnValue = { ok: false, percent, zoomFactor };
+      return;
+    }
+    owner.webContents.setZoomFactor(zoomFactor);
+    event.returnValue = { ok: true, percent, zoomFactor };
+  });
 
   try {
     db.exec('BEGIN IMMEDIATE');
@@ -217,14 +256,8 @@ function registerPrintIpc() {
         printSource = printSourceWindow.webContents;
       }
 
-      const pdf = await printSource.printToPDF({
-        landscape,
-        printBackground: true,
-        pageSize: 'A4',
-        preferCSSPageSize: false,
-        displayHeaderFooter: false,
-        margins: { top: 0, right: 0, bottom: 0, left: 0 },
-      });
+      const pdf = await renderReportPdf(printSource);
+      if (options?.returnPdf === true) return { opened: false, landscape: false, bytes: new Uint8Array(pdf) };
       const previewPath = path.join(previewRoot, `${title}-${Date.now()}.pdf`);
       fs.writeFileSync(previewPath, pdf);
 
@@ -279,6 +312,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      zoomFactor: uiScaleToZoomFactor(readUiScalePercent()),
     },
   });
 
