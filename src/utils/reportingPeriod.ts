@@ -34,7 +34,8 @@ export function buildPeriodAccounts(
   journals: JournalEntry[],
   fromDate: string,
   includeOpening = true,
-  scale = 1
+  scale = 1,
+  includeAllStatuses = false
 ): Account[] {
   if (!includeOpening) {
     return accounts.map(account => ({ ...account, openingBalance: 0 }));
@@ -42,7 +43,7 @@ export function buildPeriodAccounts(
 
   const signedBefore = new Map<string, number>();
   journals.forEach(journal => {
-    if (journal.status !== 'POSTED' || !dateToIso(journal.date) || dateToIso(journal.date) >= dateToIso(fromDate)) return;
+    if ((!includeAllStatuses && journal.status !== 'POSTED') || !dateToIso(journal.date) || dateToIso(journal.date) >= dateToIso(fromDate)) return;
     journal.lines.forEach(line => {
       signedBefore.set(
         line.accountId,
@@ -60,11 +61,12 @@ export function buildPeriodAccounts(
 /** Period-only debit/credit movement; opening balances are deliberately excluded. */
 export function calculatePeriodMovement(
   accounts: Account[],
-  journals: JournalEntry[]
+  journals: JournalEntry[],
+  includeAllStatuses = false
 ): Record<string, { debit: number; credit: number }> {
   const activity: Record<string, { debit: number; credit: number }> = {};
   accounts.forEach(account => { activity[account.id] = { debit: 0, credit: 0 }; });
-  journals.filter(journal => journal.status === 'POSTED').forEach(journal => {
+  journals.filter(journal => includeAllStatuses || journal.status === 'POSTED').forEach(journal => {
     journal.lines.forEach(line => {
       const current = activity[line.accountId] || { debit: 0, credit: 0 };
       current.debit = round2(current.debit + (line.debit || 0));

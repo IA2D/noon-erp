@@ -1,8 +1,8 @@
 import type { JournalEntry, JournalLine, OpeningBalanceRecord, SubLedgerType } from '../types/erp';
 import { dateToIso, inDateRange } from './dateInput';
 
-export function reportDocuments<T extends { date: string; status: string }>(records: T[], from: string, to: string): T[] {
-  return records.filter(record => record.status !== 'VOIDED' && inDateRange(record.date, from, to));
+export function reportDocuments<T extends { date: string; status: string }>(records: T[], from: string, to: string, includeVoided = false): T[] {
+  return records.filter(record => (includeVoided || record.status !== 'VOIDED') && inDateRange(record.date, from, to));
 }
 export function lineCostCenterId(line: JournalLine): string | undefined {
   return line.costCenterId || (line.subLedgerType === 'COST_CENTER' ? line.subLedgerId : undefined);

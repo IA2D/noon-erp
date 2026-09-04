@@ -256,7 +256,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
     }
     if (modal.mode === 'add') {
       if (!f.linkedAccountId) {
-        setFormError('يجب ربط الموظف بحساب سلف الموظفين الشهرية من دليل الحسابات.');
+        setFormError('يجب ربط الموظف بحساب عُهد الموظفين من دليل الحسابات.');
         return;
       }
       if (employees.some(e => e.code.toLowerCase() === entityCode.toLowerCase())) {
@@ -344,7 +344,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
       <PageHeader
         icon={<Users className="w-6 h-6" />}
         title="بيانات الموظفين"
-        subtitle="إدارة سجل الموظفين — بيانات الهوية والوظيفة والراتب وربطهم بسلف الموظفين الشهرية"
+        subtitle="إدارة سجل الموظفين — بيانات الهوية والوظيفة والراتب وربطهم بعُهد الموظفين"
         actions={
           <button
             type="button"
@@ -787,11 +787,11 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
                 />
               </div>
 
-              {/* حساب الربط المحاسبي — سلف الموظفين الشهرية */}
+              {/* حساب الربط المحاسبي — عُهد الموظفين */}
               <div className="rounded-xl p-3.5 border border-slate-700/60 bg-slate-900/40">
                 <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                   <Link2 className="w-4 h-4 text-sky-400" />
-                  حساب سلف الموظفين الشهرية *
+                  حساب عُهد الموظفين *
                 </label>
                 <select
                   required
@@ -806,7 +806,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
                   ))}
                 </select>
                 {isLinkedOutOfDomain(accounts, 'EMPLOYEE_ADVANCE', modal.form.linkedAccountId) && (<p className="text-xs text-amber-400 mt-1">
-                    الحساب المرتبط حالياً خارج مجموعة سلف الموظفين الشهرية — اختر حساباً من القائمة أعلاه.
+                    الحساب المرتبط حالياً خارج مجموعة عُهد الموظفين — اختر حساباً من القائمة أعلاه.
                   </p>)}
               </div>
 

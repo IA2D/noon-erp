@@ -685,26 +685,23 @@ export default function CustodyView({
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
   const employeeOf = (c: Custody) => employees.find(e => e.id === c.employeeId);
-  const advanceAccountOf = (c: Custody): Account => {
-    const emp = employeeOf(c);
-    const linked = emp?.linkedAccountId ? accounts.find(a => a.id === emp.linkedAccountId) : undefined;
-    return linked ?? accounts.find(a => a.id === '1102050001') ?? {
-      id: '1102050001',
-      code: '1102050001',
-      nameAr: 'سلف الموظفين الشهرية',
-      nameEn: 'Monthly Employee Advances',
-      level: 5,
-      accountType: 2,
-      reportType: 1,
-      parentId: '110205',
-      nature: 'DEBIT',
-      category: 'RECEIVABLE',
-      subLedgerType: 'EMPLOYEE',
-      defaultCurrency: 'YER',
-      openingBalance: 0,
-      isActive: true,
-      currencies: [],
-    };
+  const employeeCustodyAccount = accounts.find(account => account.id === '1102050001' || account.code === '1102050001');
+  const advanceAccountOf = (_c?: Custody): Account => employeeCustodyAccount ?? {
+    id: '1102050001',
+    code: '1102050001',
+    nameAr: 'عُهد الموظفين',
+    nameEn: 'Employee Custodies',
+    level: 5,
+    accountType: 2,
+    reportType: 1,
+    parentId: '110205',
+    nature: 'DEBIT',
+    category: 'RECEIVABLE',
+    subLedgerType: 'EMPLOYEE',
+    defaultCurrency: 'YER',
+    openingBalance: 0,
+    isActive: true,
+    currencies: [],
   };
 
   const q = search.trim().toLowerCase();
@@ -825,7 +822,7 @@ export default function CustodyView({
     const form = editForm;
     const amount = Number(form.amount) || 0;
     const employee = employees.find(x => x.id === form.employeeId);
-    const account = employee?.linkedAccountId ? accounts.find(a => a.id === employee.linkedAccountId) : undefined;
+    const account = advanceAccountOf(c);
 
     const validation = validateNewCustody(
       form.type,
@@ -911,7 +908,7 @@ export default function CustodyView({
       createForm.expectedClearanceDate,
       Number(createForm.maxBalance) || 0,
       createForm.assetDescription,
-      undefined
+      advanceAccountOf()
     );
     if (!validation.isValid) {
       setCreateError(validation.errors.join(' '));
@@ -973,7 +970,7 @@ export default function CustodyView({
     };
 
     onAddCustody(custody);
-    toast('success', `تم حفظ العهدة ${custody.custodyNumber} كجديدة — بانتظار الاعتماد والصرف.`);
+    toast('success', `تم حفظ العهدة ${custody.custodyNumber} كجديدة — جاهزة للاعتماد والصرف الآلي.`);
     setIsCreateOpen(false);
     setCreateForm(freshForm());
     if (printAfter) {
@@ -1060,6 +1057,10 @@ export default function CustodyView({
       toast('error', 'يرجى اختيار مصدر التمويل (صندوق / بنك بحساب مرتبط).');
       return;
     }
+    if (!canDisburse(disburseTarget)) {
+      toast('error', 'هذه العهدة ليست جاهزة للاعتماد والصرف الآلي.');
+      return;
+    }
     if (disburseTarget.disbursedAmount > 0) {
       toast('error', 'العهدة مصروفة بالفعل.');
       return;
@@ -1088,13 +1089,17 @@ export default function CustodyView({
       createdBy: currentUserName,
       createdAt: nowStamp(),
     };
+    const approvals = disburseTarget.approvals.some(approval => approval.action === 'APPROVED')
+      ? disburseTarget.approvals
+      : [...disburseTarget.approvals.filter(approval => approval.action !== 'PENDING'), { id: `approval-${Date.now()}`, level: 1, approverName: currentUserName, action: 'APPROVED' as const, actionAt: nowStamp() }];
     onUpdateCustody(disburseTarget.id, {
+      approvals,
       disbursedAmount: disburseTarget.amount,
       status: 'DISBURSED',
       transactions: [...disburseTarget.transactions, txn],
       updatedAt: nowStamp(),
     });
-    toast('success', `تم صرف ${disburseTarget.custodyNumber} (${fmtC(disburseTarget.amount, disburseTarget.currency || baseCurrency)}) وترحيل القيد المحاسبي ${journal.entryNumber}.`);
+    toast('success', `تم اعتماد وصرف ${disburseTarget.custodyNumber} (${fmtC(disburseTarget.amount, disburseTarget.currency || baseCurrency)}) وترحيل القيد المحاسبي ${journal.entryNumber}.`);
     setDisburseTarget(null);
     setDisburseSource('');
   };
@@ -1484,7 +1489,7 @@ export default function CustodyView({
       <PageHeader
         icon={<Vault className="w-6 h-6" />}
         title="العُهد المالية والعينية"
-        subtitle="دورة حياة متكاملة: إصدار → اعتماد واحد → صرف → تصفية بالمستندات → رد → إقفال — مع قيود محاسبية آلية وفق IFRS"
+        subtitle="دورة حياة متكاملة: إصدار → اعتماد وصرف آلي → تصفية بالمستندات → رد → إقفال — مع قيود محاسبية آلية وفق IFRS"
         actions={
           <button
             type="button"
@@ -1677,7 +1682,7 @@ export default function CustodyView({
 
               <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-end gap-3">
                 <div className="flex-1 text-sm text-slate-500 dark:text-slate-400">
-                  {!createReady ? 'أكمل الموظف المكلف والمبلغ لتفعيل الحفظ.' : 'العهدة تُحفظ كجديدة — يمكن صرفها وترحيل قيدها لاحقاً من شاشة الإقفالات.'}
+                  {!createReady ? 'أكمل الموظف المكلف والمبلغ لتفعيل الحفظ.' : 'العهدة تُحفظ كجديدة — يمكن اعتمادها وصرفها آلياً من قائمة إجراءات العهدة.'}
                 </div>
                 <button type="button" onClick={() => setIsCreateOpen(false)} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
                 <button type="submit" disabled={!createReady} className="flex items-center gap-1.5 px-5 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1778,12 +1783,12 @@ export default function CustodyView({
       {disburseTarget && (() => {
         const advanceAcc = advanceAccountOf(disburseTarget);
         return (
-          <ModalShell id="custody-disburse" open={!!disburseTarget} title={`صرف العهدة ${disburseTarget.custodyNumber}`} icon={Banknote} onClose={() => setDisburseTarget(null)} footer={null} closeOnBackdrop={false}>
+          <ModalShell id="custody-disburse" open={!!disburseTarget} title={`${disburseTarget.status === 'CREATED' ? 'اعتماد وصرف آلي' : 'صرف'} العهدة ${disburseTarget.custodyNumber}`} icon={Banknote} onClose={() => setDisburseTarget(null)} footer={null} closeOnBackdrop={false}>
             <form onSubmit={handleDisburse} className="space-y-4">
               <div className="rounded-xl p-4 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">الموظف:</span><span className="font-semibold text-slate-900 dark:text-white">{disburseTarget.employeeName}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">قيمة الصرف:</span><span className="font-mono font-bold text-slate-900 dark:text-white">{fmtC(disburseTarget.amount, disburseTarget.currency || baseCurrency)}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">حساب العهدة (مدين):</span><span className="font-mono text-sky-600">{advanceAcc.code} - {advanceAcc.nameAr}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">حساب عُهد الموظفين (مدين):</span><span className="font-mono text-sky-600">{advanceAcc.code} - {advanceAcc.nameAr}</span></div>
               </div>
               <SourceSelect value={disburseSource} onChange={setDisburseSource} />
               <div className="rounded-xl p-3 border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 text-sm text-slate-500 dark:text-slate-400">
@@ -1791,7 +1796,7 @@ export default function CustodyView({
               </div>
               <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
                 <button type="button" onClick={() => setDisburseTarget(null)} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
-                <button type="submit" className="px-5 py-2 bg-sky-100 hover:bg-sky-200 text-sky-700 rounded-xl text-sm font-bold shadow-lg cursor-pointer dark:bg-sky-950/60 dark:hover:bg-sky-900 dark:text-sky-400">صرف وترحيل القيد</button>
+                <button type="submit" className="px-5 py-2 bg-sky-100 hover:bg-sky-200 text-sky-700 rounded-xl text-sm font-bold shadow-lg cursor-pointer dark:bg-sky-950/60 dark:hover:bg-sky-900 dark:text-sky-400">{disburseTarget.status === 'CREATED' ? 'اعتماد وصرف آلي وترحيل القيد' : 'صرف وترحيل القيد'}</button>
               </div>
             </form>
           </ModalShell>
@@ -2215,22 +2220,16 @@ export default function CustodyView({
 
                 <div className="my-1 border-t border-slate-200" />
 
-                {c.status === 'CREATED' && canSubmit(c) && (
-                  <button type="button" onClick={() => { handleSubmitForApproval(c); setRowMenu(null); }} className={menuItem}>
-                    <Send className="w-4 h-4 text-amber-400" />
-                    إرسال للاعتماد
-                  </button>
-                )}
                 {c.status === 'PENDING_APPROVAL' && nextPending && (
                   <button type="button" onClick={() => { openApprove(c); setRowMenu(null); }} className={menuItem}>
                     <ShieldCheck className="w-4 h-4 text-sky-600" />
-                    اعتماد
+                    اعتماد السجل السابق
                   </button>
                 )}
                 {canDisburse(c) && (
-                  <button type="button" onClick={() => { openModal(() => { setDisburseTarget(c); setDisburseSource(''); }); setRowMenu(null); }} className={menuItem}>
+                  <button type="button" onClick={() => { openModal(() => { setDisburseTarget(c); setDisburseSource(c.disbursementSource || ''); }); setRowMenu(null); }} className={menuItem}>
                     <Banknote className="w-4 h-4 text-sky-600" />
-                    صرف العهدة (قيد آلي)
+                    {c.status === 'CREATED' ? 'اعتماد وصرف آلي' : 'صرف العهدة (قيد آلي)'}
                   </button>
                 )}
                 {canSettle(c) && (

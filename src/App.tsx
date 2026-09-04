@@ -566,11 +566,12 @@ function AppInner() {
       const { accounts: ensured, group } = ensureEmployeeAdvanceGroup(reindexed);
       let accs = ensured;
 
-      if (!accs.some(a => a.parentId === group.id)) {
-        const defaultAccount = employeeAdvanceGeneralAccount();
-        if (!accs.some(a => a.id === defaultAccount.id)) {
-          accs = [...accs, defaultAccount];
-        }
+      const defaultAccount = employeeAdvanceGeneralAccount();
+      const existingControl = accs.find(account => account.id === defaultAccount.id || (account.parentId === group.id && account.code === defaultAccount.code));
+      if (!existingControl) {
+        accs = [...accs, defaultAccount];
+      } else if (existingControl.nameAr !== defaultAccount.nameAr || existingControl.nameEn !== defaultAccount.nameEn || existingControl.parentId !== group.id) {
+        accs = accs.map(account => account.id === existingControl.id ? { ...account, nameAr: defaultAccount.nameAr, nameEn: defaultAccount.nameEn, parentId: group.id, subLedgerType: 'EMPLOYEE' } : account);
       }
       return accs;
     });

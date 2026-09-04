@@ -244,7 +244,7 @@ const LINKED_DOMAINS: Record<LinkedDomain, { code: string; name: string }> = {
   BANK: { code: '110102', name: 'البنوك' },
   RECEIVABLE: { code: '110201', name: 'العملاء' },
   PAYABLE: { code: '210101', name: 'ذمم موردين' },
-  EMPLOYEE_ADVANCE: { code: '110205', name: 'سلف الموظفين الشهرية' }
+  EMPLOYEE_ADVANCE: { code: '110205', name: 'عُهد الموظفين' }
 };
 
 function domainGroup(accounts: Account[], domain: LinkedDomain): Account | undefined {
@@ -306,7 +306,7 @@ export function payablePostingAccounts(accounts: Account[], currentLinkedId?: st
 export function employeeAdvancePostingAccounts(accounts: Account[], currentLinkedId?: string): Account[] {
   const list = postingAccountsForDomain(accounts, 'EMPLOYEE_ADVANCE', currentLinkedId);
 
-  // مرونة: إن وُجد حساب تشغيلي باسم "سلف الموظفين الشهرية" في مكان آخر بالدليل — يُدرج للربط
+  // مرونة: إن وُجد حساب تشغيلي باسم "عُهد الموظفين" في مكان آخر بالدليل — يُدرج للربط
   if (list.length === 0 || !list.some(a => a.nameAr === EMPLOYEE_ADVANCE_GROUP_NAME)) {
     const named = accounts.find(
       a => a.level === 5 && a.isActive && a.nameAr === EMPLOYEE_ADVANCE_GROUP_NAME && !list.some(x => x.id === a.id)
@@ -318,20 +318,24 @@ export function employeeAdvancePostingAccounts(accounts: Account[], currentLinke
 }
 
 export const EMPLOYEE_ADVANCE_GROUP_CODE = '110205';
-export const EMPLOYEE_ADVANCE_GROUP_NAME = 'سلف الموظفين الشهرية';
+export const EMPLOYEE_ADVANCE_GROUP_NAME = 'عُهد الموظفين';
 
-/** ضمان وجود مجموعة "سلف الموظفين الشهرية" في الدليل — تُضاف تلقائياً إن لم تكن موجودة (ميفريشن للبيانات المحفوظة) */
+/** ضمان وجود مجموعة "عُهد الموظفين" في الدليل — تُضاف تلقائياً إن لم تكن موجودة (ميفريشن للبيانات المحفوظة) */
 export function ensureEmployeeAdvanceGroup(accounts: Account[]): { accounts: Account[]; group: Account } {
   const existing = accounts.find(
     a => a.level === 4 && (a.code === EMPLOYEE_ADVANCE_GROUP_CODE || a.nameAr === EMPLOYEE_ADVANCE_GROUP_NAME)
   );
-  if (existing) return { accounts, group: existing };
+  if (existing) {
+    const group = { ...existing, nameAr: EMPLOYEE_ADVANCE_GROUP_NAME, nameEn: 'Employee Custodies', subLedgerType: 'EMPLOYEE' as const };
+    const changed = group.nameAr !== existing.nameAr || group.nameEn !== existing.nameEn || group.subLedgerType !== existing.subLedgerType;
+    return { accounts: changed ? accounts.map(account => account.id === existing.id ? group : account) : accounts, group };
+  }
 
   const group: Account = {
     id: EMPLOYEE_ADVANCE_GROUP_CODE,
     code: EMPLOYEE_ADVANCE_GROUP_CODE,
     nameAr: EMPLOYEE_ADVANCE_GROUP_NAME,
-    nameEn: 'Monthly Employee Advances',
+    nameEn: 'Employee Custodies',
     level: 4,
     accountType: 1,
     reportType: 1,
@@ -353,7 +357,7 @@ export function employeeAdvanceGeneralAccount(): Account {
     id: '1102050001',
     code: '1102050001',
     nameAr: EMPLOYEE_ADVANCE_GROUP_NAME,
-    nameEn: 'Monthly Employee Advances',
+    nameEn: 'Employee Custodies',
     level: 5,
     accountType: 2,
     reportType: 1,
@@ -626,7 +630,7 @@ export interface TrialBalanceRow {
   creditBalance: number;
 }
 
-export function calculateAccountActivity(accounts: Account[], journals: JournalEntry[]): { [accountId: string]: { debit: number; credit: number } } {
+export function calculateAccountActivity(accounts: Account[], journals: JournalEntry[], includeAllStatuses = false): { [accountId: string]: { debit: number; credit: number } } {
   const accountBalances: { [key: string]: { debit: number; credit: number } } = {};
 
   accounts.forEach(acc => {
@@ -637,7 +641,7 @@ export function calculateAccountActivity(accounts: Account[], journals: JournalE
   });
 
   journals
-    .filter(j => j.status === 'POSTED')
+    .filter(j => includeAllStatuses || j.status === 'POSTED')
     .forEach(entry => {
       entry.lines.forEach(line => {
         if (!accountBalances[line.accountId]) {
@@ -763,11 +767,11 @@ function groupStatementLines(
   return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 
-export function calculateIncomeStatement(accounts: Account[], journals: JournalEntry[]) {
+export function calculateIncomeStatement(accounts: Account[], journals: JournalEntry[], includeAllStatuses = false) {
   // Income statements are period reports. Opening/carry-forward balances belong
   // to balance-sheet and ledger reports and must never leak into period profit.
   const periodAccounts = accounts.map(account => ({ ...account, openingBalance: 0 }));
-  const activity = calculateAccountActivity(periodAccounts, journals);
+  const activity = calculateAccountActivity(periodAccounts, journals, includeAllStatuses);
 
   const revenueLines = groupStatementLines(accounts, activity, 'REVENUE', ['31', '32'], 3);
   const totalRevenues = sumStatementByPrefix(accounts, activity, 'REVENUE', '3');
@@ -802,9 +806,9 @@ export function calculateIncomeStatement(accounts: Account[], journals: JournalE
   };
 }
 
-export function calculateBalanceSheet(accounts: Account[], journals: JournalEntry[]) {
-  const incomeStmt = calculateIncomeStatement(accounts, journals);
-  const activity = calculateAccountActivity(accounts, journals);
+export function calculateBalanceSheet(accounts: Account[], journals: JournalEntry[], includeAllStatuses = false) {
+  const incomeStmt = calculateIncomeStatement(accounts, journals, includeAllStatuses);
+  const activity = calculateAccountActivity(accounts, journals, includeAllStatuses);
 
   let currentAssets = 0;
   let nonCurrentAssets = 0;
@@ -854,12 +858,12 @@ export interface CashFlowStatement {
 }
 
 /** Direct cash-flow classification from posted ledger entries; every cash movement is classified exactly once. */
-export function calculateCashFlowStatement(accounts: Account[], journals: JournalEntry[]): CashFlowStatement {
+export function calculateCashFlowStatement(accounts: Account[], journals: JournalEntry[], includeAllStatuses = false): CashFlowStatement {
   const cashIds = new Set(accounts.filter(account => isPostingAccount(account) && hasAncestorOrSelfCode(account, accounts, '11') && (account.category === 'CASH_BANK' || /^11(01|02)/.test(account.code))).map(account => account.id));
   let operating = 0;
   let investing = 0;
   let financing = 0;
-  journals.filter(entry => entry.status === 'POSTED').forEach(entry => {
+  journals.filter(entry => includeAllStatuses || entry.status === 'POSTED').forEach(entry => {
     const cashEffect = roundMoney(entry.lines.filter(line => cashIds.has(line.accountId)).reduce((sum, line) => sum + (line.debit || 0) - (line.credit || 0), 0));
     if (Math.abs(cashEffect) < 0.005) return;
     const counterpart = entry.lines.map(line => accounts.find(account => account.id === line.accountId)).find((account): account is Account => !!account && !cashIds.has(account.id));
@@ -870,7 +874,7 @@ export function calculateCashFlowStatement(accounts: Account[], journals: Journa
   const openingCash = roundMoney(accounts.filter(account => cashIds.has(account.id)).reduce((sum, account) => sum + (account.openingBalance || 0), 0));
   const netChange = roundMoney(operating + investing + financing);
   const closingCash = roundMoney(openingCash + netChange);
-  const activity = calculateAccountActivity(accounts, journals);
+  const activity = calculateAccountActivity(accounts, journals, includeAllStatuses);
   const ledgerClosingCash = roundMoney(accounts.filter(account => cashIds.has(account.id)).reduce((sum, account) => sum + netAccountBalance(account, activity[account.id] || { debit: 0, credit: 0 }), 0));
   const reconciliationDifference = roundMoney(closingCash - ledgerClosingCash);
   return { operating, investing, financing, netChange, openingCash, closingCash, reconciliationDifference, isReconciled: Math.abs(reconciliationDifference) < 0.01 };
@@ -886,16 +890,16 @@ export interface EquityChangesStatement {
   isReconciled: boolean;
 }
 
-export function calculateEquityChangesStatement(accounts: Account[], journals: JournalEntry[]): EquityChangesStatement {
+export function calculateEquityChangesStatement(accounts: Account[], journals: JournalEntry[], includeAllStatuses = false): EquityChangesStatement {
   const equityAccounts = accounts.filter(account => isPostingAccount(account) && hasAncestorOrSelfCode(account, accounts, '22'));
   const openingActivity = calculateAccountActivity(accounts, []);
   const openingEquity = roundMoney(equityAccounts.reduce((sum, account) => sum + netAccountBalance(account, openingActivity[account.id] || { debit: 0, credit: 0 }), 0));
   const periodAccounts = accounts.map(account => ({ ...account, openingBalance: 0 }));
-  const activity = calculateAccountActivity(periodAccounts, journals.filter(entry => !entry.reference?.startsWith('CLOSE-')));
+  const activity = calculateAccountActivity(periodAccounts, journals.filter(entry => !entry.reference?.startsWith('CLOSE-')), includeAllStatuses);
   const ownerMovements = roundMoney(equityAccounts.reduce((sum, account) => sum + netAccountBalance(account, activity[account.id] || { debit: 0, credit: 0 }), 0));
-  const netIncome = roundMoney(calculateIncomeStatement(accounts, journals.filter(entry => !entry.reference?.startsWith('CLOSE-'))).netIncome);
+  const netIncome = roundMoney(calculateIncomeStatement(accounts, journals.filter(entry => !entry.reference?.startsWith('CLOSE-')), includeAllStatuses).netIncome);
   const closingEquity = roundMoney(openingEquity + ownerMovements + netIncome);
-  const balanceSheetEquity = roundMoney(calculateBalanceSheet(accounts, journals.filter(entry => !entry.reference?.startsWith('CLOSE-'))).totalEquity);
+  const balanceSheetEquity = roundMoney(calculateBalanceSheet(accounts, journals.filter(entry => !entry.reference?.startsWith('CLOSE-')), includeAllStatuses).totalEquity);
   const reconciliationDifference = roundMoney(closingEquity - balanceSheetEquity);
   return { openingEquity, ownerMovements, netIncome, closingEquity, balanceSheetEquity, reconciliationDifference, isReconciled: Math.abs(reconciliationDifference) < 0.01 };
 }

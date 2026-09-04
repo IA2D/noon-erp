@@ -28,7 +28,7 @@ export const OPEN_STATUSES: CustodyStatus[] = ['DISBURSED', 'PARTIAL_SETTLED'];
 export const SETTLEMENT_PENDING_STATUSES: CustodyStatus[] = ['DISBURSED', 'PARTIAL_SETTLED', 'FULL_SETTLED'];
 
 export const TRANSITIONS: Record<CustodyStatus, CustodyStatus[]> = {
-  CREATED: ['PENDING_APPROVAL', 'VOIDED'],
+  CREATED: ['PENDING_APPROVAL', 'DISBURSED', 'VOIDED'],
   PENDING_APPROVAL: ['APPROVED', 'CREATED', 'VOIDED'],
   APPROVED: ['DISBURSED', 'VOIDED'],
   DISBURSED: ['PARTIAL_SETTLED', 'FULL_SETTLED', 'VOIDED'],
@@ -64,7 +64,8 @@ export function canApprove(c: Custody, requiredLevel: number): boolean {
 }
 
 export function canDisburse(c: Custody): boolean {
-  return canTransition(c.status, 'DISBURSED') && c.disbursedAmount <= 0;
+  // Newly issued custodies are approved and disbursed in one explicit action.
+  return (c.status === 'CREATED' || c.status === 'APPROVED') && c.disbursedAmount <= 0;
 }
 
 export function canReplenish(c: Custody): boolean {
@@ -156,7 +157,7 @@ export function validateNewCustody(
   }
   if (employee && account) {
     if (account.subLedgerType !== 'NONE' && account.subLedgerType !== 'EMPLOYEE') {
-      errors.push(`حساب سلف الموظفين المرتبط (${account.code}) من نوع ${account.subLedgerType} — يجب أن يكون حساباً خالصاً بلا أستاذ مساعد حاكم.`);
+      errors.push(`حساب عُهد الموظفين (${account.code}) من نوع ${account.subLedgerType} — يجب أن يكون حساباً خالصاً بلا أستاذ مساعد حاكم.`);
     }
   }
   return {isValid: errors.length === 0, errors};

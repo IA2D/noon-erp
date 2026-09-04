@@ -59,7 +59,7 @@ import { tafqeet } from '../../utils/tafqeet';
 import FinancialReportPrintLayout from '../reports/FinancialReportPrintLayout';
 import { buildPeriodAccounts, calculatePeriodMovement, validateReportPeriod } from '../../utils/reportingPeriod';
 import { currencyDecimals, roundTo } from '../../utils/money';
-import { accountsWithCurrencyOpenings, projectJournalsToCurrency, projectPostedJournalsToCurrency } from '../../utils/currencyReporting';
+import { accountsWithCurrencyOpenings, projectJournalsToCurrency } from '../../utils/currencyReporting';
 import { defaultReportToDate, toLocalIsoDate } from '../../utils/dateDefaults';
 import { reconcileControlAccountOpenings } from '../../services/openingBalancesService';
 
@@ -255,9 +255,10 @@ function build6ColumnGroupedTrialBalance(
   journalsInRange: JournalEntry[],
   allAccounts: Account[],
   analyticalEntities: AnalyticalEntityRow[] = [],
-  showZeroAccounts = false
+  showZeroAccounts = false,
+  includeAllStatuses = false
 ) {
-  const activity = calculateAccountActivity(reportAccounts, journalsInRange);
+  const activity = calculateAccountActivity(reportAccounts, journalsInRange, includeAllStatuses);
 
   const groups: TB6Group[] = [
     { key: '1', labelAr: 'الأصول', labelEn: 'Assets', rows: [], openingDebit: 0, openingCredit: 0, movementDebit: 0, movementCredit: 0, endingDebit: 0, endingCredit: 0 },
@@ -547,16 +548,16 @@ export default function FinancialReportsView({
   const toReportCurrency = (n: number) => roundTo(n || 0, selectedDecimals);
 
   const baseJournals = useMemo(
-    () => projectPostedJournalsToCurrency(journals.map(j => ({...j, date: dateToIso(j.date)})), isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals),
+    () => projectJournalsToCurrency(journals.map(j => ({...j, date: dateToIso(j.date)})), isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true, true),
     [journals, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]
   );
 
   const reportJournals = useMemo(() => baseJournals, [baseJournals]);
 
-  const journalsInRange = useMemo(() => reportDocuments(reportJournals, fromDate, toDate), [reportJournals, fromDate, toDate]);
+  const journalsInRange = useMemo(() => reportDocuments(reportJournals, fromDate, toDate, true), [reportJournals, fromDate, toDate]);
   // Operational document reports include pending records, visibly labelled; financial statements remain POSTED-only.
   const documentJournals = useMemo(() => reportDocuments(
-    projectJournalsToCurrency(journals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true), fromDate, toDate
+    projectJournalsToCurrency(journals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true, true), fromDate, toDate, true
   ), [journals, fromDate, toDate, currency, baseCode, selectedDecimals, isOriginalCurrencyReport]);
 
   const allJournals = useMemo(() => reportJournals, [reportJournals]);
@@ -580,30 +581,30 @@ export default function FinancialReportsView({
     }));
   }, [cashBoxes, bankAccounts, customers, vendors, employees, isOriginalCurrencyReport, currency, baseCode]);
   const reportAccounts = useMemo(
-    () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1),
+    () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1, true),
     [currencyAccounts, includeOpening, reportJournals, fromDate]
   );
 
-  const incomeStmt = useMemo(() => calculateIncomeStatement(reportAccounts, journalsInRange), [reportAccounts, journalsInRange]);
-  const cashFlow = useMemo(() => calculateCashFlowStatement(reportAccounts, journalsInRange), [reportAccounts, journalsInRange]);
-  const equityChanges = useMemo(() => calculateEquityChangesStatement(reportAccounts, journalsInRange), [reportAccounts, journalsInRange]);
+  const incomeStmt = useMemo(() => calculateIncomeStatement(reportAccounts, journalsInRange, true), [reportAccounts, journalsInRange]);
+  const cashFlow = useMemo(() => calculateCashFlowStatement(reportAccounts, journalsInRange, true), [reportAccounts, journalsInRange]);
+  const equityChanges = useMemo(() => calculateEquityChangesStatement(reportAccounts, journalsInRange, true), [reportAccounts, journalsInRange]);
   const balanceSheet = useMemo(() => {
     const asOfAccounts = currencyAccounts;
     const throughToDate = reportJournals.filter(journal => journal.date <= toDate);
-    return calculateBalanceSheet(asOfAccounts, throughToDate);
+    return calculateBalanceSheet(asOfAccounts, throughToDate, true);
   }, [currencyAccounts, reportJournals, toDate]);
 
   const priorPeriod = useMemo(() => {
     const shift = (iso: string) => `${Number(iso.slice(0, 4)) - 1}${iso.slice(4)}`;
     const previousFrom = shift(fromDate); const previousTo = shift(toDate);
-    const inRange = reportJournals.filter(journal => journal.status === 'POSTED' && journal.date >= previousFrom && journal.date <= previousTo);
-    const throughEnd = reportJournals.filter(journal => journal.status === 'POSTED' && journal.date <= previousTo);
+    const inRange = reportJournals.filter(journal => journal.date >= previousFrom && journal.date <= previousTo);
+    const throughEnd = reportJournals.filter(journal => journal.date <= previousTo);
     return {
       fromDate: previousFrom, toDate: previousTo,
-      income: calculateIncomeStatement(reportAccounts, inRange),
-      balance: calculateBalanceSheet(currencyAccounts, throughEnd),
-      cashFlow: calculateCashFlowStatement(reportAccounts, inRange),
-      equity: calculateEquityChangesStatement(reportAccounts, inRange)
+      income: calculateIncomeStatement(reportAccounts, inRange, true),
+      balance: calculateBalanceSheet(currencyAccounts, throughEnd, true),
+      cashFlow: calculateCashFlowStatement(reportAccounts, inRange, true),
+      equity: calculateEquityChangesStatement(reportAccounts, inRange, true)
     };
   }, [fromDate, toDate, reportAccounts, currencyAccounts, reportJournals]);
 
@@ -643,10 +644,10 @@ export default function FinancialReportsView({
     return reportAccounts.filter(a => a.code.localeCompare(fromAccount) >= 0 && a.code.localeCompare(toAccount) <= 0);
   }, [reportAccounts, fromAccount, toAccount, accountRangeSet]);
 
-  const groupedTB = useMemo(() => build6ColumnGroupedTrialBalance(tbAccounts, journalsInRange, reportAccounts, analyticalEntities, showZeroAccounts), [tbAccounts, journalsInRange, reportAccounts, analyticalEntities, showZeroAccounts]);
+  const groupedTB = useMemo(() => build6ColumnGroupedTrialBalance(tbAccounts, journalsInRange, reportAccounts, analyticalEntities, showZeroAccounts, true), [tbAccounts, journalsInRange, reportAccounts, analyticalEntities, showZeroAccounts]);
 
-  const activity = useMemo(() => calculateAccountActivity(reportAccounts, journalsInRange), [reportAccounts, journalsInRange]);
-  const periodMovement = useMemo(() => calculatePeriodMovement(reportAccounts, journalsInRange), [reportAccounts, journalsInRange]);
+  const activity = useMemo(() => calculateAccountActivity(reportAccounts, journalsInRange, true), [reportAccounts, journalsInRange]);
+  const periodMovement = useMemo(() => calculatePeriodMovement(reportAccounts, journalsInRange, true), [reportAccounts, journalsInRange]);
 
   const bsByAccount = useMemo(() => {
     const rows: {
@@ -676,7 +677,7 @@ export default function FinancialReportsView({
       let localCumulativeDebit = cumulativeDebit;
       let localCumulativeCredit = cumulativeCredit;
       if (isOriginalCurrencyReport) {
-        const matching = journals.filter(entry => entry.status === 'POSTED' && entry.date <= toDate).flatMap(entry => entry.lines.filter(line => line.accountId === acc.id && (line.currency || entry.currency) === currency).map(line => ({ entry, line })));
+        const matching = journals.filter(entry => entry.date <= toDate).flatMap(entry => entry.lines.filter(line => line.accountId === acc.id && (line.currency || entry.currency) === currency).map(line => ({ entry, line })));
         localCurrentDebit = round2(matching.filter(item => item.entry.date >= fromDate).reduce((sum, item) => sum + (item.line.debit || 0), 0));
         localCurrentCredit = round2(matching.filter(item => item.entry.date >= fromDate).reduce((sum, item) => sum + (item.line.credit || 0), 0));
         const openingLocal = (acc.openingBalances || []).filter(row => row.currency === currency).reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
@@ -866,7 +867,7 @@ export default function FinancialReportsView({
   const explorerAccount = accounts.find(a => a.id === explorerAccountId) || null;
   const explorerScaled = explorerAccount ? reportAccounts.find(a => a.id === explorerAccount.id) || null : null;
   const explorerLedger = explorerScaled ? buildLedger(explorerScaled, journalsInRange) : null;
-  const explorerActivityAll = calculateAccountActivity(reportAccounts, allJournals);
+  const explorerActivityAll = calculateAccountActivity(reportAccounts, allJournals, true);
   const explorerNetAll = explorerScaled
     ? netAccountBalance(explorerScaled, explorerActivityAll[explorerScaled.id] || { debit: 0, credit: 0 })
     : 0;
@@ -997,7 +998,7 @@ export default function FinancialReportsView({
       const useOriginalAmount = !isOriginalCurrencyReport && lineCurrency !== baseCode;
       return ({
       date: dateToIso(j.date),
-      docType: docType(j.id) + (j.status === 'PENDING_POSTING' ? ' (بانتظار الترحيل)' : ''),
+      docType: docType(j.id) + (j.status === 'VOIDED' ? ' (ملغي)' : j.status === 'PENDING_POSTING' ? ' (بانتظار الترحيل)' : ''),
       docNumber: j.entryNumber,
       reference: j.reference || '—',
       description: l.description || j.narration || '—',
@@ -1014,7 +1015,7 @@ export default function FinancialReportsView({
       const all = empIds.size === 0 || empIds.size >= employees.length;
       const reportTrusts = [
         ...trusts.filter(t => !custodies.some(c => c.id === t.id)).map(t => ({ ...t, currency: baseCode, exchangeRate: 1 })),
-        ...custodies.filter(c => c.status !== 'VOIDED').map(c => ({ ...c, date: c.requestedDate, trustNumber: c.custodyNumber, returnedAmount: c.refundedAmount + c.apTransferredAmount })),
+        ...custodies.map(c => ({ ...c, date: c.requestedDate, trustNumber: c.custodyNumber, returnedAmount: c.refundedAmount + c.apTransferredAmount })),
       ].filter(t => (all || (t.employeeId && empIds.has(t.employeeId))) && inDateRange(t.date, fromDate, toDate) && (!isOriginalCurrencyReport || t.currency === currency));
       const emp = employees.find(e => e.id === (fromEntityId || toEntityId));
       const first = scopedEntities[0];
@@ -1187,11 +1188,11 @@ export default function FinancialReportsView({
   }, [statementSpecs, baseCode, currency]);
 
   const filteredPaymentVouchers = useMemo(() =>
-    reportDocuments(vouchers || [], fromDate, toDate).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
+    reportDocuments(vouchers || [], fromDate, toDate, true).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
     [vouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
   );
   const filteredReceiptVouchers = useMemo(() =>
-    reportDocuments(receiptVouchers || [], fromDate, toDate).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
+    reportDocuments(receiptVouchers || [], fromDate, toDate, true).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
     [receiptVouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
   );
   const filteredJournalEntries = useMemo(() =>

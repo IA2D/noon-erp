@@ -11,10 +11,11 @@ export function projectJournalsToCurrency(
   currency: string,
   baseCurrency: string,
   decimals: number,
-  includePending = false
+  includePending = false,
+  includeVoided = false
 ): JournalEntry[] {
   const original = currency !== baseCurrency;
-  return journals.filter(entry => entry.status === 'POSTED' || (includePending && entry.status === 'PENDING_POSTING')).map(entry => {
+  return journals.filter(entry => entry.status === 'POSTED' || (includePending && entry.status === 'PENDING_POSTING') || (includeVoided && entry.status === 'VOIDED')).map(entry => {
     if (!original) return {
       ...entry,
       currency: baseCurrency,
