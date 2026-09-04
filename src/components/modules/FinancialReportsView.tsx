@@ -241,20 +241,10 @@ interface TB6Group {
   endingCredit: number;
 }
 
-interface AnalyticalEntityRow {
-  id: string;
-  code: string;
-  nameAr: string;
-  linkedAccountId: string;
-  openingBalance: number;
-  currency: string;
-}
-
 function build6ColumnGroupedTrialBalance(
   reportAccounts: Account[],
   journalsInRange: JournalEntry[],
   allAccounts: Account[],
-  analyticalEntities: AnalyticalEntityRow[] = [],
   showZeroAccounts = false,
   includeAllStatuses = false
 ) {
@@ -312,37 +302,6 @@ function build6ColumnGroupedTrialBalance(
     g.endingDebit = round2(g.endingDebit + endingDebit);
     g.endingCredit = round2(g.endingCredit + endingCredit);
 
-    // تعرض الحسابات التحليلية أسفل الحساب الرئيسي، بينما تبقى الإجماليات
-    // محسوبة من صف الحساب الرئيسي فقط حتى لا يتكرر الرصيد.
-    analyticalEntities.filter(entity => entity.linkedAccountId === acc.id).forEach(entity => {
-      const entityOpeningDebit = entity.openingBalance > 0 ? entity.openingBalance : 0;
-      const entityOpeningCredit = entity.openingBalance < 0 ? Math.abs(entity.openingBalance) : 0;
-      const entityMovement = journalsInRange.reduce((sum, journal) => {
-        journal.lines.filter(line => line.subLedgerId === entity.id).forEach(line => {
-          sum.debit = round2(sum.debit + (line.debit || 0));
-          sum.credit = round2(sum.credit + (line.credit || 0));
-        });
-        return sum;
-      }, { debit: 0, credit: 0 });
-      const entityEnding = round2(entity.openingBalance + entityMovement.debit - entityMovement.credit);
-      const entityHasData = entityOpeningDebit > 0 || entityOpeningCredit > 0 || entityMovement.debit > 0 || entityMovement.credit > 0;
-      if (!entityHasData && !showZeroAccounts) return;
-      g.rows.push({
-        key: `analytical-${acc.id}-${entity.id}`,
-        accountId: acc.id,
-        code: entity.code,
-        name: `↳ ${entity.nameAr}`,
-        currency: entity.currency || acc.defaultCurrency || 'YER',
-        nature: acc.nature,
-        isAnalytical: true,
-        openingDebit: entityOpeningDebit,
-        openingCredit: entityOpeningCredit,
-        movementDebit: entityMovement.debit,
-        movementCredit: entityMovement.credit,
-        endingDebit: entityEnding >= 0 ? entityEnding : 0,
-        endingCredit: entityEnding < 0 ? Math.abs(entityEnding) : 0,
-      });
-    });
   });
 
   const totals = groups.reduce(
@@ -567,19 +526,6 @@ export default function FinancialReportsView({
     [accounts, cashBoxes, bankAccounts, customers, vendors, employees]
   );
   const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(reconciledAccounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [reconciledAccounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
-  const analyticalEntities = useMemo<AnalyticalEntityRow[]>(() => {
-    const entities = [...cashBoxes, ...bankAccounts, ...customers, ...vendors, ...employees];
-    return entities.filter(entity => !!entity.linkedAccountId).map(entity => ({
-      id: entity.id,
-      code: entity.code,
-      nameAr: ('bankNameAr' in entity ? entity.bankNameAr : entity.nameAr) || entity.code,
-      linkedAccountId: entity.linkedAccountId!,
-      openingBalance: isOriginalCurrencyReport
-        ? entityOpening(entity, currency, baseCode)
-        : (entity.openingBalance || 0),
-      currency: isOriginalCurrencyReport ? currency : (entity.defaultCurrency || baseCode),
-    }));
-  }, [cashBoxes, bankAccounts, customers, vendors, employees, isOriginalCurrencyReport, currency, baseCode]);
   const reportAccounts = useMemo(
     () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1, true),
     [currencyAccounts, includeOpening, reportJournals, fromDate]
@@ -644,7 +590,7 @@ export default function FinancialReportsView({
     return reportAccounts.filter(a => a.code.localeCompare(fromAccount) >= 0 && a.code.localeCompare(toAccount) <= 0);
   }, [reportAccounts, fromAccount, toAccount, accountRangeSet]);
 
-  const groupedTB = useMemo(() => build6ColumnGroupedTrialBalance(tbAccounts, journalsInRange, reportAccounts, analyticalEntities, showZeroAccounts, true), [tbAccounts, journalsInRange, reportAccounts, analyticalEntities, showZeroAccounts]);
+  const groupedTB = useMemo(() => build6ColumnGroupedTrialBalance(tbAccounts, journalsInRange, reportAccounts, showZeroAccounts, true), [tbAccounts, journalsInRange, reportAccounts, showZeroAccounts]);
 
   const activity = useMemo(() => calculateAccountActivity(reportAccounts, journalsInRange, true), [reportAccounts, journalsInRange]);
   const periodMovement = useMemo(() => calculatePeriodMovement(reportAccounts, journalsInRange, true), [reportAccounts, journalsInRange]);
