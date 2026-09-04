@@ -51,7 +51,7 @@ export const CustomerStatementPrint: React.FC<CustomerStatementPrintProps> = ({c
   const items = statements.length ? statements : [{subLedgerCode:'—',subLedgerName:'—',accountNo:'—',currency:'',openingDebit:0,openingCredit:0,totalDebit:0,totalCredit:0,closingDebit:0,closingCredit:0,netBalance:0,balanceType:'',tafqeetText:'',count:0,transactions:[]}];
   return <div id="erp-statement-print-zone">{items.map((stmt, index) => <div key={`${stmt.subLedgerCode}-${index}`} className="statement-page-item">
     <BaseReportTemplate reportTitleAr="كشف حساب حسب العميل تحليلي" fromDate={filter?.fromDate} toDate={filter?.toDate} company={co} currentUserName={printMetadata?.printedBy}
-      entityInfo={[{label:'الحساب المساعد',value:stmt.subLedgerCode+' — '+stmt.subLedgerName},{label:'الحساب',value:stmt.accountNo},{label:'العملة',value:stmt.currency}]}
+      entityInfo={[{label:'الحساب التحليلي',value:stmt.subLedgerCode+' — '+stmt.subLedgerName},{label:'الحساب',value:stmt.accountNo},{label:'العملة',value:stmt.currency}]}
       totalDebit={stmt.totalDebit} totalCredit={stmt.totalCredit} openingBalance={stmt.openingDebit-stmt.openingCredit} closingBalance={stmt.netBalance} docCount={stmt.count} tafqeetText={stmt.tafqeetText} balanceTag={stmt.balanceType}>
       <table><thead><tr><th>التاريخ</th><th>نوع المستند</th><th>رقم المستند</th><th>البيان</th><th>مدين</th><th>دائن</th></tr></thead><tbody>
         <tr><td colSpan={4}>الرصيد الافتتاحي</td><td>{stmt.openingDebit.toFixed(2)}</td><td>{stmt.openingCredit.toFixed(2)}</td></tr>

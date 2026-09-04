@@ -3,8 +3,8 @@ export type AccountLevel = 1 | 2 | 3 | 4 | 5;
 import type { SupportingDocument } from './supportingDocuments';
 
 /**
- * نوع الحساب المساعد (Sub-Ledger) الحاكم لحساب المستوى الخامس:
- * NONE = حساب عام بلا مساعد | EMPLOYEE = موظف | CUSTOMER = عميل
+ * نوع الحساب التحليلي (Analytical Account) الحاكم لحساب المستوى الخامس:
+ * NONE = حساب عام بلا حساب تحليلي | EMPLOYEE = موظف | CUSTOMER = عميل
  * SUPPLIER = مورد | CASH_BOX = صندوق نقدي | BANK = بنك/صراف
  * ASSET = أصل ثابت | COST_CENTER = مركز تكلفة | ITEM = صنف/مخزون
  */
@@ -20,11 +20,11 @@ export type SubLedgerType =
   | 'COST_CENTER'
   | 'ITEM';
 
-/** مرجع حساب مساعد موحد يُجلب تلقائياً من نوع الحساب ويُحفظ في أسطر التفاصيل */
+/** مرجع حساب تحليلي موحد يُجلب تلقائياً من نوع الحساب ويُحفظ في أسطر التفاصيل */
 export interface SubLedgerRef {
   subLedgerType: SubLedgerType;
-  subLedgerId?: string;   // معرف الكيان المساعد (ID الموظف/العميل/المورد/الصندوق/البنك)
-  subLedgerName?: string; // اسم الكيان المساعد المختار (للقراءة السريعة)
+  subLedgerId?: string;   // معرف الكيان التحليلي (ID الموظف/العميل/المورد/الصندوق/البنك)
+  subLedgerName?: string; // اسم الكيان التحليلي المختار (للقراءة السريعة)
 }
 
 /** نوع الحساب: 1 = رئيسي/تجميعي (المستويات 1-4)، 2 = فرعي/تشغيلي (المستوى 5) */
@@ -48,14 +48,14 @@ export type AccountCategory =
 /**
  * سجل رصيد افتتاحي فريد — يُخزَّن في مصفوفة openingBalances على كل كيان.
  * كل سطر له UUID فريد (id) يمنع التكرار ويُستخدم كمفتاح React وقاعدة البيانات.
- * يدعم تعدد العملات: نفس الحساب/المساعد يمكن أن يكون له سجلات بعدة عملات.
+ * يدعم تعدد العملات: نفس الحساب/التحليلي يمكن أن يكون له سجلات بعدة عملات.
  */
 export interface OpeningBalanceRecord {
   /** UUID فريد للسجل — المفتاح الأساسي لكل صف */
   id: string;
   /** معرف الحساب المرتبط (المستوى 5) */
   accountId: string;
-  /** معرف الحساب المساعد (اختياري — للعملاء/الموردين/الموظفين/الصناديق/البنوك) */
+  /** معرف الحساب التحليلي (اختياري — للعملاء/الموردين/الموظفين/الصناديق/البنوك) */
   subAccountId?: string;
   /** رمز العملة (YER / USD / SAR) */
   currency: string;
@@ -146,7 +146,7 @@ export interface Account {
   parentId?: string;
   nature: AccountNature;     // طبيعة الحساب (مدين / دائن) — تُورَّث من الجذر
   category: AccountCategory; // تصنيف الحساب
-  subLedgerType: SubLedgerType; // نوع الحساب المساعد الحاكم لهذا الحساب (NONE افتراضياً)
+  subLedgerType: SubLedgerType; // نوع الحساب التحليلي الحاكم لهذا الحساب (NONE افتراضياً)
   currencies: AccountCurrency[]; // العملات المرتبطة (للمستوى 5)
   defaultCurrency: string;   // العملة الافتراضية
   openingBalance: number;    // الرصيد الافتتاحي (للحسابات التشغيلية)
@@ -170,8 +170,8 @@ export interface JournalLine extends ExchangeRateEvidence {
   description: string;
   costCenterId?: string;
   subLedgerType?: SubLedgerType; // يُجلب تلقائياً من الحساب المختار
-  subLedgerId?: string;          // معرف الكيان المساعد (موظف/عميل/مورد/صندوق/بنك)
-  subLedgerName?: string;        // اسم الكيان المساعد للعرض
+  subLedgerId?: string;          // معرف الكيان التحليلي (موظف/عميل/مورد/صندوق/بنك)
+  subLedgerName?: string;        // اسم الكيان التحليلي للعرض
   currency?: string;             // عملة السطر (افتراضياً عملة القيد)
   exchangeRate?: number;         // سعر صرف السطر مقابل العملة الأساسية
   debitForeign?: number;         // مدين بالعملة الأجنبية (فقط للأسطر بعملة أجنبية)
@@ -481,8 +481,8 @@ export interface PaymentVoucherLine extends ExchangeRateEvidence {
    localAmount?: number;      // المعادل بالعملة المحلية = المبلغ × سعر الصرف
   referenceNumber?: string;  // رقم المرجع على مستوى السطر
   subLedgerType?: SubLedgerType; // يُجلب تلقائياً من الحساب المختار
-  subLedgerId?: string;          // معرف الكيان المساعد
-  subLedgerName?: string;        // اسم الكيان المساعد للعرض
+  subLedgerId?: string;          // معرف الكيان التحليلي
+  subLedgerName?: string;        // اسم الكيان التحليلي للعرض
 }
 
 export interface PaymentVoucher extends ExchangeRateEvidence {
@@ -533,8 +533,8 @@ export interface ReceiptVoucherLine extends ExchangeRateEvidence {
   exchangeRate?: number;      // سعر صرف السطر مقابل العملة الأساسية
   localAmount?: number;       // المعادل بالعملة المحلية = المبلغ × سعر الصرف
   subLedgerType?: SubLedgerType; // يُجلب تلقائياً من الحساب المختار
-  subLedgerId?: string;          // معرف الكيان المساعد
-  subLedgerName?: string;        // اسم الكيان المساعد للعرض
+  subLedgerId?: string;          // معرف الكيان التحليلي
+  subLedgerName?: string;        // اسم الكيان التحليلي للعرض
 }
 
 export interface ReceiptVoucher extends ExchangeRateEvidence {

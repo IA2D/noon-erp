@@ -2819,3 +2819,10 @@ input.erp-date-input, input.erp-date-input:focus {
   caret-color: #0f172a;
   color-scheme: light;
 }
+
+
+/* قيم المبالغ تظل مقروءة داخل عرض الحقل مهما زاد عدد الأرقام. */
+.adaptive-amount-input {
+  font-size: var(--amount-font-size, inherit) !important;
+  white-space: nowrap;
+}

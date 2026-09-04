@@ -268,7 +268,7 @@ export default function OpeningBalancesTable({
                             onOpenSubLedger(a.id);
                           }}
                           className="flex items-center gap-1 px-2 py-1 rounded-lg border border-sky-500/40 bg-sky-500/10 text-sky-300 text-xs font-bold hover:bg-sky-500/25 transition-colors cursor-pointer"
-                          title={entitiesCount > 0 ? `فتح تفكيك الأرصدة لـ ${entitiesCount} كيان مساعد` : 'لا توجد كيانات مساعدة بعد'}
+                          title={entitiesCount > 0 ? `فتح تفكيك الأرصدة لـ ${entitiesCount} كيان تحليلي` : 'لا توجد كيانات تحليلية بعد'}
                         >
                           {entitiesCount > 0 ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
                           تفكيك
@@ -415,7 +415,7 @@ export default function OpeningBalancesTable({
           ))}
           <span className="flex items-center gap-1">
             <ChevronDown className="w-3 h-3 text-sky-400" />
-            اضغط «تفكيك» لإدخال أرصدة الكيانات المساعدة — الإجمالي يُحقن تلقائياً
+            اضغط «تفكيك» لإدخال أرصدة الكيانات التحليلية — الإجمالي يُحقن تلقائياً
           </span>
         </div>
       )}

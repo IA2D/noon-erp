@@ -16,7 +16,7 @@ export interface GridLine {
   account: Account | null;
   entity: LinkedEntity | null;
   isControl: boolean;
-  /** null عندما لا يكون السطر قابلاً للتحرير بعد (حساب غير محسوم / تحكم بلا مساعد) */
+  /** null عندما لا يكون السطر قابلاً للتحرير بعد (حساب غير محسوم / تحكم بلا حساب تحليلي) */
   row: RowState | null;
 }
 
@@ -34,11 +34,11 @@ interface Props {
   isBalanced: boolean;
   isPosted: boolean;
   accountsWithBalance: number;
-  /** العملات المسجلة مسبقاً لنفس (الحساب + المساعد) — تُعطَّل في قائمة العملة لمنع التكرار */
+  /** العملات المسجلة مسبقاً لنفس (الحساب + التحليلي) — تُعطَّل في قائمة العملة لمنع التكرار */
   usedCurrenciesFor: (key: string) => ReadonlySet<string>;
-  /** فحص مباشر: هل هذه العملة مستخدمة بالفعل لنفس الحساب والمساعد؟ */
+  /** فحص مباشر: هل هذه العملة مستخدمة بالفعل لنفس الحساب والتحليلي؟ */
   isCurrencyUsedForAccount: (excludeKey: string, accountId: string, subLedgerId: string | undefined, currency: string) => boolean;
-  /** مفاتيح الأسطر المكررة تماماً (حساب + مساعد + عملة) — تُظلل للتنبيه البصري */
+  /** مفاتيح الأسطر المكررة تماماً (حساب + تحليلي + عملة) — تُظلل للتنبيه البصري */
   duplicateLineKeys: ReadonlySet<string>;
   /** مفاتيح الأسطر ذات القيم الصفرية — تُظلل بالحمراء للتنبيه */
   zeroLineKeys: ReadonlySet<string>;
@@ -153,7 +153,7 @@ export default function OpeningBalancesGrid({
     return true;
   };
 
-  /** ينشئ سطراً جديداً فقط إذا كان السطر الحالي قابلاً للتحرير (حساب محسوم + مساعد مختار للتحكم) */
+  /** ينشئ سطراً جديداً فقط إذا كان السطر الحالي قابلاً للتحرير (حساب محسوم + حساب تحليلي مختار للتحكم) */
   const appendIfLastRow = (target: HTMLElement): boolean => {
     const rowKey = keyOf(target);
     const line = lines.find(l => l.key === rowKey);
@@ -262,7 +262,7 @@ export default function OpeningBalancesGrid({
               <th className={`${thCls} w-10 text-center`}>#</th>
               <th className={`${thCls} w-40`}>رقم الحساب (F9)</th>
               <th className={`${thCls} w-44 max-w-44`}>اسم الحساب</th>
-              <th className={`${thCls} w-72 min-w-72`}>الحساب المساعد (F8)</th>
+              <th className={`${thCls} w-72 min-w-72`}>الحساب التحليلي (F8)</th>
               <th className={`${thCls} w-24`}>العملة</th>
               <th className={`${thCls} w-28`}>سعر التحويل</th>
               <th className={`${thCls} w-28`}>مدين</th>
@@ -322,7 +322,7 @@ export default function OpeningBalancesGrid({
                           {l.isControl && <span className="inline-block w-2.5 h-2.5 border-b border-r border-sky-500/50 rounded-br shrink-0" />}
                           <div className="text-slate-50 font-bold truncate">{l.account!.nameAr}</div>
                           {l.isControl && (
-                            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-sky-500/10 text-sky-300 border border-sky-500/30 whitespace-nowrap">مساعد</span>
+                            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-sky-500/10 text-sky-300 border border-sky-500/30 whitespace-nowrap">تحليلي</span>
                           )}
                         </div>
                       ) : (
@@ -347,9 +347,9 @@ export default function OpeningBalancesGrid({
                             )},
                           ]}
                           searchText={e => `${e.code} ${e.nameAr} ${SUB_LEDGER_KIND_LABEL[e.kind]}`}
-                          browseTitle="اختيار الحساب المساعد (F8)"
+                          browseTitle="اختيار الحساب التحليلي (F8)"
                           shortcutKey="F8"
-                          emptyMessage="لا توجد كيانات مساعدة مرتبطة بهذا الحساب."
+                          emptyMessage="لا توجد كيانات تحليلية مرتبطة بهذا الحساب."
                           onSelect={entity => onSelectEntity(l.key, entity)}
                           inputProps={{
                             'data-ob-field': '',

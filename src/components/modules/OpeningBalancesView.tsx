@@ -178,7 +178,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
   const handleSelectEntity = (key: string, entity: LinkedEntity) => {
     const l = lines.find(x => x.key === key);
     if (!l || !l.account) return;
-    // إعادة اختيار نفس المساعد لا تمسح المبالغ أو الحقول اللاحقة.
+    // إعادة اختيار نفس الحساب التحليلي لا تمسح المبالغ أو الحقول اللاحقة.
     if (l.entity?.id === entity.id) return;
     if (l.kind === 'fetched') {
       const nextRow = initEntityRow(entity.openingCurrency || entity.defaultCurrency, entity.openingBalance, entity.openingBalanceForeign, entity.openingRate, entity.openingDocumentRef, entity.openingDueDate);
@@ -255,7 +255,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
     if (!line?.account) return;
 
     if (isCurrencyUsedForAccount(key, line.account, line.entity, code)) {
-      toast('error', `العملة (${code}) مسجلة مسبقاً لهذا الحساب/المساعد — اختر عملة أخرى.`);
+      toast('error', `العملة (${code}) مسجلة مسبقاً لهذا الحساب/التحليلي — اختر عملة أخرى.`);
       return;
     }
 
@@ -505,7 +505,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
     }
     const dup = findDuplicateLine();
     if (dup && dup.account) {
-      toast('error', `⚠️ تنبيه: الحساب [${dup.account.nameAr}] للمساعد [${dup.entity?.nameAr || 'لا يوجد'}] بعملة [${dup.row.currency}] مسجل مسبقاً! يُمنع تكرار نفس الحساب المساعد لنفس العملة — عدّل السطر المكرر أو استخدم «استعراض الأرصدة المدخلة» لتعديل الرصيد الموجود بدلاً من تكراره.`);
+      toast('error', `⚠️ تنبيه: الحساب [${dup.account.nameAr}] للتحليلي [${dup.entity?.nameAr || 'لا يوجد'}] بعملة [${dup.row.currency}] مسجل مسبقاً! يُمنع تكرار نفس الحساب التحليلي لنفس العملة — عدّل السطر المكرر أو استخدم «استعراض الأرصدة المدخلة» لتعديل الرصيد الموجود بدلاً من تكراره.`);
       return false;
     }
     return true;
@@ -526,7 +526,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
     try {
     onSaveDraft({ ...payload, attachments });
       stampEditKeys();
-      toast('success', `تم حفظ المسودة — ${payload.accounts.length} حساب${payload.subLedgers.length ? ` و ${payload.subLedgers.length} كيان مساعد` : ''} (يمكنك العودة للتعديل لاحقاً)${zeroCount ? ` — تصفير ${zeroCount} رصيد محذوف/فارغ.` : ''}`);
+      toast('success', `تم حفظ المسودة — ${payload.accounts.length} حساب${payload.subLedgers.length ? ` و ${payload.subLedgers.length} كيان تحليلي` : ''} (يمكنك العودة للتعديل لاحقاً)${zeroCount ? ` — تصفير ${zeroCount} رصيد محذوف/فارغ.` : ''}`);
     } finally {
       setSaving(false);
     }
@@ -549,7 +549,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
     try {
     onPost({ ...payload, attachments });
       stampEditKeys();
-      toast('success', `تم ترحيل الأرصدة الافتتاحية بنجاح — ${payload.accounts.length} حساب${payload.subLedgers.length ? ` و ${payload.subLedgers.length} كيان مساعد` : ''}${zeroCount ? ` — تصفير ${zeroCount} رصيد محذوف/فارغ.` : ''}`);
+      toast('success', `تم ترحيل الأرصدة الافتتاحية بنجاح — ${payload.accounts.length} حساب${payload.subLedgers.length ? ` و ${payload.subLedgers.length} كيان تحليلي` : ''}${zeroCount ? ` — تصفير ${zeroCount} رصيد محذوف/فارغ.` : ''}`);
     } finally {
       setSaving(false);
     }
@@ -867,7 +867,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
       <PageHeader
         icon={<Coins className="w-5 h-5" />}
         title="الأرصدة الافتتاحية"
-        subtitle="إدخال أرصدة افتتاحية للحسابات والكيانات المساعدة"
+        subtitle="إدخال أرصدة افتتاحية للحسابات والكيانات التحليلية"
         actions={
           <div className="flex items-center gap-2">
             {isPosted && (
@@ -954,7 +954,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
         footer={null}
       >
         <div className="space-y-5 p-1 text-right">
-          <p className="text-sm text-slate-300">يجب اختيار الحساب والحساب المساعد عند الحاجة وإدخال قيمة غير صفرية. هل تريد تجاهل السطور غير المكتملة ثم حفظ الباقي تلقائياً؟</p>
+          <p className="text-sm text-slate-300">يجب اختيار الحساب والحساب التحليلي عند الحاجة وإدخال قيمة غير صفرية. هل تريد تجاهل السطور غير المكتملة ثم حفظ الباقي تلقائياً؟</p>
           <div className="flex items-center justify-end gap-3">
             <button type="button" onClick={() => setIncompleteBrowseKeys([])} className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-bold text-slate-200">إلغاء والعودة للإدخال</button>
             <button type="button" onClick={discardIncompleteAndBrowse} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-[#ffffff] hover:bg-red-500">تجاهل السطور غير المكتملة والمتابعة</button>
@@ -1020,7 +1020,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
                       <tr key={row.key} className={idx % 2 ? 'bg-slate-50' : ''}>
                         <td className="p-2 text-center">{idx + 1}</td>
                         <td className="p-2 font-mono">{row.accountCode}</td>
-                        <td className="p-2">{row.entity ? `${row.accountName} - ${row.entity.nameAr}` : row.accountName}</td>
+                        <td className="p-2">{row.entity?.nameAr || row.accountName}</td>
                         <td className="p-2 font-mono">{row.currency}</td>
                         <td className="p-2 font-mono text-left text-emerald-700 font-bold">{row.debit > 0 ? fmtAmount(row.debit) : '—'}</td>
                         <td className="p-2 font-mono text-left text-amber-700 font-bold">{row.credit > 0 ? fmtAmount(row.credit) : '—'}</td>

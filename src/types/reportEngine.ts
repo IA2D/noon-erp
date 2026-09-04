@@ -190,8 +190,8 @@ export interface ReportMeta {
 }
 
 /**
- * نتيجة الـ Unified Lookup API للحسابات المساعدة:
- * GET /api/v1/sub-ledgers?type={type}&search={query} → [{ id, code, name, ... }]
+ * نتيجة الـ Unified Lookup API للحسابات التحليلية:
+ * GET /api/v1/analytical-accounts?type={type}&search={query} → [{ id, code, name, ... }]
  */
 export interface SubLedgerLookupItem {
   id: string;

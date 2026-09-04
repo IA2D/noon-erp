@@ -290,10 +290,10 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
     return;
   }
 
-  // التحقق الموحد من الحسابات المساعدة قبل الحفظ (بأرقام الأسطر)
+  // التحقق الموحد من الحسابات التحليلية قبل الحفظ (بأرقام الأسطر)
   const slCheck = validateSubLedgerLines(lines, accounts, subLedgerDataset);
   if (!slCheck.valid) {
-    setSubLedgerError(slCheck.message || 'يرجى تحديد الحساب المساعد للسطر المطلوب.');
+    setSubLedgerError(slCheck.message || 'يرجى تحديد الحساب التحليلي للسطر المطلوب.');
     return;
   }
   setSubLedgerError('');
@@ -843,7 +843,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
    <th className="py-2.5 px-2 text-center">#</th>
    <th className="py-2.5 px-2 text-right">رقم الحساب <span className="text-slate-500 font-normal">(F9)</span></th>
    <th className="py-2.5 px-2 text-right">اسم الحساب</th>
-   <th className="py-2.5 px-2 text-right">الحساب المساعد</th>
+   <th className="py-2.5 px-2 text-right">الحساب التحليلي</th>
    <th className="py-2.5 px-2 text-center">العملة</th>
    <th className="py-2.5 px-2 text-center">سعر الصرف</th>
    <th className="py-2.5 px-2 text-right">البيان / التفاصيل</th>

@@ -192,13 +192,13 @@ export type RowEditField = 'debit' | 'credit' | 'debitForeign' | 'creditForeign'
 
 /**
  * المفتاح المركب الفريد للرصيد الافتتاحي:
- *   Account ID + "_" + (Sub-Ledger ID أو "NONE") + "_" + Currency
- * يُستخدم لمنع تكرار نفس (الحساب + المساعد + العملة) على مستوى ورقة العمل وقاعدة البيانات.
+ *   Account ID + "_" + (Analytical Account ID أو "NONE") + "_" + Currency
+ * يُستخدم لمنع تكرار نفس (الحساب + الحساب التحليلي + العملة) على مستوى ورقة العمل وقاعدة البيانات.
  */
 export const compositeKey = (accountId: string, entityId: string | null | undefined, currency: string): string =>
   `${accountId}_${entityId || 'NONE'}_${currency}`;
 
-/** سطر واحد في ورقة عمل الأرصدة الافتتاحية — حساب + مساعد اختياري + الحالة المحرَّرة */
+/** سطر واحد في ورقة عمل الأرصدة الافتتاحية — حساب + حساب تحليلي اختياري + الحالة المحرَّرة */
 export interface EntryLine {
   /** معرف ثابت للسطر */
   key: string;
@@ -208,7 +208,7 @@ export interface EntryLine {
   account: Account | null;
   /** النص المكتوب في حقل رقم الحساب (يُحفظ حتى اختيار حساب من F9) */
   codeText: string;
-  /** الحساب المساعد المُختار (لحسابات التحكم فقط) */
+  /** الحساب التحليلي المُختار (لحسابات التحكم فقط) */
   entity: LinkedEntity | null;
   /** الحالة المحرَّرة للسطر */
   row: RowState;

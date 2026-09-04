@@ -61,6 +61,7 @@ import { buildPeriodAccounts, calculatePeriodMovement, validateReportPeriod } fr
 import { currencyDecimals, roundTo } from '../../utils/money';
 import { accountsWithCurrencyOpenings, projectJournalsToCurrency, projectPostedJournalsToCurrency } from '../../utils/currencyReporting';
 import { defaultReportToDate, toLocalIsoDate } from '../../utils/dateDefaults';
+import { reconcileControlAccountOpenings } from '../../services/openingBalancesService';
 
 interface Props {
   accounts: Account[];
@@ -211,11 +212,14 @@ function buildLedger(account: Account, journalsList: JournalEntry[]): {
 }
 
 interface TB6Row {
+  key: string;
   accountId: string;
   code: string;
   name: string;
   currency: string;
   nature: 'DEBIT' | 'CREDIT';
+  /** صف تفصيلي تابع للحساب الرئيسي؛ لا يدخل في الإجماليات مرتين. */
+  isAnalytical?: boolean;
   openingDebit: number;
   openingCredit: number;
   movementDebit: number;
@@ -237,10 +241,20 @@ interface TB6Group {
   endingCredit: number;
 }
 
+interface AnalyticalEntityRow {
+  id: string;
+  code: string;
+  nameAr: string;
+  linkedAccountId: string;
+  openingBalance: number;
+  currency: string;
+}
+
 function build6ColumnGroupedTrialBalance(
   reportAccounts: Account[],
   journalsInRange: JournalEntry[],
   allAccounts: Account[],
+  analyticalEntities: AnalyticalEntityRow[] = [],
   showZeroAccounts = false
 ) {
   const activity = calculateAccountActivity(reportAccounts, journalsInRange);
@@ -277,6 +291,7 @@ function build6ColumnGroupedTrialBalance(
     if (!g) return;
 
     g.rows.push({
+      key: `account-${acc.id}`,
       accountId: acc.id,
       code: acc.code,
       name: acc.nameAr,
@@ -295,6 +310,38 @@ function build6ColumnGroupedTrialBalance(
     g.movementCredit = round2(g.movementCredit + movementCredit);
     g.endingDebit = round2(g.endingDebit + endingDebit);
     g.endingCredit = round2(g.endingCredit + endingCredit);
+
+    // تعرض الحسابات التحليلية أسفل الحساب الرئيسي، بينما تبقى الإجماليات
+    // محسوبة من صف الحساب الرئيسي فقط حتى لا يتكرر الرصيد.
+    analyticalEntities.filter(entity => entity.linkedAccountId === acc.id).forEach(entity => {
+      const entityOpeningDebit = entity.openingBalance > 0 ? entity.openingBalance : 0;
+      const entityOpeningCredit = entity.openingBalance < 0 ? Math.abs(entity.openingBalance) : 0;
+      const entityMovement = journalsInRange.reduce((sum, journal) => {
+        journal.lines.filter(line => line.subLedgerId === entity.id).forEach(line => {
+          sum.debit = round2(sum.debit + (line.debit || 0));
+          sum.credit = round2(sum.credit + (line.credit || 0));
+        });
+        return sum;
+      }, { debit: 0, credit: 0 });
+      const entityEnding = round2(entity.openingBalance + entityMovement.debit - entityMovement.credit);
+      const entityHasData = entityOpeningDebit > 0 || entityOpeningCredit > 0 || entityMovement.debit > 0 || entityMovement.credit > 0;
+      if (!entityHasData && !showZeroAccounts) return;
+      g.rows.push({
+        key: `analytical-${acc.id}-${entity.id}`,
+        accountId: acc.id,
+        code: entity.code,
+        name: `↳ ${entity.nameAr}`,
+        currency: entity.currency || acc.defaultCurrency || 'YER',
+        nature: acc.nature,
+        isAnalytical: true,
+        openingDebit: entityOpeningDebit,
+        openingCredit: entityOpeningCredit,
+        movementDebit: entityMovement.debit,
+        movementCredit: entityMovement.credit,
+        endingDebit: entityEnding >= 0 ? entityEnding : 0,
+        endingCredit: entityEnding < 0 ? Math.abs(entityEnding) : 0,
+      });
+    });
   });
 
   const totals = groups.reduce(
@@ -509,7 +556,24 @@ export default function FinancialReportsView({
 
   const allJournals = useMemo(() => reportJournals, [reportJournals]);
 
-  const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(accounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [accounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
+  const reconciledAccounts = useMemo(
+    () => reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }).accounts,
+    [accounts, cashBoxes, bankAccounts, customers, vendors, employees]
+  );
+  const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(reconciledAccounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [reconciledAccounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
+  const analyticalEntities = useMemo<AnalyticalEntityRow[]>(() => {
+    const entities = [...cashBoxes, ...bankAccounts, ...customers, ...vendors, ...employees];
+    return entities.filter(entity => !!entity.linkedAccountId).map(entity => ({
+      id: entity.id,
+      code: entity.code,
+      nameAr: ('bankNameAr' in entity ? entity.bankNameAr : entity.nameAr) || entity.code,
+      linkedAccountId: entity.linkedAccountId!,
+      openingBalance: isOriginalCurrencyReport
+        ? entityOpening(entity, currency, baseCode)
+        : (entity.openingBalance || 0),
+      currency: isOriginalCurrencyReport ? currency : (entity.defaultCurrency || baseCode),
+    }));
+  }, [cashBoxes, bankAccounts, customers, vendors, employees, isOriginalCurrencyReport, currency, baseCode]);
   const reportAccounts = useMemo(
     () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1),
     [currencyAccounts, includeOpening, reportJournals, fromDate]
@@ -574,7 +638,7 @@ export default function FinancialReportsView({
     return reportAccounts.filter(a => a.code.localeCompare(fromAccount) >= 0 && a.code.localeCompare(toAccount) <= 0);
   }, [reportAccounts, fromAccount, toAccount, accountRangeSet]);
 
-  const groupedTB = useMemo(() => build6ColumnGroupedTrialBalance(tbAccounts, journalsInRange, reportAccounts, showZeroAccounts), [tbAccounts, journalsInRange, reportAccounts, showZeroAccounts]);
+  const groupedTB = useMemo(() => build6ColumnGroupedTrialBalance(tbAccounts, journalsInRange, reportAccounts, analyticalEntities, showZeroAccounts), [tbAccounts, journalsInRange, reportAccounts, analyticalEntities, showZeroAccounts]);
 
   const activity = useMemo(() => calculateAccountActivity(reportAccounts, journalsInRange), [reportAccounts, journalsInRange]);
   const periodMovement = useMemo(() => calculatePeriodMovement(reportAccounts, journalsInRange), [reportAccounts, journalsInRange]);
@@ -1395,7 +1459,7 @@ export default function FinancialReportsView({
                       onChange={(e) => handleFromEntityChange(e.target.value)}
                       className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
                     >
-                      <option value="">-- أول حساب مساعد --</option>
+                      <option value="">-- أول حساب تحليلي --</option>
                       {currentEntitiesList.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.name} ({item.code})
@@ -1420,7 +1484,7 @@ export default function FinancialReportsView({
                       onChange={(e) => handleToEntityChange(e.target.value)}
                       className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
                     >
-                      <option value="">-- آخر حساب مساعد --</option>
+                      <option value="">-- آخر حساب تحليلي --</option>
                       {currentEntitiesList.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.name} ({item.code})
@@ -1705,10 +1769,10 @@ export default function FinancialReportsView({
                         return groupedTB.groups.map(g => (
                           <React.Fragment key={g.key}>
                             {g.rows.map(row => (
-                              <tr key={row.accountId} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => openLedger(row.accountId)}>
-                                <td>{flatIndex++}</td>
-                                <td className="font-mono">{row.code}</td>
-                                <td className="text-right">{row.name}</td>
+                              <tr key={row.key} className={`cursor-pointer hover:bg-slate-50 transition-colors ${row.isAnalytical ? 'bg-sky-50/40' : ''}`} onClick={() => openLedger(row.accountId)}>
+                                <td>{row.isAnalytical ? '' : flatIndex++}</td>
+                                <td className={`font-mono ${row.isAnalytical ? 'pr-5 text-sky-700' : ''}`}>{row.code}</td>
+                                <td className={`text-right ${row.isAnalytical ? 'pr-5 text-sky-700 font-semibold' : ''}`}>{row.name}</td>
                                 <td className="font-mono">{row.currency}</td>
                                 <td className="font-mono">{row.openingDebit > 0 ? fmt(row.openingDebit) : ''}</td>
                                 <td className="font-mono">{row.openingCredit > 0 ? fmt(row.openingCredit) : ''}</td>

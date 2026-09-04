@@ -106,7 +106,7 @@ export default function F9SearchInput<T>({
     onSelect(item);
     closeBrowse();
     // Return focus to the originating field after the modal closes so Enter-as-Tab
-    // continues into the next field (including sub-ledger selectors).
+    // continues into the next field (including analytical-account selectors).
     window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
   };
 

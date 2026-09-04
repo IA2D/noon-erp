@@ -13,7 +13,7 @@ assert.match(f9, /modalSearchRef\.current\?\.focus\(\)/);
 assert.doesNotMatch(f9, /setTimeout\(\(\) => inputRef\.current\?\.focus/);
 assert.match(f9, /shortcutKey = 'F9'/);
 assert.match(grid, /shortcutKey="F8"/);
-assert.match(grid, /الحساب المساعد \(F8\)/);
+assert.match(grid, /الحساب التحليلي \(F8\)/);
 assert.match(grid, /w-72 min-w-72/);
 assert.match(grid, /w-44 max-w-44/);
 assert.match(view, /current\?\.account\?\.code === t/);

@@ -11,7 +11,7 @@ import React, {
 export const MODAL_Z_BASE = 80;
 export const MODAL_Z_STEP = 20;
 const MODAL_PARAM = 'modal';
-/** الحد الأدنى لـ z-index للنوافذ المحصّنة (F9 / Sub-Ledger) — لا يقل عن هذا القيم regardless of stack depth. */
+/** الحد الأدنى لـ z-index للنوافذ المحصّنة (F9 / Analytical Account) — لا يقل عن هذا القيم regardless of stack depth. */
 export const MODAL_Z_FLOOR = 500;
 
 export interface ModalStackEntryOptions {

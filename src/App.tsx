@@ -61,7 +61,8 @@ import {
 import { Account, AccountCurrency, JournalEntry, JournalLine, AuditLog, CostCenter, Trust, Custody, CashBox, BankAccount, PaymentVoucher, ReceiptVoucher, Employee, Customer, Vendor, Currency, SubLedgerType } from './types/erp';
 import type { ERPContract } from './types/contracts';
 import type { SavePayload } from './components/modules/opening/types';
-import { applyOpeningBalances, cleanupOpeningBalanceDuplicates } from './services/openingBalancesService';
+import { applyOpeningBalances, cleanupOpeningBalanceDuplicates, reconcileControlAccountOpenings } from './services/openingBalancesService';
+import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
 import { useLocalStorageState } from './utils/useLocalStorageState';
 import { isPeriodClosed } from './utils/periodGuard';
 import { reindexAccountCodes, ensureEmployeeAdvanceGroup, employeeAdvanceGeneralAccount, nextJournalNumber, calculateAccountActivity, netAccountBalance, isPostingAccount, accountFinancialType } from './utils/accountingEngine';
@@ -236,6 +237,24 @@ function AppInner() {
   const [statementNavParams, setStatementNavParams] = useState<{ kind: string; id: string } | null>(null);
 
   useEffect(() => {
+    const fit = (element: Element | null) => {
+      if (element instanceof HTMLInputElement && isAmountInput(element)) fitAmountInput(element);
+    };
+    const onInput = (event: Event) => fit(event.target as Element);
+    const onFocus = (event: FocusEvent) => fit(event.target as Element);
+    const onResize = () => document.querySelectorAll<HTMLInputElement>('input[data-amount-input="true"], input[type="number"], input[inputmode="decimal"]').forEach(fitAmountInput);
+    document.addEventListener('input', onInput, true);
+    document.addEventListener('focusin', onFocus, true);
+    window.addEventListener('resize', onResize);
+    onResize();
+    return () => {
+      document.removeEventListener('input', onInput, true);
+      document.removeEventListener('focusin', onFocus, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, []);
+
+  useEffect(() => {
     initializeCleanState();
     const timer = window.setTimeout(() => setIsBooted(true), 500);
     return () => window.clearTimeout(timer);
@@ -249,6 +268,13 @@ function AppInner() {
     if (migrated.custodies !== custodies) setCustodies(migrated.custodies);
     if (migrated.contracts !== contracts) setContracts(migrated.contracts);
     // Run once: persisted SQLite/local compatibility conversion is idempotent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // إصلاح بيانات قديمة: مزامنة أرصدة حسابات التحكم من أرصدة الحسابات التحليلية المرتبطة بها.
+    const reconciled = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees });
+    if (reconciled.changed) setAccounts(reconciled.accounts);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -691,7 +717,7 @@ function AppInner() {
     addAuditLog(
       'OPENING_BALANCES',
       'UPDATE',
-      `حفظ مسودة الأرصدة الافتتاحية لـ ${payload.accounts.length} حساب و ${payload.subLedgers.length} كيان مساعد`
+      `حفظ مسودة الأرصدة الافتتاحية لـ ${payload.accounts.length} حساب و ${payload.subLedgers.length} كيان تحليلي`
     );
   };
 
@@ -711,7 +737,7 @@ function AppInner() {
       return false;
     }
     const next = applyOpeningBalances(payload, { accounts, cashBoxes, bankAccounts, customers, vendors, employees });
-    const details = `ترحيل الأرصدة الافتتاحية لـ ${payload.accounts.length} حساب و ${payload.subLedgers.length} كيان مساعد`;
+    const details = `ترحيل الأرصدة الافتتاحية لـ ${payload.accounts.length} حساب و ${payload.subLedgers.length} كيان تحليلي`;
     const audit = createAuditLog('OPENING_BALANCES', 'POST', details);
     const openingChanges = [
       { key: K.accounts, value: next.accounts }, { key: K.cashBoxes, value: next.cashBoxes }, { key: K.bankAccounts, value: next.bankAccounts },

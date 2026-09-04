@@ -105,6 +105,7 @@ export default function AmountInput({ value, onChange, className, title, require
       onKeyDown={onKeyDown}
       onClick={onClick}
       data-enter-field={enterField}
+      data-amount-input="true"
       className={className}
     />
   );

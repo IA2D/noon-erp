@@ -8,19 +8,19 @@ import { registerScopedShortcut } from '../../utils/scopedShortcutRegistry';
 
 interface Props {
   dataset: SubLedgerDataset;
-  account?: Account;            // الحساب المختار في السطر — منه يُشتق نوع المساعد
+  account?: Account;            // الحساب المختار في السطر — منه يُشتق نوع الحساب التحليلي
   subLedgerId?: string;
-  subLedgerName?: string;       // اسم الكيان المساعد المختار (للعرض دون جلب إضافي)
+  subLedgerName?: string;       // اسم الكيان التحليلي المختار (للعرض دون جلب إضافي)
   onChange: (subLedgerId: string, subLedgerName: string) => void;
   disabled?: boolean;
   compact?: boolean;            // وضع مختصر (سطر تفاصيل ضيق)
 }
 
 /**
- * خلية الحساب المساعد الموحّدة (Generic Sub-Ledger Cell):
- * - عند اختيار حساب عام (NONE): تُعرض رمادية معطّلة "بدون حساب مساعد".
- * - عند اختيار حساب ذي مساعد (موظف/عميل/مورد/صندوق/بنك/أصل...): تُفعَّل،
- *   ويتم اختيار الكيان المساعد عبر F9 (شاشة البحث الموحدة) من نفس النوع فقط.
+ * خلية الحساب التحليلي الموحّدة (Generic Analytical Account Cell):
+ * - عند اختيار حساب عام (NONE): تُعرض رمادية معطّلة "بدون حساب تحليلي".
+ * - عند اختيار حساب ذي حساب تحليلي (موظف/عميل/مورد/صندوق/بنك/أصل...): تُفعَّل،
+ *   ويتم اختيار الكيان التحليلي عبر F9 (شاشة البحث الموحدة) من نفس النوع فقط.
  */
 export default function SubLedgerF9Cell({
   dataset,
@@ -42,7 +42,7 @@ export default function SubLedgerF9Cell({
     window.setTimeout(() => cellRef.current?.focus(), 40);
   };
 
-  // شارك سجل الاختصارات العام حتى تفوز خلية الحساب المساعد المركزة على
+  // شارك سجل الاختصارات العام حتى تفوز خلية الحساب التحليلي المركزة على
   // حقول F9 الموجودة خلف النافذة، بدلاً من فتح مستعرض السندات الخارجي.
   useEffect(() => registerScopedShortcut({
     key: 'F9',
@@ -51,8 +51,8 @@ export default function SubLedgerF9Cell({
     enabled: () => type !== 'NONE' && !disabled && !open,
   }), [type, disabled, open]);
 
-  // عودة الوضع إلى "بدون مساعد" عند تغيير الحساب لنوع مختلف،
-  // وإعادة ضبط الخلية تلقائياً إذا لم يعد المعرّف المحفوظ ينتمي لنوع المساعد الجديد
+  // عودة الوضع إلى "بدون حساب تحليلي" عند تغيير الحساب لنوع مختلف،
+  // وإعادة ضبط الخلية تلقائياً إذا لم يعد المعرّف المحفوظ ينتمي لنوع الحساب التحليلي الجديد
   // (حماية إضافية حتى لو لم يقم الأب بمسح القيمة — Cascading Reset)
   useEffect(() => {
     if (!subLedgerId) return;
@@ -64,8 +64,8 @@ export default function SubLedgerF9Cell({
 
   if (type === 'NONE') {
     return (
-      <div className="text-slate-500/60 text-sm select-none leading-6 whitespace-nowrap" title="حساب عام — لا يتطلب كياناً مساعداً">
-        بدون حساب مساعد
+      <div className="text-slate-500/60 text-sm select-none leading-6 whitespace-nowrap" title="حساب عام — لا يتطلب حساباً تحليلياً">
+        بدون حساب تحليلي
       </div>
     );
   }

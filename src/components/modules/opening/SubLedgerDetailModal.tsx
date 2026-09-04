@@ -62,7 +62,7 @@ export default function SubLedgerDetailModal({open, account, entities, currencyO
         <ModalHeader
           icon={Users}
           title={`تفكيك الأرصدة الافتتاحية — ${account.code} ${account.nameAr}`}
-          subtitle="أدخل رصيد كل كيان مساعد على حدة — يُجمَع الإجمالي آلياً في السطر الرئيسي للحساب (غير قابل للتعديل المباشر)"
+          subtitle="أدخل رصيد كل كيان تحليلي على حدة — يُجمَع الإجمالي آلياً في السطر الرئيسي للحساب (غير قابل للتعديل المباشر)"
           onClose={onClose}
         />
 
@@ -70,7 +70,7 @@ export default function SubLedgerDetailModal({open, account, entities, currencyO
           {entities.length === 0 ? (
             <div className="py-16 text-center text-slate-400">
               <Info className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-              لا توجد كيانات مساعدة مرتبطة بهذا الحساب. أضف كيانات (صناديق/بنوك/عملاء/موردين/موظفين) واربطها بالحساب من شاشاتها.
+              لا توجد كيانات تحليلية مرتبطة بهذا الحساب. أضف كيانات (صناديق/بنوك/عملاء/موردين/موظفين) واربطها بالحساب من شاشاتها.
             </div>
           ) : (
             <div className="p-4">
@@ -177,7 +177,7 @@ export default function SubLedgerDetailModal({open, account, entities, currencyO
                   </tbody>
                   <tfoot className="sticky bottom-0 bg-slate-800/80 font-bold text-[12.5px] text-slate-200 border-t border-slate-800">
                     <tr className="border-t border-slate-800">
-                      <td colSpan={4} className="py-2.5 px-3">إجمالي المساعدين ({entities.length}) — يُحقن في {account.code}</td>
+                      <td colSpan={4} className="py-2.5 px-3">إجمالي التحليليين ({entities.length}) — يُحقن في {account.code}</td>
                       <td className="py-2.5 px-3 text-left font-mono text-emerald-400" dir="ltr">{fmtAmountCur(totals.debit, baseCode)}</td>
                       <td className="py-2.5 px-3 text-left font-mono text-amber-400" dir="ltr">{fmtAmountCur(totals.credit, baseCode)}</td>
                       <td colSpan={2} className="py-2.5 px-3" />

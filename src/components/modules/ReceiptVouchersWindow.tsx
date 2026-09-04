@@ -305,7 +305,7 @@ export default function ReceiptVouchersWindow({
       || line.accountNameAr;
   };
 
-  /** العملة الافتراضية لكيان الحساب المساعد المختار — تُنزّل تلقائياً في السطر عند التفعيل */
+  /** العملة الافتراضية لكيان الحساب التحليلي المختار — تُنزّل تلقائياً في السطر عند التفعيل */
   const defaultCurrencyOfSubLedger = (type: SubLedgerType | undefined, entityId: string): string | undefined => {
     if (!type || !entityId) return undefined;
     switch (type) {
@@ -370,7 +370,7 @@ export default function ReceiptVouchersWindow({
     const targetLineId = f9LineId;
     const control = level4GroupOf(account, accounts);
     const slType = subLedgerTypeOf(account, subLedgerDataset);
-    // مسح القيم الراجعة عند تغيير الحساب: تصفير الحساب المساعد والعملة والمبلغ لإعادة السلسلة من جديد
+    // مسح القيم الراجعة عند تغيير الحساب: تصفير الحساب التحليلي والعملة والمبلغ لإعادة السلسلة من جديد
     setLines(prev => prev.map(l => l.id === targetLineId ? {
       ...l,
       accountId: account.id,
@@ -385,7 +385,7 @@ export default function ReceiptVouchersWindow({
     } : l));
     setF9Open(false);
     setF9LineId(null);
-    // التركيز على الخانة التالية في السلسلة: المساعد إن لزم، وإلا العملة
+    // التركيز على الخانة التالية في السلسلة: الحساب التحليلي إن لزم، وإلا العملة
     window.setTimeout(() => {
       const row = document.querySelector<HTMLElement>(`tr[data-rv-line="${targetLineId}"]`);
       if (!row) return;
@@ -723,10 +723,10 @@ export default function ReceiptVouchersWindow({
       return null;
     }
 
-    // التحقق الموحد من الحسابات المساعدة قبل الحفظ (بأرقام الأسطر)
+    // التحقق الموحد من الحسابات التحليلية قبل الحفظ (بأرقام الأسطر)
     const slCheck = validateSubLedgerLines(computedLines, accounts, subLedgerDataset);
     if (!slCheck.valid) {
-      toast('error', slCheck.message || 'يرجى تحديد الحساب المساعد للسطر المطلوب.');
+      toast('error', slCheck.message || 'يرجى تحديد الحساب التحليلي للسطر المطلوب.');
       return null;
     }
 
@@ -1525,7 +1525,7 @@ export default function ReceiptVouchersWindow({
                         <tr className="bg-slate-900/90 text-slate-400 border-b border-slate-800">
                           <th className="p-3 w-10 min-w-[40px] text-center whitespace-nowrap" title="#">#</th>
                           <th className="p-3 min-w-[260px] whitespace-nowrap" title="الحساب المحاسبي (المستوى 5) — اضغط F9 للبحث">الحساب المحاسبي (المستوى 5) *</th>
-                          <th className="p-3 min-w-[150px] whitespace-nowrap" title="الحساب المساعد (Sub-Ledger) — يظهر عند الحسابات ذات الكيان المساعد">الحساب المساعد (Sub-Ledger)</th>
+                          <th className="p-3 min-w-[150px] whitespace-nowrap" title="الحساب التحليلي (Analytical Account) — يظهر عند الحسابات ذات الكيان التحليلي">الحساب التحليلي (Analytical Account)</th>
                           <th className="p-3 min-w-[95px] whitespace-nowrap" title="العملة">العملة</th>
                           <th className="p-3 min-w-[90px] whitespace-nowrap" title="سعر الصرف">سعر الصرف</th>
                           <th className="p-3 min-w-[240px] whitespace-nowrap" title="البيان التفصيلي للسطر">البيان التفصيلي للسطر</th>
@@ -1580,7 +1580,7 @@ export default function ReceiptVouchersWindow({
                                 {!line.accountId ? (
                                   <div
                                     className="w-full bg-slate-900/40 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-600 flex items-center justify-between select-none"
-                                    title="اختر الحساب المحاسبي أولاً لتفعيل الحساب المساعد"
+                                    title="اختر الحساب المحاسبي أولاً لتفعيل الحساب التحليلي"
                                   >
                                     <span>—</span>
                                     <Lock className="w-3.5 h-3.5 opacity-50" />
@@ -1588,9 +1588,9 @@ export default function ReceiptVouchersWindow({
                                 ) : slType === 'NONE' ? (
                                   <div
                                     className="w-full bg-slate-900/40 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-500 flex items-center justify-between select-none"
-                                    title="هذا الحساب لا يتطلب كياناً مساعداً"
+                                    title="هذا الحساب لا يتطلب كياناً تحليلياً"
                                   >
-                                    <span>بدون حساب مساعد</span>
+                                    <span>بدون حساب تحليلي</span>
                                     <CheckCircle2 className="w-3.5 h-3.5 text-slate-600" />
                                   </div>
                                 ) : (

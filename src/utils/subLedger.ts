@@ -30,7 +30,7 @@ export interface SubLedgerMeta {
 
 /** دليل الأنواع: يُعرض في شاشات البحث وعند تظليل/تفعيل الخلية */
 export const SUB_LEDGER_META: Record<SubLedgerType, SubLedgerMeta> = {
-  NONE: { label: 'بدون حساب مساعد', labelEn: 'No Sub-Ledger', hint: 'حساب عام — لا يتطلب كياناً مساعداً.' },
+  NONE: { label: 'بدون حساب تحليلي', labelEn: 'No Analytical Account', hint: 'حساب عام — لا يتطلب حساباً تحليلياً.' },
   EMPLOYEE: { label: 'موظف', labelEn: 'Employee', hint: 'يتطلب اختيار موظف من دليل الموظفين.' },
   CUSTOMER: { label: 'عميل', labelEn: 'Customer', hint: 'يتطلب اختيار عميل من دليل العملاء.' },
   SUPPLIER: { label: 'مورد', labelEn: 'Supplier', hint: 'يتطلب اختيار مورد من دليل الموردين.' },
@@ -86,8 +86,8 @@ function cashBoxTypeLabel(t?: CashBox['boxType']): string {
 
 /**
  * "Dynamic Lookup API" الموحّد:
- * موزّع يجلب قائمة كيانات الحساب المساعد من الجدول المناسب حسب type.
- * (يقابل GET /api/v1/sub-ledgers/search?type={type}&query={q} في بيئة Backend)
+ * موزّع يجلب قائمة كيانات الحساب التحليلي من الجدول المناسب حسب type.
+ * (يقابل GET /api/v1/analytical-accounts/search?type={type}&query={q} في بيئة Backend)
  */
 export function listSubLedgers(ds: SubLedgerDataset, type: SubLedgerType): SubLedgerEntity[] {
   switch (type) {
@@ -140,7 +140,7 @@ export function searchSubLedgers(ds: SubLedgerDataset, type: SubLedgerType, quer
 }
 
 /**
- * استخراج نوع الحساب المساعد لحساب مختار:
+ * استخراج نوع الحساب التحليلي لحساب مختار:
  * 1) القيمة المكوّنة في دليل الحسابات (subLedgerType) إن لم تكن NONE.
  * 2) الاشتقاق الرجعي من الكيانات المرتبطة (مفّريشن للبيانات القديمة).
  * 3) وإلا NONE.
@@ -171,7 +171,7 @@ export function resolveSubLedgerName(ds: SubLedgerDataset, type: SubLedgerType, 
 
 /**
  * قواعد التحقق الموحدة قبل الحفظ:
- * يُمنع الحفظ إذا كان نوع الحساب المساعد يتطلب كياناً (غير NONE)
+ * يُمنع الحفظ إذا كان نوع الحساب التحليلي يتطلب كياناً (غير NONE)
  * ولم يتم تحديد sub_ledger_id.
  */
 export function validateSubLedger(
@@ -189,12 +189,12 @@ export function validateSubLedger(
   if (!subLedgerId) {
     return {
       valid: false,
-      message: `الحساب «${account?.nameAr || ''}» من نوع ${SUB_LEDGER_META[type].label} — يجب تحديد الكيان المساعد (${SUB_LEDGER_META[type].labelEn}).`
+      message: `الحساب «${account?.nameAr || ''}» من نوع ${SUB_LEDGER_META[type].label} — يجب تحديد الكيان التحليلي (${SUB_LEDGER_META[type].labelEn}).`
     };
   }
 
   if (!subLedgerEntityById(ds, type, subLedgerId)) {
-    return { valid: false, message: 'الكيان المساعد المحدد لم يعد موجوداً — أعد اختياره من البحث.' };
+    return { valid: false, message: 'الكيان التحليلي المحدد لم يعد موجوداً — أعد اختياره من البحث.' };
   }
 
   return { valid: true };
@@ -215,7 +215,7 @@ export function subLedgerBadge(type: SubLedgerType): { text: string; cls: string
   }
 }
 
-/** الاشتقاق الرجعي لنوع الحساب المساعد عند تهيئة بيانات قديمة (يُستخدم في App.tsx) */
+/** الاشتقاق الرجعي لنوع الحساب التحليلي عند تهيئة بيانات قديمة (يُستخدم في App.tsx) */
 export function deriveLegacySubLedgerType(accountId: string, ds: SubLedgerDataset): SubLedgerType {
   const linked = (list: { linkedAccountId?: string }[]) => list.some(x => x.linkedAccountId === accountId);
   if (linked(ds.employees)) return 'EMPLOYEE';
@@ -233,7 +233,7 @@ export interface SubLedgerLineLike {
 }
 
 /**
- * التحقق الموحد من الحسابات المساعدة لصف من الأسطر قبل الحفظ:
+ * التحقق الموحد من الحسابات التحليلية لصف من الأسطر قبل الحفظ:
  * يفحص كل سطر بالترتيب، ويعيد أول سطر مخالف مع رقمه (يبدأ من 1).
  * يُستخدم من كل شاشات الإدخال (قيود/سندات صرف/قبض) — لا تكرار للمنطق.
  */
@@ -251,7 +251,7 @@ export function validateSubLedgerLines(
       return {
         valid: false,
         lineIndex: i,
-        message: `يرجى تحديد الحساب المساعد للسطر رقم (${lineNo}): ${check.message}`
+        message: `يرجى تحديد الحساب التحليلي للسطر رقم (${lineNo}): ${check.message}`
       };
     }
   }

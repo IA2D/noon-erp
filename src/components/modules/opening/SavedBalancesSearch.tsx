@@ -133,7 +133,7 @@ export default function SavedBalancesSearch({rows, onPick}: Props) {
                         <span className="font-mono">{r.entity.code}</span> — {r.entity.nameAr}
                       </>
                     ) : (
-                      'بدون حساب مساعد'
+                      'بدون حساب تحليلي'
                     )}
                     {' · '}عملة <span className="font-mono">{r.currency}</span>
                   </div>

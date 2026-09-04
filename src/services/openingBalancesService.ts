@@ -51,7 +51,7 @@ export interface LinkedEntitiesInput {
   baseCode: string;
 }
 
-/** بناء قائمة الكيانات المساعدة المرتبطة بحسابات التحكم (المستوى 5 فقط) */
+/** بناء قائمة الكيانات التحليلية المرتبطة بحسابات التحكم (المستوى 5 فقط) */
 export function buildLinkedEntities(input: LinkedEntitiesInput): LinkedEntity[] {
   const { accounts, cashBoxes, bankAccounts, customers, vendors, employees, baseCode } = input;
   const accById = new Map(accounts.map(a => [a.id, a]));
@@ -265,10 +265,117 @@ export function applyOpeningBalances(payload: SavePayload, current: BalanceColle
   const vendors = applySub(current.vendors);
   const employees = applySub(current.employees);
 
+  // مصدر الحقيقة لحسابات التحكم هو أرصدة الحسابات التحليلية المرتبطة بها.
+  // أعد بناء الرصيد المجمّع بعد تطبيق تفاصيل الكيانات حتى لا تبقى قيمة قديمة
+  // في الحساب الرئيسي وتتجاهلها التقارير المالية.
+  const reconciled = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees });
   const totalDebit = [...entries, ...subLedgers].reduce((s, e) => s + e.debitLocal, 0);
   const totalCredit = [...entries, ...subLedgers].reduce((s, e) => s + e.creditLocal, 0);
 
-  return { accounts, cashBoxes, bankAccounts, customers, vendors, employees, totalDebit, totalCredit };
+  return { accounts: reconciled.accounts, cashBoxes, bankAccounts, customers, vendors, employees, totalDebit, totalCredit };
+}
+
+export interface ReconciledControlOpenings {
+  accounts: Account[];
+  changed: boolean;
+}
+
+/**
+ * يجمع أرصدة الكيانات التحليلية في حساب التحكم الرئيسي المرتبط بها.
+ * لا تُعامل قيمة الحساب الرئيسي القديمة كمصدر مستقل حتى لا يُحتسب نفس الرصيد مرتين.
+ */
+export function reconcileControlAccountOpenings(current: BalanceCollections): ReconciledControlOpenings {
+  const allEntities: SubLedgerLike[] = [
+    ...current.cashBoxes,
+    ...current.bankAccounts,
+    ...current.customers,
+    ...current.vendors,
+    ...current.employees,
+  ];
+  const entitiesByAccount = new Map<string, SubLedgerLike[]>();
+  allEntities.forEach(entity => {
+    const linkedAccountId = (entity as SubLedgerLike & { linkedAccountId?: string }).linkedAccountId;
+    if (!linkedAccountId) return;
+    const list = entitiesByAccount.get(linkedAccountId) || [];
+    list.push(entity);
+    entitiesByAccount.set(linkedAccountId, list);
+  });
+
+  let changed = false;
+  const accounts = current.accounts.map(account => {
+    const entities = entitiesByAccount.get(account.id);
+    if (!entities?.length) return account;
+    // لا نمس رصيداً تاريخياً للحساب الرئيسي إن لم يبدأ إدخال أي رصيد تحليلي له بعد.
+    const hasAnalyticalOpening = entities.some(entity =>
+      Math.abs(entity.openingBalance || 0) > 0 ||
+      Math.abs(entity.openingBalanceForeign || 0) > 0 ||
+      (entity.openingBalances || []).some(record =>
+        Math.abs(record.amount || 0) > 0 || Math.abs(record.foreignAmount || 0) > 0 ||
+        Math.abs(record.debit || 0) > 0 || Math.abs(record.credit || 0) > 0 ||
+        Math.abs(record.debitLocal || 0) > 0 || Math.abs(record.creditLocal || 0) > 0
+      )
+    );
+    if (!hasAnalyticalOpening) return account;
+
+    const byCurrency = new Map<string, OpeningBalanceRecord[]>();
+    entities.forEach(entity => {
+      const fallback: OpeningBalanceRecord = {
+        id: `aggregate-${entity.id}`,
+        accountId: account.id,
+        currency: entity.openingCurrency || entity.defaultCurrency || account.defaultCurrency || 'YER',
+        exchangeRate: entity.openingRate || 1,
+        debit: Math.max(0, entity.openingBalanceForeign || 0),
+        credit: Math.max(0, -(entity.openingBalanceForeign || 0)),
+        debitLocal: Math.max(0, entity.openingBalance || 0),
+        creditLocal: Math.max(0, -(entity.openingBalance || 0)),
+        amount: round2(entity.openingBalance || 0),
+        foreignAmount: round2(entity.openingBalanceForeign || 0),
+        rate: entity.openingRate || 1,
+      };
+      const records = entity.openingBalances?.length ? entity.openingBalances : [fallback];
+      records.forEach(record => {
+        const currency = record.currency || account.defaultCurrency || 'YER';
+        const list = byCurrency.get(currency) || [];
+        list.push(record);
+        byCurrency.set(currency, list);
+      });
+    });
+
+    const openingBalances = Array.from(byCurrency.entries()).map(([currency, records]) => {
+      const debit = round2(records.reduce((sum, record) => sum + (record.debit || 0), 0));
+      const credit = round2(records.reduce((sum, record) => sum + (record.credit || 0), 0));
+      const debitLocal = round2(records.reduce((sum, record) => sum + (record.debitLocal ?? Math.max(0, record.amount || 0)), 0));
+      const creditLocal = round2(records.reduce((sum, record) => sum + (record.creditLocal ?? Math.max(0, -(record.amount || 0))), 0));
+      const rate = records.find(record => (record.rate || record.exchangeRate || 1) > 0)?.rate || records[0]?.exchangeRate || 1;
+      return {
+        id: `control-opening-${account.id}-${currency}`,
+        accountId: account.id,
+        currency,
+        exchangeRate: rate,
+        debit,
+        credit,
+        debitLocal,
+        creditLocal,
+        amount: round2(debitLocal - creditLocal),
+        foreignAmount: round2(debit - credit),
+        rate,
+      } satisfies OpeningBalanceRecord;
+    });
+    const openingBalance = round2(openingBalances.reduce((sum, record) => sum + (record.amount || 0), 0));
+    const foreign = openingBalances.find(record => record.currency !== (account.defaultCurrency || 'YER'));
+    const next: Account = {
+      ...account,
+      openingBalance,
+      openingBalances,
+      openingBalanceForeign: foreign ? foreign.foreignAmount : undefined,
+      openingRate: foreign?.rate,
+      openingCurrency: foreign?.currency,
+    };
+    if (account.openingBalance !== next.openingBalance || JSON.stringify(account.openingBalances || []) !== JSON.stringify(next.openingBalances) || account.openingBalanceForeign !== next.openingBalanceForeign || account.openingCurrency !== next.openingCurrency) changed = true;
+    return next;
+  });
+
+  return { accounts, changed };
 }
 
 /** إزالة الكيانات المكررة بنفس المعرّف فقط. تُحتفظ جميع أرصدة openingBalances كما هي. */

@@ -59,7 +59,7 @@ function validateJournal(
     if (debit > 0 && credit > 0) errors.push(`السطر ${index + 1}: لا يمكن أن يكون مديناً ودائناً معاً.`);
     const account = accounts.find(item => item.id === line.accountId);
     if (account && account.subLedgerType !== 'NONE' && (!line.subLedgerId || line.subLedgerType !== account.subLedgerType)) {
-      errors.push(`السطر ${index + 1}: الحساب المساعد ${account.subLedgerType} مطلوب.`);
+      errors.push(`السطر ${index + 1}: الحساب التحليلي ${account.subLedgerType} مطلوب.`);
     }
     const code = line.currency || entry.currency;
     const currency = currencies.find(item => item.code === code && item.isActive);
@@ -170,9 +170,9 @@ export function validateOpeningBalancesForPosting(
     validateAmounts(row, `الحساب ${index + 1}`);
   });
   payload.subLedgers.forEach((row, index) => {
-    const label = `الحساب المساعد ${index + 1}`;
+    const label = `الحساب التحليلي ${index + 1}`;
     const account = validatePostingAccount(row.linkedAccountId, accounts, label, errors);
-    if (account && account.subLedgerType !== openingSubLedgerType[row.kind]) errors.push(`${label}: نوع الحساب المساعد لا يطابق الحساب المرتبط.`);
+    if (account && account.subLedgerType !== openingSubLedgerType[row.kind]) errors.push(`${label}: نوع الحساب التحليلي لا يطابق الحساب المرتبط.`);
     const entityLists: Record<SubLedgerKind, Array<{ id: string; linkedAccountId?: string; isActive: boolean }>> = {
       CASH_BOX: entities.cashBoxes,
       BANK: entities.bankAccounts,
@@ -244,7 +244,7 @@ export function validateVoucherForPosting(
     totalLocal = roundTo(totalLocal + local, localDecimals);
     totalDocument = roundTo(totalDocument + (line.totalAmount || line.amount || 0), currencyDecimals(voucher.currency, currencies));
     if (account && account.subLedgerType !== 'NONE' && (!line.subLedgerId || line.subLedgerType !== account.subLedgerType)) {
-      errors.push(`السطر ${index + 1}: الحساب المساعد ${account.subLedgerType} مطلوب.`);
+      errors.push(`السطر ${index + 1}: الحساب التحليلي ${account.subLedgerType} مطلوب.`);
     }
   });
   if (!(voucher.totalAmount > 0)) errors.push('إجمالي السند يجب أن يكون أكبر من صفر.');

@@ -83,7 +83,7 @@ export default function SavedBalancesModal({
                 <th className={`${thCls} w-10 text-center`}>#</th>
                 <th className={thCls}>رقم الحساب</th>
                 <th className={thCls}>اسم الحساب</th>
-                <th className={thCls}>الحساب المساعد</th>
+                <th className={thCls}>الحساب التحليلي</th>
                 <th className={`${thCls} w-20 text-center`}>العملة</th>
                 <th className={`${thCls} w-24 text-center`}>سعر الصرف</th>
                 <th className={`${thCls} w-32`}>مدين</th>

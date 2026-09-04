@@ -32,8 +32,8 @@ const TYPE_ICONS: Record<SubLedgerType, React.ElementType> = {
 };
 
 /**
- * شاشة البحث الموحّدة للحساب المساعد (Global Sub-Ledger Lookup):
- * تُستدعى عند الضغط على F9 داخل خلية «الحساب المساعد» في أي جدول إدخال،
+ * شاشة البحث الموحّدة للحساب المساعد (Global Analytical Account Lookup):
+ * تُستدعى عند الضغط على F9 داخل خلية «الحساب التحليلي» في أي جدول إدخال،
  * وتستقبل subLedgerType لتُظهر بيانات الكيان المحدد فقط عبر الخدمة الموحّدة.
  */
 export default function SubLedgerLookup({ open, type, dataset, initialQuery = '', onSelect, onClose }: Props) {
@@ -88,7 +88,7 @@ export default function SubLedgerLookup({ open, type, dataset, initialQuery = ''
       onClose={handleClose}
       title={
         <>
-          اختيار {meta.label} المساعد
+          اختيار الكيان التحليلي: {meta.label}
           <span className="ml-1.5 text-xs font-mono text-slate-500">({meta.labelEn})</span>
         </>
       }

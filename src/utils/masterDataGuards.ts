@@ -40,7 +40,7 @@ export function accountRemovalDecision(id: string, ctx: MasterDataReferenceConte
   const reasons: string[] = [];
   if (ctx.accounts.some(item => item.parentId === id)) reasons.push('له حسابات فرعية');
   if (ctx.journals.some(entry => entry.lines.some(line => line.accountId === id))) reasons.push('مستخدم في قيود اليومية');
-  if ([...ctx.cashBoxes, ...ctx.bankAccounts, ...ctx.employees, ...ctx.customers, ...ctx.vendors].some(item => item.linkedAccountId === id)) reasons.push('مرتبط ببطاقة حساب مساعد');
+  if ([...ctx.cashBoxes, ...ctx.bankAccounts, ...ctx.employees, ...ctx.customers, ...ctx.vendors].some(item => item.linkedAccountId === id)) reasons.push('مرتبط ببطاقة حساب تحليلي');
   if ([...ctx.vouchers, ...ctx.receipts].some(v => v.sourceAccountId === id || v.lines.some(line => line.accountId === id))) reasons.push('مستخدم في سند مالي');
   const account = ctx.accounts.find(item => item.id === id);
   if (account && anyOpening(account)) reasons.push('له رصيد افتتاحي');
@@ -57,7 +57,7 @@ export function entityRemovalDecision(
   const reasons: string[] = [];
   if (item && anyOpening(item)) reasons.push('له رصيد افتتاحي');
   const subType = kind === 'VENDOR' ? 'SUPPLIER' : kind;
-  if (ctx.journals.some(entry => entry.lines.some(line => line.subLedgerType === subType && line.subLedgerId === id))) reasons.push('مستخدم كحساب مساعد في قيد');
+  if (ctx.journals.some(entry => entry.lines.some(line => line.subLedgerType === subType && line.subLedgerId === id))) reasons.push('مستخدم كحساب تحليلي في قيد');
   if (kind === 'EMPLOYEE' && (ctx.trusts.some(item => item.employeeId === id) || ctx.custodies.some(item => item.employeeId === id))) reasons.push('مرتبط بعهدة');
   if (kind === 'VENDOR' && ctx.custodies.some(c => c.settlements.some(s => s.items.some(item => item.vendorId === id)))) reasons.push('مرتبط بتصفية عهدة');
   if ((kind === 'CASH_BOX' || kind === 'BANK') && ctx.custodies.some(c => c.disbursementSource === id)) reasons.push('مستخدم كمصدر صرف عهدة');
@@ -83,7 +83,7 @@ export function currencyRemovalDecision(id: string, ctx: MasterDataReferenceCont
   const code = currency.code;
   const reasons: string[] = [];
   if (ctx.accounts.some(a => a.defaultCurrency === code || a.currencies.some(c => c.code === code) || a.openingBalances?.some(o => o.currency === code))) reasons.push('مرتبطة بدليل الحسابات');
-  if ([...ctx.cashBoxes, ...ctx.bankAccounts, ...ctx.employees, ...ctx.customers, ...ctx.vendors].some(item => item.defaultCurrency === code || item.currencies.some(c => c.code === code) || item.openingBalances?.some(o => o.currency === code))) reasons.push('مرتبطة ببطاقة حساب مساعد');
+  if ([...ctx.cashBoxes, ...ctx.bankAccounts, ...ctx.employees, ...ctx.customers, ...ctx.vendors].some(item => item.defaultCurrency === code || item.currencies.some(c => c.code === code) || item.openingBalances?.some(o => o.currency === code))) reasons.push('مرتبطة ببطاقة حساب تحليلي');
   if (ctx.journals.some(j => j.currency === code || j.lines.some(line => line.currency === code))) reasons.push('مستخدمة في قيد');
   if ([...ctx.vouchers, ...ctx.receipts].some(v => v.currency === code || v.lines.some(line => line.currency === code))) reasons.push('مستخدمة في سند مالي');
   if (ctx.custodies.some(c => c.currency === code)) reasons.push('مستخدمة في عهدة');
