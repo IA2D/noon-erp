@@ -510,6 +510,9 @@ export default function FinancialReportsView({
   const [fromEntityCode, setFromEntityCode] = useState<string>('');
   const [toEntityId, setToEntityId] = useState<string>('');
   const [toEntityCode, setToEntityCode] = useState<string>('');
+  // التقارير التحليلية تبدأ بالحساب الرئيسي؛ لا يُتاح التحليلي قبل اختياره.
+  const [fromMainAccountId, setFromMainAccountId] = useState<string>('');
+  const [toMainAccountId, setToMainAccountId] = useState<string>('');
 
   const isEntityOrCostCenterReport =
     ['EMPLOYEES_REPORT', 'CUSTOMERS_REPORT', 'VENDORS_REPORT', 'CASHBOX_REPORT', 'BANK_REPORT', 'TRUSTS_REPORT', 'COST_CENTERS'].includes(reportType);
@@ -519,6 +522,8 @@ export default function FinancialReportsView({
     setFromEntityCode('');
     setToEntityId('');
     setToEntityCode('');
+    setFromMainAccountId('');
+    setToMainAccountId('');
   }, [reportType]);
 
   const currencyOptions = useMemo(
@@ -827,6 +832,8 @@ export default function FinancialReportsView({
     setFromEntityCode('');
     setToEntityId('');
     setToEntityCode('');
+    setFromMainAccountId('');
+    setToMainAccountId('');
     setFromAccount('');
     setToAccount('');
     setSelectedAccountId('');
@@ -864,21 +871,38 @@ export default function FinancialReportsView({
     ? netAccountBalance(explorerScaled, explorerActivityAll[explorerScaled.id] || { debit: 0, credit: 0 })
     : 0;
 
-  const currentEntitiesList: { id: string; code: string; name: string }[] = useMemo(() => {
+  type ReportEntityOption = { id: string; code: string; name: string; linkedAccountId?: string };
+  const currentEntitiesList: ReportEntityOption[] = useMemo(() => {
     switch (reportType) {
       case 'EMPLOYEES_REPORT':
-      case 'TRUSTS_REPORT': return employees.map(e => ({ id: e.id, code: e.code, name: e.nameAr }));
-      case 'CUSTOMERS_REPORT': return customers.map(c => ({ id: c.id, code: c.code, name: c.nameAr }));
-      case 'VENDORS_REPORT': return vendors.map(v => ({ id: v.id, code: v.code, name: v.nameAr }));
-      case 'CASHBOX_REPORT': return cashBoxes.map(a => ({ id: a.id, code: a.code, name: a.nameAr }));
-      case 'BANK_REPORT': return bankAccounts.map(a => ({ id: a.id, code: a.code, name: a.bankNameAr }));
+      case 'TRUSTS_REPORT': return employees.map(e => ({ id: e.id, code: e.code, name: e.nameAr, linkedAccountId: e.linkedAccountId }));
+      case 'CUSTOMERS_REPORT': return customers.map(c => ({ id: c.id, code: c.code, name: c.nameAr, linkedAccountId: c.linkedAccountId }));
+      case 'VENDORS_REPORT': return vendors.map(v => ({ id: v.id, code: v.code, name: v.nameAr, linkedAccountId: v.linkedAccountId }));
+      case 'CASHBOX_REPORT': return cashBoxes.map(a => ({ id: a.id, code: a.code, name: a.nameAr, linkedAccountId: a.linkedAccountId }));
+      case 'BANK_REPORT': return bankAccounts.map(a => ({ id: a.id, code: a.code, name: a.bankNameAr, linkedAccountId: a.linkedAccountId }));
       case 'COST_CENTERS': return costCenters.map(cc => ({ id: cc.id, code: cc.code, name: cc.nameAr }));
       default: return [];
     }
-  }, [reportType, employees, customers, vendors, cashBoxes, bankAccounts, costCenters, accounts]);
+  }, [reportType, employees, customers, vendors, cashBoxes, bankAccounts, costCenters]);
+
+  const reportMainAccounts = useMemo(() => {
+    const linkedIds = new Set(currentEntitiesList.map(entity => entity.linkedAccountId).filter(Boolean));
+    // مركز التكلفة لا يملك حساباً تحليلياً مباشراً؛ يظل الحساب الرئيسي فلتر حركة التقرير.
+    return accounts.filter(account => isPostingAccount(account) && (reportType === 'COST_CENTERS' || linkedIds.has(account.id)));
+  }, [accounts, currentEntitiesList, reportType]);
+
+  const entitiesForMainAccount = (mainAccountId: string) =>
+    currentEntitiesList.filter(entity => reportType === 'COST_CENTERS' || entity.linkedAccountId === mainAccountId);
+
+  const scopedEntityList = useMemo(() => {
+    const selectedMainIds = [fromMainAccountId, toMainAccountId].filter(Boolean);
+    if (!selectedMainIds.length) return currentEntitiesList;
+    if (reportType === 'COST_CENTERS') return currentEntitiesList;
+    return currentEntitiesList.filter(entity => selectedMainIds.includes(entity.linkedAccountId || ''));
+  }, [currentEntitiesList, fromMainAccountId, toMainAccountId, reportType]);
 
   const { rangeLo, rangeHi } = useMemo(() => {
-    const list = currentEntitiesList;
+    const list = scopedEntityList;
     if (!list.length) return { rangeLo: 0, rangeHi: -1 };
     const f = list.findIndex(x => String(x.id) === String(fromEntityId));
     const t = list.findIndex(x => String(x.id) === String(toEntityId));
@@ -886,11 +910,11 @@ export default function FinancialReportsView({
     const lo = f === -1 && t !== -1 ? t : (f === -1 ? 0 : f);
     const hi = t === -1 ? list.length - 1 : t;
     return { rangeLo: Math.min(lo, hi), rangeHi: Math.max(lo, hi) };
-  }, [currentEntitiesList, fromEntityId, toEntityId]);
+  }, [scopedEntityList, fromEntityId, toEntityId]);
 
   const scopedEntities = useMemo(
-    () => (rangeHi >= rangeLo ? currentEntitiesList.slice(rangeLo, rangeHi + 1) : []),
-    [currentEntitiesList, rangeLo, rangeHi]
+    () => (rangeHi >= rangeLo ? scopedEntityList.slice(rangeLo, rangeHi + 1) : []),
+    [scopedEntityList, rangeLo, rangeHi]
   );
 
   const handleFromEntityChange = (id: string) => {
@@ -921,6 +945,7 @@ export default function FinancialReportsView({
       case 'VENDORS_REPORT': return vendors.find(v => v.id === enId)?.linkedAccountId;
       case 'CASHBOX_REPORT': return cashBoxes.find(e => e.id === enId)?.linkedAccountId;
       case 'BANK_REPORT': return bankAccounts.find(e => e.id === enId)?.linkedAccountId;
+      case 'TRUSTS_REPORT': return employees.find(e => e.id === enId)?.linkedAccountId;
       default: return undefined;
     }
   };
@@ -958,6 +983,8 @@ export default function FinancialReportsView({
     subjectName: string;
     subjectExtra?: string;
     opening: number;
+    /** Opening balance split by original currency for independent print sections. */
+    openingByCurrency?: Record<string, number>;
     showOpening: boolean;
     rows: PrintableStatementRow[];
     currencyCode?: string;
@@ -965,16 +992,20 @@ export default function FinancialReportsView({
 
   const statementSpecs = useMemo<StatementSpec[]>(() => {
     const docType = (id: string) => docTypeByJournal[id] || 'قيد يومية';
-    const toRow = (j: JournalEntry, l: { debit?: number; credit?: number; description?: string; currency?: string }): PrintableStatementRow => ({
+    const toRow = (j: JournalEntry, l: { debit?: number; credit?: number; debitForeign?: number; creditForeign?: number; description?: string; currency?: string }): PrintableStatementRow => {
+      const lineCurrency = l.currency || j.currency || baseCode;
+      const useOriginalAmount = !isOriginalCurrencyReport && lineCurrency !== baseCode;
+      return ({
       date: dateToIso(j.date),
       docType: docType(j.id) + (j.status === 'PENDING_POSTING' ? ' (بانتظار الترحيل)' : ''),
       docNumber: j.entryNumber,
       reference: j.reference || '—',
       description: l.description || j.narration || '—',
-      debit: l.debit || 0,
-      credit: l.credit || 0,
-      currency: l.currency || j.currency || baseCode,
+      debit: useOriginalAmount ? (l.debitForeign ?? l.debit ?? 0) : (l.debit || 0),
+      credit: useOriginalAmount ? (l.creditForeign ?? l.credit ?? 0) : (l.credit || 0),
+      currency: lineCurrency,
     });
+    };
     const sortRows = (a: PrintableStatementRow, b: PrintableStatementRow) =>
       a.date.localeCompare(b.date) || a.docNumber.localeCompare(b.docNumber);
 
@@ -1008,6 +1039,7 @@ export default function FinancialReportsView({
           description: t.title,
           debit: round2((t.amount || 0) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
           credit: round2(((t.settledAmount || 0) + (t.returnedAmount || 0)) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
+          currency: t.currency || baseCode,
         })),
       }];
     }
@@ -1015,12 +1047,14 @@ export default function FinancialReportsView({
     if (reportType === 'COST_CENTERS') {
       const scopedIds = new Set(scopedEntities.map(e => e.id));
       const scopedCC = costCenters.filter(cc => scopedIds.has(cc.id));
+      const mainAccountIds = new Set([fromMainAccountId, toMainAccountId].filter(Boolean));
       const allRows: PrintableStatementRow[] = [];
 
       scopedCC.forEach(cc => {
         documentJournals.forEach(j =>
           j.lines.forEach(l => {
             if (lineCostCenterId(l) !== cc.id) return;
+            if (mainAccountIds.size && !mainAccountIds.has(l.accountId)) return;
             allRows.push(toRow(j, l));
           })
         );
@@ -1060,15 +1094,36 @@ export default function FinancialReportsView({
       const m = meta[reportType];
       const allRows: PrintableStatementRow[] = [];
       let openingBalance = 0;
+      const openingByCurrency: Record<string, number> = {};
       const entities = reportType === 'CASHBOX_REPORT' ? cashBoxes : reportType === 'BANK_REPORT' ? bankAccounts : reportType === 'EMPLOYEES_REPORT' ? employees : reportType === 'CUSTOMERS_REPORT' ? customers : vendors;
       const types: SubLedgerType[] = reportType === 'CASHBOX_REPORT' ? ['CASH_BOX'] : reportType === 'BANK_REPORT' ? ['BANK','EXCHANGER'] : reportType === 'EMPLOYEES_REPORT' ? ['EMPLOYEE'] : reportType === 'CUSTOMERS_REPORT' ? ['CUSTOMER'] : ['SUPPLIER'];
       scopedEntities.forEach(en => {
         const entity = entities.find(e => e.id === en.id);
         if (!entity) return;
-        if (includeOpening) openingBalance += entityOpening(entity, isOriginalCurrencyReport ? currency : baseCode, baseCode);
+        if (includeOpening) {
+          if (isOriginalCurrencyReport) {
+            const amount = entityOpening(entity, currency, baseCode);
+            openingBalance += amount;
+            openingByCurrency[currency] = round2((openingByCurrency[currency] || 0) + amount);
+          } else {
+            const balances = entity.openingBalances?.length
+              ? entity.openingBalances.map(row => ({ code: row.currency || baseCode, amount: (row.debit ?? row.debitLocal ?? 0) - (row.credit ?? row.creditLocal ?? 0) }))
+              : [{ code: entity.openingCurrency || entity.defaultCurrency || baseCode, amount: entity.openingBalance || 0 }];
+            balances.forEach(({ code, amount }) => {
+              openingByCurrency[code] = round2((openingByCurrency[code] || 0) + amount);
+              openingBalance += amount;
+            });
+          }
+        }
         reportJournals.forEach(j => j.lines.forEach(l => {
           if (!lineBelongsToEntity(l, j, entity, entities, types, [...vouchers, ...receiptVouchers])) return;
-          if (includeOpening && isBeforeReport(j.date, fromDate)) openingBalance += (l.debit || 0) - (l.credit || 0);
+          if (includeOpening && isBeforeReport(j.date, fromDate)) {
+            const lineCurrency = l.currency || j.currency || baseCode;
+            const useOriginalAmount = !isOriginalCurrencyReport && lineCurrency !== baseCode;
+            const amount = (useOriginalAmount ? (l.debitForeign ?? l.debit ?? 0) - (l.creditForeign ?? l.credit ?? 0) : (l.debit || 0) - (l.credit || 0));
+            openingBalance += amount;
+            openingByCurrency[lineCurrency] = round2((openingByCurrency[lineCurrency] || 0) + amount);
+          }
           else if (inDateRange(j.date, fromDate, toDate)) allRows.push(toRow(j, l));
         }));
       });
@@ -1090,17 +1145,17 @@ export default function FinancialReportsView({
         subjectCode: first?.code || '—',
         subjectName,
         opening: openingBalance,
+        openingByCurrency,
         showOpening: true,
         rows: allRows,
       }];
     }
 
     return [];
-  }, [reportType, journalsInRange, documentJournals, reportJournals, scopedEntities, reportAccounts, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, costCenters, docTypeByJournal, fromEntityId, toEntityId, fromDate, toDate, includeOpening, isOriginalCurrencyReport, currency, baseCode, vouchers, receiptVouchers]);
+  }, [reportType, journalsInRange, documentJournals, reportJournals, scopedEntities, reportAccounts, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, costCenters, docTypeByJournal, fromEntityId, toEntityId, fromDate, toDate, includeOpening, isOriginalCurrencyReport, currency, baseCode, vouchers, receiptVouchers, fromMainAccountId, toMainAccountId]);
 
-  // When the report is not restricted to one original currency, render a full
-  // independent page per currency in the same print job.
-  // Build a full independent page per currency in the same print job.
+  // Each original currency is an independent statement in the same print job.
+  // This preserves a complete pagination run for one currency before the next starts.
   const printableStatementSpecs = useMemo(() => {
     const expanded: StatementSpec[] = [];
     statementSpecs.forEach(spec => {
@@ -1111,18 +1166,25 @@ export default function FinancialReportsView({
         bucket.push(row);
         groups.set(code, bucket);
       });
-      if (groups.size <= 1) { expanded.push(spec); return; }
-      groups.forEach((rows, code) => expanded.push({
-        ...spec,
-        key: `${spec.key}-${code}`,
-        titleAr: `${spec.titleAr} — ${code}`,
-        subjectExtra: `${spec.subjectExtra ? `${spec.subjectExtra} — ` : ''}عملة ${code}`,
-        rows,
-        currencyCode: code,
-      }));
+      Object.keys(spec.openingByCurrency || {}).forEach(code => {
+        if (!groups.has(code)) groups.set(code, []);
+      });
+      if (!groups.size) groups.set(spec.currencyCode || currency || baseCode, []);
+      groups.forEach((rows, code) => {
+        const opening = spec.openingByCurrency?.[code] ?? (groups.size === 1 ? spec.opening : 0);
+        expanded.push({
+          ...spec,
+          key: `${spec.key}-${code}`,
+          titleAr: groups.size > 1 ? `${spec.titleAr} — ${code}` : spec.titleAr,
+          subjectExtra: `${spec.subjectExtra ? `${spec.subjectExtra} — ` : ''}عملة ${code}`,
+          opening,
+          rows,
+          currencyCode: code,
+        });
+      });
     });
     return expanded;
-  }, [statementSpecs, isOriginalCurrencyReport, baseCode]);
+  }, [statementSpecs, baseCode, currency]);
 
   const filteredPaymentVouchers = useMemo(() =>
     reportDocuments(vouchers || [], fromDate, toDate).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
@@ -1211,14 +1273,14 @@ export default function FinancialReportsView({
       case 'RECEIPT_VOUCHERS_REPORT':
         return { columns: ['التاريخ', 'رقم السند', 'المدفوع منه', 'البيان', 'طريقة القبض', 'المبلغ', 'الحالة'], rows: filteredReceiptVouchers.map(v => [v.date, v.receiptNumber, v.payerName, v.narration, v.receiptMethod === 'CASH' ? 'نقداً' : v.receiptMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', v.totalAmount, v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
       case 'JOURNAL_ENTRIES_REPORT':
-        return { columns: ['التاريخ', 'رقم المستند', 'النوع', 'البيان', 'مدين', 'دائن', 'الحالة'], rows: filteredJournalEntries.map(j => [j.date, j.entryNumber, j.type === 'PV' ? 'سند صرف' : j.type === 'RV' ? 'سند قبض' : 'قيد يدوي', j.narration, j.totalDebit, j.totalCredit, j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
+        return { columns: ['التاريخ', 'رقم المستند', 'النوع', 'البيان', 'العملة', 'مدين', 'دائن', 'الحالة'], rows: filteredJournalEntries.map(j => [j.date, j.entryNumber, j.type === 'PV' ? 'سند صرف' : j.type === 'RV' ? 'سند قبض' : 'قيد يدوي', j.narration, j.currency || baseCode, j.totalDebit, j.totalCredit, j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
       default:
         return { columns: ['البند', 'البيان'], rows: [] };
     }
   };
 
   const renderStatements = () => (
-    statementSpecs.map(spec => (
+    printableStatementSpecs.map(spec => (
       <PrintableAccountStatement
         key={spec.key}
         titleAr={spec.titleAr}
@@ -1228,9 +1290,9 @@ export default function FinancialReportsView({
         subjectExtra={spec.subjectExtra}
         fromDate={fromDate}
         toDate={toDate}
-        currencyCode={currency}
-        currencyNameAr={currencyNameAr}
-        currencySymbol={sym}
+        currencyCode={spec.currencyCode || currency}
+        currencyNameAr={currencyOptions.find(option => option.code === (spec.currencyCode || currency))?.label.split(' (')[0] || spec.currencyCode || currency}
+        currencySymbol={symbolOf(spec.currencyCode || currency)}
         opening={spec.opening}
         rows={spec.rows}
         showOpening={spec.showOpening}
@@ -1443,55 +1505,58 @@ export default function FinancialReportsView({
 
               {isEntityOrCostCenterReport && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap min-w-[65px]">من حساب:</span>
-                    <div className="relative w-28">
-                      <input
-                        type="text"
-
-                        value={fromEntityCode}
-                        onChange={(e) => handleFromCodeChange(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-sky-600 text-center outline-none focus:border-blue-600 uppercase"
-                      />
-                    </div>
-                    <select
-                      value={fromEntityId}
-                      onChange={(e) => handleFromEntityChange(e.target.value)}
-                      className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
-                    >
-                      <option value="">-- أول حساب تحليلي --</option>
-                      {currentEntitiesList.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name} ({item.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap min-w-[65px]">إلى حساب:</span>
-                    <div className="relative w-28">
-                      <input
-                        type="text"
-
-                        value={toEntityCode}
-                        onChange={(e) => handleToCodeChange(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-sky-600 text-center outline-none focus:border-blue-600 uppercase"
-                      />
-                    </div>
-                    <select
-                      value={toEntityId}
-                      onChange={(e) => handleToEntityChange(e.target.value)}
-                      className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
-                    >
-                      <option value="">-- آخر حساب تحليلي --</option>
-                      {currentEntitiesList.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name} ({item.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {([
+                    { side: 'from' as const, label: 'من', mainId: fromMainAccountId, entityId: fromEntityId, entityCode: fromEntityCode },
+                    { side: 'to' as const, label: 'إلى', mainId: toMainAccountId, entityId: toEntityId, entityCode: toEntityCode },
+                  ]).map(({ side, label, mainId, entityId, entityCode }) => {
+                    const selectedMain = reportMainAccounts.find(account => account.id === mainId);
+                    const selectableEntities = entitiesForMainAccount(mainId);
+                    const setMain = (account?: Account) => {
+                      if (side === 'from') {
+                        setFromMainAccountId(account?.id || ''); setFromEntityId(''); setFromEntityCode('');
+                      } else {
+                        setToMainAccountId(account?.id || ''); setToEntityId(''); setToEntityCode('');
+                      }
+                    };
+                    const setEntity = (entity?: ReportEntityOption) => {
+                      if (side === 'from') {
+                        setFromEntityId(entity?.id || ''); setFromEntityCode(entity?.code || '');
+                      } else {
+                        setToEntityId(entity?.id || ''); setToEntityCode(entity?.code || '');
+                      }
+                    };
+                    return (
+                      <div key={side} className="grid grid-cols-1 gap-2">
+                        <F9SearchInput<Account>
+                          value={selectedMain?.code || ''}
+                          onChange={(value) => setMain(reportMainAccounts.find(account => account.code.toLowerCase() === value.toLowerCase()))}
+                          onSelect={setMain}
+                          items={reportMainAccounts}
+                          columns={[
+                            { label: 'الكود', render: account => account.code, className: 'w-24 font-mono text-sky-600' },
+                            { label: 'الحساب الرئيسي', render: account => account.nameAr },
+                          ]}
+                          searchText={account => `${account.code} ${account.nameAr} ${account.nameEn}`}
+                          browseTitle={`اختيار ${label} الحساب الرئيسي`}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
+                        />
+                        <F9SearchInput<ReportEntityOption>
+                          value={entityCode}
+                          onChange={(value) => setEntity(selectableEntities.find(entity => entity.code.toLowerCase() === value.toLowerCase()))}
+                          onSelect={setEntity}
+                          items={selectableEntities}
+                          columns={[
+                            { label: 'الكود', render: entity => entity.code, className: 'w-24 font-mono text-sky-600' },
+                            { label: reportType === 'COST_CENTERS' ? 'مركز التكلفة' : 'الحساب التحليلي', render: entity => entity.name },
+                          ]}
+                          searchText={entity => `${entity.code} ${entity.name}`}
+                          browseTitle={`اختيار ${label} ${reportType === 'COST_CENTERS' ? 'مركز التكلفة' : 'الحساب التحليلي'}`}
+                          inputProps={{ disabled: !mainId || !selectableEntities.length, 'aria-label': `${label} الحساب التحليلي` }}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600 disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -2420,8 +2485,7 @@ export default function FinancialReportsView({
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 pr-5">
                     <span>الفترة: <span className="font-mono text-slate-300">{dateToDisplay(fromDate)} ← {dateToDisplay(toDate)}</span></span>
                     <span>عدد القيود: <span className="text-slate-300">{filteredJournalEntries.length}</span></span>
-                    <span>إجمالي المدين: <span className="text-emerald-400 font-mono">{fmt(filteredJournalEntries.reduce((s, j) => s + j.totalDebit, 0))} {sym}</span></span>
-                    <span>إجمالي الدائن: <span className="text-sky-400 font-mono">{fmt(filteredJournalEntries.reduce((s, j) => s + j.totalCredit, 0))} {sym}</span></span>
+                    <span>تُعرض العملة لكل قيد داخل الجدول.</span>
                   </div>
                 </div>
                 <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
@@ -2432,6 +2496,7 @@ export default function FinancialReportsView({
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">رقم المستند</th>
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">النوع</th>
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40">البيان</th>
+                        <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40 text-center">العملة</th>
 
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40 text-left">مدين</th>
                         <th className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/40 text-left">دائن</th>
@@ -2440,7 +2505,7 @@ export default function FinancialReportsView({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                       {filteredJournalEntries.length === 0 ? (
-                        <tr><td colSpan={7} className="py-8 text-center text-slate-400">لا توجد قيود يومية في هذه الفترة</td></tr>
+                        <tr><td colSpan={8} className="py-8 text-center text-slate-400">لا توجد قيود يومية في هذه الفترة</td></tr>
                       ) : filteredJournalEntries.map(j => (
                         <tr key={j.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400">{dateToDisplay(j.date)}</td>
@@ -2454,6 +2519,7 @@ export default function FinancialReportsView({
                             </span>
                           </td>
                           <td className="px-4 py-2 text-slate-500 dark:text-slate-400 max-w-[220px] truncate">{j.narration}</td>
+                          <td className="px-4 py-2 text-center font-mono text-slate-600 dark:text-slate-300">{j.currency || baseCode}</td>
 
                           <td className="px-4 py-2 font-mono text-emerald-600 dark:text-emerald-400 text-left tabular-nums">{j.totalDebit > 0 ? fmt(j.totalDebit) : '—'}</td>
                           <td className="px-4 py-2 font-mono text-sky-600 dark:text-sky-400 text-left tabular-nums">{j.totalCredit > 0 ? fmt(j.totalCredit) : '—'}</td>
@@ -2470,12 +2536,22 @@ export default function FinancialReportsView({
                     </tbody>
                     {filteredJournalEntries.length > 0 && (
                       <tfoot>
-                        <tr className="font-bold bg-slate-50 dark:bg-slate-800/50 border-t-2 border-double border-slate-300 dark:border-slate-700/40">
-                          <td colSpan={4} className="px-4 py-2.5 text-slate-700 dark:text-slate-200">الإجمالي ({filteredJournalEntries.length} قيد)</td>
-                          <td className="px-4 py-2.5 font-mono text-emerald-600 dark:text-emerald-400 text-left tabular-nums">{fmt(filteredJournalEntries.reduce((s, j) => s + j.totalDebit, 0))} {sym}</td>
-                          <td className="px-4 py-2.5 font-mono text-sky-600 dark:text-sky-400 text-left tabular-nums">{fmt(filteredJournalEntries.reduce((s, j) => s + j.totalCredit, 0))} {sym}</td>
-                          <td className="px-4 py-2.5"></td>
-                        </tr>
+                        {Object.entries(filteredJournalEntries.reduce<Record<string, { debit: number; credit: number }>>((totals, entry) => {
+                          const code = entry.currency || baseCode;
+                          const current = totals[code] || { debit: 0, credit: 0 };
+                          current.debit += entry.totalDebit || 0;
+                          current.credit += entry.totalCredit || 0;
+                          totals[code] = current;
+                          return totals;
+                        }, {})).map(([code, totals]) => (
+                          <tr key={code} className="font-bold bg-slate-50 dark:bg-slate-800/50 border-t-2 border-double border-slate-300 dark:border-slate-700/40">
+                            <td colSpan={4} className="px-4 py-2.5 text-slate-700 dark:text-slate-200">إجمالي العملة {code}</td>
+                            <td className="px-4 py-2.5 text-center font-mono text-slate-600 dark:text-slate-300">{code}</td>
+                            <td className="px-4 py-2.5 font-mono text-emerald-600 dark:text-emerald-400 text-left tabular-nums">{fmt(totals.debit)}</td>
+                            <td className="px-4 py-2.5 font-mono text-sky-600 dark:text-sky-400 text-left tabular-nums">{fmt(totals.credit)}</td>
+                            <td className="px-4 py-2.5"></td>
+                          </tr>
+                        ))}
                       </tfoot>
                     )}
                   </table>

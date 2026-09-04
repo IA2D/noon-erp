@@ -1135,7 +1135,6 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
       voucherTitleEn="General Journal Entry"
       documentNumber={selectedEntry.entryNumber}
       documentDate={selectedEntry.date}
-      currency={selectedEntry.currency}
       currentUserName={selectedEntry.createdBy}
       metadata={[
        { label: 'حالة القيد', value: selectedEntry.status === 'POSTED' ? 'مُرّحل' : selectedEntry.status === 'PENDING_POSTING' ? 'بانتظار الترحيل' : 'ملغى' },
@@ -1144,7 +1143,6 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
        ...(selectedEntry.referenceCode ? [{ label: 'رقم مستند المصدر', value: selectedEntry.referenceCode }] : []),
        { label: 'البيان العام', value: selectedEntry.narration },
       ]}
-      totalAmountText={`${selectedEntry.totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedEntry.currency}`}
       signatures={[
        { roleLabelAr: 'أعده / المحاسب', name: selectedEntry.createdBy },
        { roleLabelAr: 'المراجع الداخلي / التدقيق' },
@@ -1160,8 +1158,9 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
         <col style={{ width: '23%' }} />
         <col style={{ width: '11%' }} />
         <col style={{ width: '11%' }} />
-        <col style={{ width: '10%' }} />
-        <col style={{ width: '10%' }} />
+        <col style={{ width: '8%' }} />
+        <col style={{ width: '8%' }} />
+        <col style={{ width: '8%' }} />
        </colgroup>
        <thead>
         <tr>
@@ -1171,8 +1170,9 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
          <th>البيان / الشرح</th>
          <th>رقم المرجع</th>
          <th>مركز التكلفة</th>
-         <th className="text-left">مدين ({selectedEntry.currency})</th>
-         <th className="text-left">دائن ({selectedEntry.currency})</th>
+         <th>العملة</th>
+         <th className="text-left">مدين</th>
+         <th className="text-left">دائن</th>
         </tr>
        </thead>
        <tbody>
@@ -1189,17 +1189,27 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
             return cc ? `${cc.code} — ${cc.nameAr}` : '—';
            })() : '—'}
           </td>
+          <td className="text-center font-mono">{line.currency || selectedEntry.currency || '—'}</td>
           <td className="font-bold text-left font-mono whitespace-nowrap">{line.debit > 0 ? line.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
           <td className="font-bold text-left font-mono whitespace-nowrap">{line.credit > 0 ? line.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
          </tr>
         ))}
        </tbody>
        <tfoot>
-        <tr>
-         <td colSpan={6} className="text-left font-bold">الإجمالي:</td>
-         <td className="font-bold text-left font-mono whitespace-nowrap">{selectedEntry.totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-         <td className="font-bold text-left font-mono whitespace-nowrap">{selectedEntry.totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-        </tr>
+        {Object.entries(selectedEntry.lines.reduce<Record<string, { debit: number; credit: number }>>((totals, line) => {
+          const code = line.currency || selectedEntry.currency || '—';
+          const current = totals[code] || { debit: 0, credit: 0 };
+          current.debit += line.debit || 0;
+          current.credit += line.credit || 0;
+          totals[code] = current;
+          return totals;
+        }, {})).map(([code, totals]) => (
+          <tr key={code}>
+            <td colSpan={7} className="text-left font-bold">إجمالي العملة {code}:</td>
+            <td className="font-bold text-left font-mono whitespace-nowrap">{totals.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td className="font-bold text-left font-mono whitespace-nowrap">{totals.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+        ))}
        </tfoot>
       </table>
      </VoucherPrintTemplate>
