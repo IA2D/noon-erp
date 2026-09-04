@@ -8,6 +8,7 @@ import { createRelationalStore } from './relational-store.mjs';
 import { createAccountingCommandStore } from './accounting-command-store.mjs';
 import { assertSupportedDataPath, createVerifiedBackup, listVerifiedBackups, restoreLatestVerifiedBackup, verifyDatabaseFile } from './database-recovery.mjs';
 import { createAuthStore } from './auth-store.mjs';
+import { bindConfiguredUiScale, normalizeUiScalePercent, uiScaleToZoomFactor } from './ui-scale.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let db;
@@ -24,20 +25,6 @@ const printPreviewWindows = new Set();
 const smokeResultPath = process.env.FULLERP_SMOKE_RESULT || '';
 const smokeMode = process.env.FULLERP_SMOKE_TEST === '1' && Boolean(smokeResultPath);
 const SETTINGS_STORAGE_KEY = 'elite-erp-settings-v6';
-const UI_ZOOM_BASE_FACTOR = 0.7;
-const UI_SCALE_MIN_PERCENT = 50;
-const UI_SCALE_MAX_PERCENT = 200;
-
-function normalizeUiScalePercent(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 100;
-  return Math.min(UI_SCALE_MAX_PERCENT, Math.max(UI_SCALE_MIN_PERCENT, Math.round(numeric / 5) * 5));
-}
-
-function uiScaleToZoomFactor(percent) {
-  return Number((UI_ZOOM_BASE_FACTOR * normalizeUiScalePercent(percent) / 100).toFixed(3));
-}
-
 function readUiScalePercent() {
   try {
     const raw = db?.prepare('SELECT value FROM kv_store WHERE key = ?').get(SETTINGS_STORAGE_KEY)?.value;
@@ -315,6 +302,8 @@ function createWindow() {
       zoomFactor: uiScaleToZoomFactor(readUiScalePercent()),
     },
   });
+
+  bindConfiguredUiScale(window, readUiScalePercent);
 
   if (!smokeMode) window.once('ready-to-show', () => window.show());
   if (app.isPackaged) {

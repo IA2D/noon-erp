@@ -138,9 +138,12 @@ assert.match(css, /button\.financial-reports-show-button[\s\S]*color: #ffffff !i
 assert.match(reports, /className="financial-reports-show-button[^\"]*text-white/);
 assert.doesNotMatch(financialReportLayout, /useLayoutEffect|normalizeReport\(root\)|ref=\{rootRef\}/);
 assert.match(desktopPrintPreview, /const clone = element\.cloneNode\(true\)[\s\S]*normalizeReport\(clone\)/);
-assert.match(electronMain, /UI_ZOOM_BASE_FACTOR = 0\.7/);
 assert.match(electronMain, /zoomFactor: uiScaleToZoomFactor\(readUiScalePercent\(\)\)/);
 assert.match(electronMain, /desktop-window:set-ui-scale[\s\S]*setZoomFactor\(zoomFactor\)/);
+assert.match(electronMain, /bindConfiguredUiScale\(window, readUiScalePercent\)/);
+const uiScaleRuntime = read('electron/ui-scale.mjs');
+assert.match(uiScaleRuntime, /UI_ZOOM_BASE_FACTOR = 0\.7/);
+assert.match(uiScaleRuntime, /zoom-changed[\s\S]*before-input-event[\s\S]*setInterval\(enforce, driftCheckMs\)/);
 assert.match(electronPreload, /setUiScalePercent: percent => ipcRenderer\.sendSync\('desktop-window:set-ui-scale', percent\)/);
 assert.match(read('src/components/modules/SettingsView.tsx'), /uiScalePercent: '100'[\s\S]*id="ui-scale-range"[\s\S]*min="50"[\s\S]*max="200"/);
 assert.match(report, /table-layout:fixed/);
