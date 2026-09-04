@@ -1071,6 +1071,7 @@ export default function CustodyView({
       entryNumber: nextJournalNumber(journals),
       currency: disburseTarget.currency || 'YER',
       exchangeRate: disburseTarget.exchangeRate || 1,
+      isForeignCurrency: (disburseTarget.currency || baseCurrency) !== baseCurrency,
       createdBy: currentUserName,
       reference: `CUSTODY-${disburseTarget.custodyNumber}`,
     };
@@ -1156,6 +1157,7 @@ export default function CustodyView({
       entryNumber: nextJournalNumber(journals),
       currency: settleTarget.currency || 'YER',
       exchangeRate: settleTarget.exchangeRate || 1,
+      isForeignCurrency: (settleTarget.currency || baseCurrency) !== baseCurrency,
       createdBy: currentUserName,
       reference: `CUSTODY-${settleTarget.custodyNumber}`,
     };
@@ -1235,6 +1237,7 @@ export default function CustodyView({
       entryNumber: nextJournalNumber(journals),
       currency: refundTarget.currency || 'YER',
       exchangeRate: refundTarget.exchangeRate || 1,
+      isForeignCurrency: (refundTarget.currency || baseCurrency) !== baseCurrency,
       createdBy: currentUserName,
       reference: `CUSTODY-${refundTarget.custodyNumber}`,
     };
@@ -1309,6 +1312,7 @@ export default function CustodyView({
       entryNumber: nextJournalNumber(journals),
       currency: replenishTarget.currency || 'YER',
       exchangeRate: replenishTarget.exchangeRate || 1,
+      isForeignCurrency: (replenishTarget.currency || baseCurrency) !== baseCurrency,
       createdBy: currentUserName,
       reference: `CUSTODY-${replenishTarget.custodyNumber}`,
     };

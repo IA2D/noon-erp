@@ -6,6 +6,8 @@ export interface JournalBuildContext {
   entryNumber: string;
   currency: string;
   exchangeRate: number;
+  /** True when amounts supplied by the custody workflow are in a non-base currency. */
+  isForeignCurrency: boolean;
   createdBy: string;
   reference: string;
 }
@@ -24,15 +26,36 @@ const line = (account: Pick<Account, 'id' | 'code' | 'nameAr'>, debit: number, c
 });
 
 function journal(ctx: JournalBuildContext, narration: string, lines: JournalLine[]): JournalEntry {
-  const totalDebit = Math.round(lines.reduce((s, l) => s + l.debit, 0) * 100) / 100;
-  const totalCredit = Math.round(lines.reduce((s, l) => s + l.credit, 0) * 100) / 100;
+  // Custody forms store their amount in the custody currency. Journal lines, however,
+  // are always stored in the base/local currency, with the original-currency evidence
+  // retained on each line. Without this conversion generated foreign-currency custody
+  // journals fail posting validation before the custody itself is updated.
+  const rate = Number(ctx.exchangeRate) || 1;
+  const normalizedLines = lines.map(item => {
+    const debitForeign = Number(item.debit) || 0;
+    const creditForeign = Number(item.credit) || 0;
+    if (!ctx.isForeignCurrency) {
+      return { ...item, currency: ctx.currency, exchangeRate: rate };
+    }
+    return {
+      ...item,
+      currency: ctx.currency,
+      exchangeRate: rate,
+      debit: Math.round(debitForeign * rate * 100) / 100,
+      credit: Math.round(creditForeign * rate * 100) / 100,
+      debitForeign,
+      creditForeign,
+    };
+  });
+  const totalDebit = Math.round(normalizedLines.reduce((s, l) => s + l.debit, 0) * 100) / 100;
+  const totalCredit = Math.round(normalizedLines.reduce((s, l) => s + l.credit, 0) * 100) / 100;
   return {
     id: ctx.journalId,
     entryNumber: ctx.entryNumber,
     date: today(),
     reference: ctx.reference,
     narration,
-    lines,
+    lines: normalizedLines,
     totalDebit,
     totalCredit,
     currency: ctx.currency,
