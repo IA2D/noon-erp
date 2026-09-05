@@ -42,7 +42,7 @@ const TEXT: Record<'ar' | 'en', AboutCopy> = {
     teamTitle: 'الفريق البرمجي',
     teamSubtitle: 'المطورون القائمون على تطوير وصيانة النظام',
     team: [
-      { name: 'ياسر محمد الحميدي', role: 'المطور الرئيسي', initial: 'ي', github: 'alhomidyyasser-cmyk', bio: 'مهندس ذكاء اصطناعي ومطور متخصص بلغة Python يجمع بين النمذجة الذكية وتطوير البرمجيات التطبيقية. يمتلك خلفية قوية في التعلم الآلي والتعلم العميق والرؤية الحاسوبية، مع إتقان بناء واجهات المستخدم والتطبيقات التفاعلية عبر Flet، وتصميم النماذج والمحاكاة التفاعلية عبر Ursina. يحول الأفكار والخوارزميات المعقدة إلى منتجات برمجية جاهزة للاستخدام وعالية الكفاءة.' },
+      { name: 'ياسر محمد الحميدي', role: 'المطور الرئيسي', initial: 'ي', github: 'alhomidyyasser-cmyk', bio: 'مهندس ذكاء اصطناعي ومطور برمجيات متمرس بلغة Python، يمتلك خلفية متينة في التعلم الآلي وهندسة الأنظمة، وخبرة في بناء البيئات التفاعلية والمحاكاة باستخدام Flet وUrsina. يضع الأسس الهندسية والبنية التحتية لنظام NOON ERP، ويتولى تطوير الواجهات الرئيسية وصقل التجربة البصرية والوظيفية بما يضمن السلاسة والوضوح وسهولة الاستخدام. يركز على هندسة المنظومة المحاسبية، من بناء وتفريد شجرة الحسابات، إلى إحكام دورات القيود والحركات المالية، وتنظيم تدفق البيانات والتقارير، مع تحويل المتطلبات المحاسبية إلى حلول برمجية دقيقة وموثوقة قابلة للتوسع.' },
       { name: 'أحمد إسماعيل إبراهيم', role: 'مدير المنتج وقائد تجربة المستخدم وضمان الجودة', initial: 'أ', github: 'ia2d', bio: 'يقود رؤية المنتج وتجربة المستخدم في NOON ERP، ويحوّل احتياجات المحاسب الميداني إلى تدفقات عمل واضحة ودقيقة. يركز على تصميم الواجهات العملية، مراجعة التفاصيل المحاسبية والتشغيلية، وضمان جودة التقارير وسهولة استخدام النظام من أول إدخال حتى الطباعة والترحيل.' },
       { name: 'عبدالملك علي الريمي', role: 'المستشار المحاسبي ومؤسس المنطق المالي', initial: 'ع', linkedin: 'noon-erp', bio: 'مستشار مالي متمرس في العمل على الأنظمة المحاسبية؛ تولى تأسيس وهندسة الهيكل المالي للأستاذ العام في NOON ERP، مستثمراً خبرته التشغيلية السابقة في بناء نظام رقابي متين يلبي احتياجات المحاسب الميداني.' },
     ],
@@ -69,8 +69,8 @@ const TEXT: Record<'ar' | 'en', AboutCopy> = {
 function SectionTitle({ icon, title, className = 'mb-5' }: { icon: React.ElementType; title: string; className?: string }) {
   const Icon = icon;
   return (
-    <h2 className={`font-bold text-slate-900 text-base flex items-center gap-2.5 dark:text-slate-100 ${className}`}>
-      <span className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
+    <h2 className={`font-bold text-slate-900 text-lg flex items-center gap-2.5 dark:text-slate-100 ${className}`}>
+      <span className="w-10 h-10 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
         <Icon className="w-5 h-5" />
       </span>
       {title}
@@ -91,13 +91,13 @@ export default function AboutUs() {
       <section className="bg-white rounded-2xl border border-sky-100/80 p-6 md:p-8 shadow-sm space-y-4 dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-slate-100">{t.heroTitle}</h1>
+            <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-slate-100">{t.heroTitle}</h1>
             <div className="flex items-center gap-2 mt-2">
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-sky-500/40 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 dark:bg-sky-950/80 dark:border-sky-800/50 dark:text-sky-300">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-sky-500/40 bg-sky-50 px-2.5 py-1 text-sm font-bold text-sky-700 dark:bg-sky-950/80 dark:border-sky-800/50 dark:text-sky-300">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 {t.ifrsBadge}
               </span>
-              <span className="rounded-md border border-slate-200/80 bg-slate-100 px-2.5 py-1 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" dir="ltr">
+              <span className="rounded-md border border-slate-200/80 bg-slate-100 px-2.5 py-1 font-mono text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" dir="ltr">
                 {VERSION}
               </span>
             </div>
@@ -107,7 +107,7 @@ export default function AboutUs() {
             <img src="./brand/fullerp-icon-dark-128.png" alt="NOON ERP" className="hidden h-full w-full object-contain dark:block" />
           </div>
         </div>
-        <p className="text-slate-600 text-sm md:text-base leading-relaxed pt-2 border-t border-slate-100 dark:text-slate-400 dark:border-slate-800">
+        <p className="text-slate-600 text-base md:text-lg leading-8 pt-2 border-t border-slate-100 dark:text-slate-400 dark:border-slate-800">
           {t.heroText}
         </p>
       </section>
@@ -116,7 +116,7 @@ export default function AboutUs() {
       <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm p-6 dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
           <SectionTitle icon={Users} title={t.teamTitle} className="mb-0" />
-          <p className="text-xs text-slate-500 pt-3 dark:text-slate-400">{t.teamSubtitle}</p>
+          <p className="text-sm text-slate-500 pt-3 dark:text-slate-400">{t.teamSubtitle}</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {t.team.map((m, i) => {
@@ -124,28 +124,28 @@ export default function AboutUs() {
             return (
               <div key={i} className="rounded-xl border border-slate-200/80 bg-slate-50 p-5 flex flex-col transition-all hover-lift dark:bg-slate-800/90 dark:border-slate-800">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-sky-100 border border-sky-200/80 text-sky-700 rounded-xl flex items-center justify-center text-lg font-black shrink-0 dark:bg-slate-800 dark:border-slate-700 dark:text-sky-400">
+                  <div className="w-14 h-14 bg-sky-100 border border-sky-200/80 text-sky-700 rounded-xl flex items-center justify-center text-xl font-black shrink-0 dark:bg-slate-800 dark:border-slate-700 dark:text-sky-400">
                     {m.initial}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="font-semibold text-slate-900 truncate dark:text-slate-100">{m.name}</h4>
-                    <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">{m.role}</p>
+                    <h4 className="font-semibold text-lg text-slate-900 truncate dark:text-slate-100">{m.name}</h4>
+                    <p className="text-sm text-slate-500 mt-0.5 dark:text-slate-400">{m.role}</p>
                   </div>
                 </div>
-                <p className="mt-4 text-xs leading-6 text-slate-600 dark:text-slate-300">{m.bio}</p>
+                <p className="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">{m.bio}</p>
                 {hasLinks && (
                   <>
                     <div className="flex-1" />
                     <div className="border-t border-slate-200/60 mt-4 pt-4 dark:border-slate-700">
                       <div className="flex flex-col gap-2">
                         {m.github && (
-                          <a href={`https://github.com/${m.github}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-lg bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-700 border border-sky-200/60 transition-colors hover:bg-sky-100 dark:bg-sky-600 dark:text-white dark:border-sky-500 dark:hover:bg-sky-500">
+                          <a href={`https://github.com/${m.github}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-lg bg-sky-50 px-4 py-2.5 text-base font-semibold text-sky-700 border border-sky-200/60 transition-colors hover:bg-sky-100 dark:bg-sky-600 dark:text-white dark:border-sky-500 dark:hover:bg-sky-500">
                             <Github className="w-4 h-4" />
                             GitHub
                           </a>
                         )}
                         {m.linkedin && (
-                          <a href={`https://www.linkedin.com/in/${m.linkedin}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-sky-50 hover:text-sky-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700">
+                          <a href={`https://www.linkedin.com/in/${m.linkedin}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-4 py-2.5 text-base font-semibold text-slate-700 transition-colors hover:bg-sky-50 hover:text-sky-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700">
                             <Linkedin className="w-4 h-4" />
                             LinkedIn
                           </a>
@@ -160,7 +160,7 @@ export default function AboutUs() {
         </div>
       </section>
 
-      <p className="text-xs text-slate-500 text-center leading-relaxed dark:text-slate-400">{t.rights}</p>
+      <p className="text-sm text-slate-500 text-center leading-relaxed dark:text-slate-400">{t.rights}</p>
       </div>
     </div>
   );
