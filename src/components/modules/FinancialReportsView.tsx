@@ -963,71 +963,79 @@ export default function FinancialReportsView({
         ...trusts.filter(t => !custodies.some(c => c.id === t.id)).map(t => ({ ...t, currency: baseCode, exchangeRate: 1 })),
         ...custodies.map(c => ({ ...c, date: c.requestedDate, trustNumber: c.custodyNumber, returnedAmount: c.refundedAmount + c.apTransferredAmount })),
       ].filter(t => (all || (t.employeeId && empIds.has(t.employeeId))) && inDateRange(t.date, fromDate, toDate) && (!isOriginalCurrencyReport || t.currency === currency));
-      const emp = employees.find(e => e.id === (fromEntityId || toEntityId));
-      const first = scopedEntities[0];
-      const last = scopedEntities[scopedEntities.length - 1];
-      const subjectName = emp?.nameAr || (first && last
-        ? (first.id === last.id ? first.name : `${first.code} ← ${last.code} (${scopedEntities.length})`)
-        : 'كافة العهد');
-      return [{
-        key: 'TRUSTS_REPORT',
-        titleAr: 'كشف العُهد المالية تحليلي',
-        titleEn: 'Custody Financial Statement',
-        subjectCode: emp?.code || first?.code || '—',
-        subjectName,
-        subjectExtra: reportTrusts.length ? `عدد العهد: ${reportTrusts.length}` : undefined,
-        opening: 0,
-        showOpening: false,
-        rows: reportTrusts.map(t => ({
-          date: t.date,
-          docType: 'عهدة مالية',
-          docNumber: t.trustNumber,
-          reference: t.referenceNumber || '—',
-          description: t.title,
-          debit: round2((t.amount || 0) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
-          credit: round2(((t.settledAmount || 0) + (t.returnedAmount || 0)) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
-          currency: t.currency || baseCode,
-        })),
-      }];
+      const rowsForTrusts = (items: typeof reportTrusts) => items.map(t => ({
+        date: t.date,
+        docType: 'عهدة مالية',
+        docNumber: t.trustNumber,
+        reference: t.referenceNumber || '—',
+        description: t.title,
+        debit: round2((t.amount || 0) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
+        credit: round2(((t.settledAmount || 0) + (t.returnedAmount || 0)) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
+        currency: t.currency || baseCode,
+      }));
+
+      // كل موظف يخرج في كشف مستقل، ثم تفصل مرحلة الطباعة كل عملة منه.
+      const specs = scopedEntities.map(entity => {
+        const entityTrusts = reportTrusts.filter(trust => trust.employeeId === entity.id);
+        return {
+          key: `TRUSTS_REPORT-${entity.id}`,
+          titleAr: 'كشف العُهد المالية تحليلي',
+          titleEn: 'Custody Financial Statement',
+          subjectCode: entity.code,
+          subjectName: entity.name,
+          subjectExtra: entityTrusts.length ? `عدد العهد: ${entityTrusts.length}` : undefined,
+          opening: 0,
+          showOpening: false,
+          rows: rowsForTrusts(entityTrusts),
+        };
+      });
+
+      // لا تُسقط عهداً غير مربوط بموظف عند استعراض جميع الكيانات.
+      if (all) {
+        const unassigned = reportTrusts.filter(trust => !trust.employeeId);
+        if (unassigned.length) {
+          specs.push({
+            key: 'TRUSTS_REPORT-unassigned',
+            titleAr: 'كشف العُهد المالية تحليلي',
+            titleEn: 'Custody Financial Statement',
+            subjectCode: '—',
+            subjectName: 'عُهد غير مرتبطة بموظف',
+            subjectExtra: `عدد العهد: ${unassigned.length}`,
+            opening: 0,
+            showOpening: false,
+            rows: rowsForTrusts(unassigned),
+          });
+        }
+      }
+      return specs;
     }
 
     if (reportType === 'COST_CENTERS') {
       const scopedIds = new Set(scopedEntities.map(e => e.id));
       const scopedCC = costCenters.filter(cc => scopedIds.has(cc.id));
       const mainAccountIds = new Set([fromMainAccountId, toMainAccountId].filter(Boolean));
-      const allRows: PrintableStatementRow[] = [];
-
-      scopedCC.forEach(cc => {
+      return scopedCC.map(cc => {
+        const rows: PrintableStatementRow[] = [];
         documentJournals.forEach(j =>
           j.lines.forEach(l => {
             if (lineCostCenterId(l) !== cc.id) return;
             if (mainAccountIds.size && !mainAccountIds.has(l.accountId)) return;
-            allRows.push(toRow(j, l));
+            rows.push(toRow(j, l));
           })
         );
+        rows.sort(sortRows);
+        return {
+          key: `COST_CENTERS-${cc.id}`,
+          titleAr: 'كشف مراكز التكلفة التحليلي',
+          titleEn: 'Cost Centers Analytical Statement',
+          subjectExtra: 'يشمل الحركات المرحلة والمعلقة؛ الحركات المعلقة موضحة ولا تدخل القوائم المالية',
+          subjectCode: cc.code,
+          subjectName: cc.nameAr,
+          opening: 0,
+          showOpening: false,
+          rows,
+        };
       });
-
-      allRows.sort(sortRows);
-
-      const first = scopedEntities[0];
-      const last = scopedEntities[scopedEntities.length - 1];
-      const subjectName = scopedEntities.length === 1
-        ? (first?.name || '—')
-        : (first && last
-          ? (first.id === last.id ? first.name : `${first.name} ← ${last.name} (${scopedEntities.length} مركز)`)
-          : 'كافة مراكز التكلفة');
-
-      return [{
-        key: 'COST_CENTERS',
-        titleAr: 'كشف مراكز التكلفة التحليلي',
-        titleEn: 'Cost Centers Analytical Statement',
-        subjectExtra: 'يشمل الحركات المرحلة والمعلقة؛ الحركات المعلقة موضحة ولا تدخل القوائم المالية',
-        subjectCode: first?.code || '—',
-        subjectName,
-        opening: 0,
-        showOpening: false,
-        rows: allRows,
-      }];
     }
 
     if (['EMPLOYEES_REPORT', 'CUSTOMERS_REPORT', 'VENDORS_REPORT', 'CASHBOX_REPORT', 'BANK_REPORT'].includes(reportType)) {
@@ -1039,14 +1047,14 @@ export default function FinancialReportsView({
         BANK_REPORT: { titleAr: 'كشف حركة البنك / الصراف التحليلي', titleEn: 'Bank & Exchange Analytical Statement' },
       };
       const m = meta[reportType];
-      const allRows: PrintableStatementRow[] = [];
-      let openingBalance = 0;
-      const openingByCurrency: Record<string, number> = {};
       const entities = reportType === 'CASHBOX_REPORT' ? cashBoxes : reportType === 'BANK_REPORT' ? bankAccounts : reportType === 'EMPLOYEES_REPORT' ? employees : reportType === 'CUSTOMERS_REPORT' ? customers : vendors;
       const types: SubLedgerType[] = reportType === 'CASHBOX_REPORT' ? ['CASH_BOX'] : reportType === 'BANK_REPORT' ? ['BANK','EXCHANGER'] : reportType === 'EMPLOYEES_REPORT' ? ['EMPLOYEE'] : reportType === 'CUSTOMERS_REPORT' ? ['CUSTOMER'] : ['SUPPLIER'];
-      scopedEntities.forEach(en => {
+      return scopedEntities.flatMap(en => {
         const entity = entities.find(e => e.id === en.id);
-        if (!entity) return;
+        if (!entity) return [];
+        const rows: PrintableStatementRow[] = [];
+        let openingBalance = 0;
+        const openingByCurrency: Record<string, number> = {};
         if (includeOpening) {
           if (isOriginalCurrencyReport) {
             const amount = entityOpening(entity, currency, baseCode);
@@ -1068,31 +1076,21 @@ export default function FinancialReportsView({
             openingBalance += amount;
             openingByCurrency[lineCurrency] = round2((openingByCurrency[lineCurrency] || 0) + amount);
           }
-          else if (inDateRange(j.date, fromDate, toDate)) allRows.push(toRow(j, l));
+          else if (inDateRange(j.date, fromDate, toDate)) rows.push(toRow(j, l));
         }));
-      });
-
-      allRows.sort(sortRows);
-
-      const first = scopedEntities[0];
-      const last = scopedEntities[scopedEntities.length - 1];
-      const subjectName = scopedEntities.length === 1
-        ? (first?.name || '—')
-        : (first && last
-          ? (first.id === last.id ? first.name : `${first.name} ← ${last.name} (${scopedEntities.length} كيان)`)
-          : 'كافة الكيانات');
-
-      return [{
-        key: reportType,
+        rows.sort(sortRows);
+        return [{
+        key: `${reportType}-${en.id}`,
         titleAr: m.titleAr,
         titleEn: m.titleEn,
-        subjectCode: first?.code || '—',
-        subjectName,
+        subjectCode: en.code,
+        subjectName: en.name,
         opening: openingBalance,
         openingByCurrency,
         showOpening: true,
-        rows: allRows,
+        rows,
       }];
+      });
     }
 
     return [];
