@@ -628,6 +628,7 @@ export default function CustodyView({
   const [overdueOnly, setOverdueOnly] = useState(false);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createMaximized, setCreateMaximized] = useState(false);
   const [createError, setCreateError] = useState('');
   const [attachments, setAttachments] = useState<SupportingDocument[]>([]);
   const { active: activeCurrencies, baseCode, rateOf } = useActiveCurrencies(currencies);
@@ -656,6 +657,7 @@ export default function CustodyView({
 
   const [editTarget, setEditTarget] = useState<Custody | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editMaximized, setEditMaximized] = useState(false);
   const [editForm, setEditForm] = useState<CustodyFormState>({
     type: 'TEMPORARY' as CustodyType,
     title: '',
@@ -968,6 +970,7 @@ export default function CustodyView({
     onUpdateCustody(c.id, { ...updates, ...extra });
     toast('success', extra.status === 'PENDING_APPROVAL' ? `تم تعديل ${c.custodyNumber} — أُعيدت للاعتماد بتسلسل جديد حسب القيمة المحدثة.` : `تم تعديل ${c.custodyNumber}.`);
     setIsEditOpen(false);
+    setEditMaximized(false);
     setEditTarget(null);
   };
 
@@ -1053,6 +1056,7 @@ export default function CustodyView({
     onAddCustody(custody);
     toast('success', `تم حفظ العهدة ${custody.custodyNumber} كجديدة — جاهزة للاعتماد والصرف الآلي.`);
     setIsCreateOpen(false);
+    setCreateMaximized(false);
     setCreateForm(freshForm());
     if (printAfter) {
       setPrintCustody(custody);
@@ -1755,7 +1759,9 @@ export default function CustodyView({
             open={!!isCreateOpen}
             title="عهدة جديدة"
             icon={Plus}
-            onClose={() => setIsCreateOpen(false)}
+            onClose={() => { setIsCreateOpen(false); setCreateMaximized(false); }}
+            maximized={createMaximized}
+            onToggleMaximize={() => setCreateMaximized(value => !value)}
             footer={null}
             closeOnBackdrop={false}
             size="lg"
@@ -1774,7 +1780,7 @@ export default function CustodyView({
                 <div className="flex-1 text-sm text-slate-500 dark:text-slate-400">
                   {!createReady ? 'أكمل الموظف المكلف والمبلغ لتفعيل الحفظ.' : 'العهدة تُحفظ كجديدة — يمكن اعتمادها وصرفها آلياً من قائمة إجراءات العهدة.'}
                 </div>
-                <button type="button" onClick={() => setIsCreateOpen(false)} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
+                <button type="button" onClick={() => { setIsCreateOpen(false); setCreateMaximized(false); }} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
                 <button type="submit" disabled={!createReady} className="flex items-center gap-1.5 px-5 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                   <Save className="w-4 h-4" />
                   حفظ
@@ -1796,7 +1802,9 @@ export default function CustodyView({
             open={!!(isEditOpen && editTarget)}
             title={`تعديل العهدة ${editTarget.custodyNumber}`}
             icon={Pencil}
-            onClose={() => { setIsEditOpen(false); setEditTarget(null); }}
+            onClose={() => { setIsEditOpen(false); setEditTarget(null); setEditMaximized(false); }}
+            maximized={editMaximized}
+            onToggleMaximize={() => setEditMaximized(value => !value)}
             footer={null}
             closeOnBackdrop={false}
             size="lg"
@@ -1814,7 +1822,7 @@ export default function CustodyView({
                 <div className="flex-1 text-sm text-slate-500 dark:text-slate-400">
                   {locked ? 'تعديل بيانات وصفية فقط — الحقول المالية للعهدة المصروفة محمية.' : 'تحقق من البيانات — عند تغيير المبلغ أو الموظف تُعاد العهدة للاعتماد بتسلسل جديد.'}
                 </div>
-                <button type="button" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
+                <button type="button" onClick={() => { setIsEditOpen(false); setEditTarget(null); setEditMaximized(false); }} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
                 <button type="submit" disabled={!editReady} className="flex items-center gap-1.5 px-5 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                   <Save className="w-4 h-4" />
                   حفظ التعديلات
