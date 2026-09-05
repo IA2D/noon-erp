@@ -2289,6 +2289,7 @@ export default function CustodyView({
                           <th>رقم الحساب</th>
                           <th>اسم الحساب</th>
                           <th>البيان</th>
+                          <th>رقم المرجع</th>
                           <th className="text-left">مدين ({curCode})</th>
                           <th className="text-left">دائن ({curCode})</th>
                         </tr>
@@ -2300,6 +2301,7 @@ export default function CustodyView({
                             <td className="font-mono">{line.accountCode}</td>
                             <td className="font-semibold">{line.accountNameAr}</td>
                             <td className="text-slate-600">{line.description}</td>
+                            <td className="font-mono">{line.referenceNumber || c.referenceNumber || '—'}</td>
                             <td className="font-bold text-left font-mono whitespace-nowrap">{lineAmount(line, 'debit') > 0 ? lineAmount(line, 'debit').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
                             <td className="font-bold text-left font-mono whitespace-nowrap">{lineAmount(line, 'credit') > 0 ? lineAmount(line, 'credit').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
                           </tr>
@@ -2307,7 +2309,7 @@ export default function CustodyView({
                       </tbody>
                       <tfoot>
                         <tr>
-                          <td colSpan={4} className="text-left font-bold">الإجمالي:</td>
+                          <td colSpan={5} className="text-left font-bold">الإجمالي:</td>
                           <td className="font-bold text-left font-mono whitespace-nowrap">{receiptDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="font-bold text-left font-mono whitespace-nowrap">{receiptCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
