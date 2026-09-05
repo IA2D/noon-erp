@@ -5,6 +5,7 @@ import { buildRealizedExchangeDifferenceJournal, buildUnrealizedRevaluationJourn
 import { accountsWithCurrencyOpenings, projectPostedJournalsToCurrency } from '../src/utils/currencyReporting';
 import { validateJournalForPosting } from '../src/utils/postingValidation';
 import { entityOpening, entityOpeningsByCurrency } from '../src/utils/reportData';
+import { tafqeetAmount } from '../src/utils/tafqeetHelper';
 
 const currencies = [
   { id: 'yer', code: 'YER', nameAr: 'ريال', nameEn: 'Rial', symbol: 'ر.ي', decimals: 0, isBase: true, exchangeRate: 1, minExchangeRate: 1, maxExchangeRate: 1, isActive: true, createdAt: '' },
@@ -17,6 +18,9 @@ assert.equal(fromMinorUnits(1235, 2), 12.35);
 assert.equal(multiplyMoney(10.25, 530.25, 0), 5435);
 assert.equal(roundTo(1.005, 2), 1.01);
 assert.equal(amountsEqual(1.004, 1, 2), true);
+const usdTafqeet = tafqeetAmount(20_000, 'دولار أمريكي', 'USD');
+assert.match(usdTafqeet, /دولار أمريكي/);
+assert.doesNotMatch(usdTafqeet, /ريال يمني/);
 
 const position = revalueForeignPosition({ accountId: 'cash-usd', accountCode: '1101', accountNameAr: 'نقدية دولار', currency: 'USD', foreignBalance: 100, carryingLocalBalance: 50_000, historicalRate: 500 }, 530, 0);
 assert.equal(position.revaluedLocalBalance, 53_000);
@@ -60,4 +64,4 @@ assert.equal(journal!.totalCredit, 3_000);
 assert.equal(journal!.lines[0].rateType, 'CLOSING');
 assert.equal(journal!.rateSource, 'PERIOD_REVALUATION');
 
-console.log('CURRENCY_REGRESSION_OK currencyDecimals=true minorUnits=true deterministicRounding=true historicalRate=true historicalReportInvariant=true originalOpening=true cashBoxOpening=true derivedPositions=true realizedDifference=2500 realizedJournalBalanced=true unrealizedDifference=3000 balancedRevaluation=true rateEvidence=true');
+console.log('CURRENCY_REGRESSION_OK currencyDecimals=true currencyTafqeet=true minorUnits=true deterministicRounding=true historicalRate=true historicalReportInvariant=true originalOpening=true cashBoxOpening=true derivedPositions=true realizedDifference=2500 realizedJournalBalanced=true unrealizedDifference=3000 balancedRevaluation=true rateEvidence=true');

@@ -55,7 +55,7 @@ import { downloadVoucherPdf } from '../../utils/voucherPdf';
 import { buildXlsx, downloadBlob, type XlsxSheet } from '../../utils/xlsxWriter';
 import PrintableAccountStatement, { type PrintableStatementRow } from './reports/PrintableAccountStatement';
 import { loadBranchesLocal, DEFAULT_COMPANY_BRANCH } from '../../utils/companyStore';
-import { tafqeet } from '../../utils/tafqeet';
+import { tafqeetAmount } from '../../utils/tafqeetHelper';
 import FinancialReportPrintLayout from '../reports/FinancialReportPrintLayout';
 import { buildPeriodAccounts, calculatePeriodMovement, validateReportPeriod } from '../../utils/reportingPeriod';
 import { currencyDecimals, roundTo } from '../../utils/money';
@@ -104,7 +104,7 @@ const PrintTafqeet = ({ label, amount, currencyName, currencyCode }: { label: st
   <div style={{ marginTop: '8px', border: '2px solid #000', padding: '6px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9f8fc', pageBreakInside: 'avoid' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
       <span style={{ fontSize: '10.4px', fontWeight: 900, color: '#000' }}>{label} =</span>
-      <span style={{ fontSize: '9.6px', fontWeight: 'bold', color: '#000' }}>{tafqeet(Math.abs(amount), currencyName, currencyCode)}</span>
+      <span style={{ fontSize: '9.6px', fontWeight: 'bold', color: '#000' }}>{tafqeetAmount(Math.abs(amount), currencyName, currencyCode)}</span>
     </div>
     <div style={{ fontSize: '12.8px', fontWeight: 900, color: '#1d4ed8', direction: 'ltr', fontFamily: "'Consolas', monospace" }}>
       {fmt(Math.abs(amount))}
@@ -2812,7 +2812,9 @@ export default function FinancialReportsView({
               const closing = spec.opening + totalDebit - totalCredit;
               const closingAbs = Math.abs(closing);
               const closingTag = closing >= 0 ? 'عليكم (مدين)' : 'لكم (دائن)';
-              const tafqeetText = tafqeet(closingAbs, currencyNameAr || currency, currency);
+              // Every printable statement can be split by its original currency.
+              // The wording must follow that section, not the page's base currency.
+              const tafqeetText = tafqeetAmount(closingAbs, specCurrencyName, specCode);
               const openingDebit = spec.opening > 0 ? spec.opening : 0;
               const openingCredit = spec.opening < 0 ? Math.abs(spec.opening) : 0;
               return (
