@@ -23,6 +23,7 @@ interface AboutCopy {
   team: {
     name: string;
     role: string;
+    bio: string;
     initial: string;
     github?: string;
     linkedin?: string;
@@ -36,14 +37,14 @@ const TEXT: Record<'ar' | 'en', AboutCopy> = {
     subtitle: `${PRODUCT_NAME_AR} — الحل المحاسبي المتكامل للأستاذ العام`,
     heroTitle: `${PRODUCT_NAME_AR} — الحل المحاسبي المتكامل للأستاذ العام`,
     heroText:
-      'نظام ERP محاسبي حديث يغطي دورة المحاسبة الكاملة بدءاً من دليل الحسابات الهرمي النقي والترحيل المزدوج الدقيق للقيود والسندات، مروراً بإدارة العهد، الأرصدة الافتتاحية، وإغلاقات الفترات المالية. يتميز النظام بسرعة استجابة فائقة تحاكي تطبيقات سطح المكتب دون انتظار، مع دعم كامل وبنائي للغة العربية (RTL)، وواجهة نوافذ متطورة تتيح فتح وتكبير وتصغير الشاشات التشغيلية بحرية تامة تلبي احتياجات المؤسسات بمرونة عالية.',
+      'NOON ERP نظام محاسبي مكتبي متكامل لإدارة الأستاذ العام والقيود والسندات والتقارير المالية. يربط دليل الحسابات بالحسابات التحليلية ومراكز التكلفة والعملات المتعددة، ويؤمّن الترحيل المزدوج وسير الاعتماد والأرصدة الافتتاحية وإغلاق الفترات ضمن تجربة عربية عملية مصممة لاحتياجات المحاسب الميداني.',
     ifrsBadge: 'متوافق مع معايير IFRS',
     teamTitle: 'الفريق البرمجي',
     teamSubtitle: 'المطورون القائمون على تطوير وصيانة النظام',
     team: [
-      { name: 'ياسر محمد الحميدي', role: 'المطور الرئيسي', initial: 'ي', github: 'alhomidyyasser-cmyk' },
-      { name: 'أحمد إسماعيل إبراهيم', role: 'مدير المنتج ومصمم تجربة وواجهات المستخدم ومهندس ضمان الجودة', initial: 'أ', github: 'ia2d' },
-      { name: 'عبد الملك علي الريمي', role: 'المستشار المحاسبي', initial: 'ع', linkedin: 'noon-erp' },
+      { name: 'ياسر محمد الحميدي', role: 'المطور الرئيسي', initial: 'ي', github: 'alhomidyyasser-cmyk', bio: 'مهندس ذكاء اصطناعي ومطور متخصص بلغة Python يجمع بين النمذجة الذكية وتطوير البرمجيات التطبيقية. يمتلك خلفية قوية في التعلم الآلي والتعلم العميق والرؤية الحاسوبية، مع إتقان بناء واجهات المستخدم والتطبيقات التفاعلية عبر Flet، وتصميم النماذج والمحاكاة التفاعلية عبر Ursina. يحول الأفكار والخوارزميات المعقدة إلى منتجات برمجية جاهزة للاستخدام وعالية الكفاءة.' },
+      { name: 'أحمد إسماعيل إبراهيم', role: 'مدير المنتج وقائد تجربة المستخدم وضمان الجودة', initial: 'أ', github: 'ia2d', bio: 'يقود رؤية المنتج وتجربة المستخدم في NOON ERP، ويحوّل احتياجات المحاسب الميداني إلى تدفقات عمل واضحة ودقيقة. يركز على تصميم الواجهات العملية، مراجعة التفاصيل المحاسبية والتشغيلية، وضمان جودة التقارير وسهولة استخدام النظام من أول إدخال حتى الطباعة والترحيل.' },
+      { name: 'عبدالملك علي الريمي', role: 'المستشار المحاسبي ومؤسس المنطق المالي', initial: 'ع', linkedin: 'noon-erp', bio: 'مستشار مالي متمرس في العمل على الأنظمة المحاسبية؛ تولى تأسيس وهندسة الهيكل المالي للأستاذ العام في NOON ERP، مستثمراً خبرته التشغيلية السابقة في بناء نظام رقابي متين يلبي احتياجات المحاسب الميداني.' },
     ],
     rights: `© 2026 ${PRODUCT_NAME_AR} — جميع الحقوق محفوظة. يُمنع إعادة توزيع النظام أو نسخه دون إذن كتابي من المطور.`,
   },
@@ -52,14 +53,14 @@ const TEXT: Record<'ar' | 'en', AboutCopy> = {
     subtitle: `${PRODUCT_NAME} — the integrated accounting solution for the general ledger`,
     heroTitle: `${PRODUCT_NAME} — the integrated accounting solution for the general ledger`,
     heroText:
-      'A modern ERP accounting system covering the full accounting cycle: from the hierarchical chart of accounts and precise double-entry posting of journals and vouchers, through custody management, opening balances, and period closings. The system features blazing-fast responsiveness that mimics desktop applications with zero wait time, full native Arabic (RTL) support, and an advanced windowing interface that allows opening, maximizing, and minimizing operational screens with complete freedom to meet enterprise needs with high flexibility.',
+      'NOON ERP is a desktop accounting platform for the general ledger, journals, vouchers, and financial reporting. It connects the chart of accounts with analytical accounts, cost centers, and multiple currencies while supporting double-entry posting, approval workflows, opening balances, and period closing in a practical Arabic-first experience for field accountants.',
     ifrsBadge: 'IFRS Compliant',
     teamTitle: 'Development Team',
     teamSubtitle: 'The developers behind the system',
     team: [
-      { name: 'Yasser Mohammed Al-Hamidi', role: 'Lead Developer', initial: 'Y', github: 'alhomidyyasser-cmyk' },
-      { name: 'Ahmed Ismail Ibrahim', role: 'Product Manager, UI/UX Designer & QA Engineer', initial: 'A', github: 'ia2d' },
-      { name: 'Abdulmalik Ali Al-Raimi', role: 'Accounting Consultant', initial: 'A', linkedin: 'noon-erp' },
+      { name: 'Yasser Mohammed Al-Hamidi', role: 'Lead Developer', initial: 'Y', github: 'alhomidyyasser-cmyk', bio: 'An AI engineer and Python developer who combines intelligent modeling with applied software development. He brings strong machine-learning, deep-learning, and computer-vision experience, alongside interactive UI development with Flet and simulation design with Ursina, turning complex algorithms into efficient, production-ready products.' },
+      { name: 'Ahmed Ismail Ibrahim', role: 'Product Manager, UX Lead & QA Engineer', initial: 'A', github: 'ia2d', bio: 'Leads product direction and user experience for NOON ERP, turning field-accountant needs into clear and precise workflows. His focus spans practical UI design, review of accounting and operational details, report quality, and an easy end-to-end journey from entry through posting and print.' },
+      { name: 'Abdulmalik Ali Al-Raimi', role: 'Accounting Consultant & Financial Logic Founder', initial: 'A', linkedin: 'noon-erp', bio: 'An experienced financial consultant in accounting systems who established and engineered the general-ledger financial structure of NOON ERP, applying operational expertise to build a robust control system for field accountants.' },
     ],
     rights: `© 2026 ${PRODUCT_NAME} — All rights reserved. Redistribution or copying without written permission is prohibited.`,
   },
@@ -131,6 +132,7 @@ export default function AboutUs() {
                     <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">{m.role}</p>
                   </div>
                 </div>
+                <p className="mt-4 text-xs leading-6 text-slate-600 dark:text-slate-300">{m.bio}</p>
                 {hasLinks && (
                   <>
                     <div className="flex-1" />
