@@ -11,4 +11,7 @@ assert.match(source, /return scopedCC\.map\(cc =>/);
 assert.match(source, /return scopedEntities\.flatMap\(en =>/);
 assert.match(source, /key: `\$\{spec\.key\}-\$\{code\}`/);
 assert.match(source, /printableStatementSpecs\.map\(spec =>/);
-console.log('FINANCIAL_REPORTS_BACKGROUND_OK inheritedShell=true standaloneBackground=false matchesOtherModules=true entitySections=true currencySections=true combinedPrintJob=true');
+assert.match(source, /!isSummary && spec\.rows\.map/);
+assert.match(source, /!isSummary && groupedTB\.groups\.flatMap/);
+assert.match(source, /إجمالي القيود اليومية/);
+console.log('FINANCIAL_REPORTS_BACKGROUND_OK inheritedShell=true standaloneBackground=false matchesOtherModules=true entitySections=true currencySections=true combinedPrintJob=true summarySuppressesDetails=true');

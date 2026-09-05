@@ -272,6 +272,14 @@ function registerPrintIpc() {
       previewWindow.once('closed', () => {
         printPreviewWindows.delete(previewWindow);
         fs.rm(previewPath, { force: true }, () => {});
+        // نافذة المعاينة ابن للنافذة الرئيسية؛ أعدها للواجهة عند الإغلاق بدل
+        // ترك Chromium ينقلها إلى حالة التصغير بعد إغلاق الابن.
+        setImmediate(() => {
+          if (!owner || owner.isDestroyed()) return;
+          if (owner.isMinimized()) owner.restore();
+          owner.show();
+          owner.focus();
+        });
       });
       await previewWindow.loadURL(pathToFileURL(previewPath).href);
 

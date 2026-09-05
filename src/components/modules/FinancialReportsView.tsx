@@ -1189,7 +1189,7 @@ export default function FinancialReportsView({
       }
       case 'BALANCE_SHEET': {
         const columns = ['رقم الحساب', 'اسم الحساب', 'العملة', 'مدين الفترة الحالية', 'دائن الفترة الحالية', 'مدين التراكمي', 'دائن التراكمي'];
-        const rows: (string | number)[][] = bsByAccount.rows.map(r => [
+        const rows: (string | number)[][] = isSummary ? [] : bsByAccount.rows.map(r => [
           r.code, r.name, currency,
           toReportCurrency(r.currentDebit) || '', toReportCurrency(r.currentCredit) || '',
           toReportCurrency(r.cumulativeDebit) || '', toReportCurrency(r.cumulativeCredit) || '',
@@ -1211,10 +1211,21 @@ export default function FinancialReportsView({
           ['حقوق الملكية حسب الميزانية', equityChanges.balanceSheetEquity], ['فرق المطابقة', equityChanges.reconciliationDifference],
         ] };
       case 'PAYMENT_VOUCHERS_REPORT':
+        if (isSummary) return { columns: ['البند', 'العدد', 'إجمالي المبلغ'], rows: [[
+          'إجمالي سندات الصرف', filteredPaymentVouchers.length, roundTo(filteredPaymentVouchers.reduce((sum, voucher) => sum + voucher.totalAmount, 0), selectedDecimals)
+        ]] };
         return { columns: ['التاريخ', 'رقم السند', 'المستفيد', 'البيان', 'طريقة الدفع', 'المبلغ', 'الحالة'], rows: filteredPaymentVouchers.map(v => [v.date, v.voucherNumber, v.payeeName, v.narration, v.paymentMethod === 'CASH' ? 'نقداً' : v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', v.totalAmount, v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
       case 'RECEIPT_VOUCHERS_REPORT':
+        if (isSummary) return { columns: ['البند', 'العدد', 'إجمالي المبلغ'], rows: [[
+          'إجمالي سندات القبض', filteredReceiptVouchers.length, roundTo(filteredReceiptVouchers.reduce((sum, voucher) => sum + voucher.totalAmount, 0), selectedDecimals)
+        ]] };
         return { columns: ['التاريخ', 'رقم السند', 'المدفوع منه', 'البيان', 'طريقة القبض', 'المبلغ', 'الحالة'], rows: filteredReceiptVouchers.map(v => [v.date, v.receiptNumber, v.payerName, v.narration, v.receiptMethod === 'CASH' ? 'نقداً' : v.receiptMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', v.totalAmount, v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
       case 'JOURNAL_ENTRIES_REPORT':
+        if (isSummary) return { columns: ['البند', 'العدد', 'إجمالي المدين', 'إجمالي الدائن'], rows: [[
+          'إجمالي القيود اليومية', filteredJournalEntries.length,
+          roundTo(filteredJournalEntries.reduce((sum, entry) => sum + entry.totalDebit, 0), selectedDecimals),
+          roundTo(filteredJournalEntries.reduce((sum, entry) => sum + entry.totalCredit, 0), selectedDecimals)
+        ]] };
         return { columns: ['التاريخ', 'رقم المستند', 'النوع', 'البيان', 'العملة', 'مدين', 'دائن', 'الحالة'], rows: filteredJournalEntries.map(j => [j.date, j.entryNumber, j.type === 'PV' ? 'سند صرف' : j.type === 'RV' ? 'سند قبض' : 'قيد يدوي', j.narration, j.currency || baseCode, j.totalDebit, j.totalCredit, j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
       default:
         return { columns: ['البند', 'البيان'], rows: [] };
@@ -1786,7 +1797,7 @@ export default function FinancialReportsView({
                         let flatIndex = 1;
                         return groupedTB.groups.map(g => (
                           <React.Fragment key={g.key}>
-                            {g.rows.map(row => (
+                            {!isSummary && g.rows.map(row => (
                               <tr key={row.key} className={`cursor-pointer hover:bg-slate-50 transition-colors ${row.isAnalytical ? 'bg-sky-50/40' : ''}`} onClick={() => openLedger(row.accountId)}>
                                 <td>{row.isAnalytical ? '' : flatIndex++}</td>
                                 <td className={`font-mono ${row.isAnalytical ? 'pr-5 text-sky-700' : ''}`}>{row.code}</td>
@@ -1800,6 +1811,17 @@ export default function FinancialReportsView({
                                 <td className="font-mono">{row.endingCredit > 0 ? fmt(row.endingCredit) : ''}</td>
                               </tr>
                             ))}
+                            {isSummary && g.rows.length > 0 && (
+                              <tr className="bg-slate-100 font-bold text-slate-800">
+                                <td colSpan={4} className="text-right px-2">إجمالي {g.labelAr}</td>
+                                <td className="font-mono">{g.openingDebit > 0 ? fmt(g.openingDebit) : ''}</td>
+                                <td className="font-mono">{g.openingCredit > 0 ? fmt(g.openingCredit) : ''}</td>
+                                <td className="font-mono">{g.movementDebit > 0 ? fmt(g.movementDebit) : ''}</td>
+                                <td className="font-mono">{g.movementCredit > 0 ? fmt(g.movementCredit) : ''}</td>
+                                <td className="font-mono">{g.endingDebit > 0 ? fmt(g.endingDebit) : ''}</td>
+                                <td className="font-mono">{g.endingCredit > 0 ? fmt(g.endingCredit) : ''}</td>
+                              </tr>
+                            )}
                           </React.Fragment>
                         ));
                       })()}
@@ -1873,13 +1895,13 @@ export default function FinancialReportsView({
                       <div className="px-5 py-2.5 bg-gradient-to-l from-emerald-500/8 to-transparent border-b border-slate-200 dark:border-slate-800/30">
                         <span className="font-bold text-slate-800 dark:text-slate-100 text-[15px]">١. الإيرادات — Revenues</span>
                       </div>
-                      {filteredIncomeStmt.revenueLines.map(l => (
+                      {!isSummary && filteredIncomeStmt.revenueLines.map(l => (
                         <div key={l.key} className="flex justify-between px-5 py-[7px] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800/30 last:border-b-0">
                           <span className="pr-8">{l.labelAr} <span className="text-[11px] text-slate-400 dark:text-slate-500">{l.labelEn}</span></span>
                           <span className="font-mono text-[13px] text-slate-800 dark:text-slate-200 tabular-nums">{fmt(l.amount)} {sym}</span>
                         </div>
                       ))}
-                      {filteredIncomeStmt.revenueResidual !== 0 && (
+                      {!isSummary && filteredIncomeStmt.revenueResidual !== 0 && (
                         <div className="flex justify-between px-5 py-[7px] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800/30">
                           <span className="pr-8">إيرادات أخرى — Other Revenues</span>
                           <span className="font-mono text-[13px] tabular-nums">{fmt(filteredIncomeStmt.revenueResidual)} {sym}</span>
@@ -1895,13 +1917,13 @@ export default function FinancialReportsView({
                       <div className="px-5 py-2.5 bg-gradient-to-l from-rose-500/8 to-transparent border-b border-slate-200 dark:border-slate-800/30">
                         <span className="font-bold text-slate-800 dark:text-slate-100 text-[15px]">٢. المصاريف التشغيلية — Operating Expenses</span>
                       </div>
-                      {filteredIncomeStmt.expenseLines.map(l => (
+                      {!isSummary && filteredIncomeStmt.expenseLines.map(l => (
                         <div key={l.key} className="flex justify-between px-5 py-[7px] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800/30 last:border-b-0">
                           <span className="pr-8">{l.labelAr} <span className="text-[11px] text-slate-400 dark:text-slate-500">{l.labelEn}</span></span>
                           <span className="font-mono text-[13px] text-rose-600 dark:text-rose-400 tabular-nums">{fmtP(-l.amount)} {sym}</span>
                         </div>
                       ))}
-                      {filteredIncomeStmt.operatingResidual !== 0 && (
+                      {!isSummary && filteredIncomeStmt.operatingResidual !== 0 && (
                         <div className="flex justify-between px-5 py-[7px] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800/30">
                           <span className="pr-8">مصاريف تشغيلية أخرى — Other Operating</span>
                           <span className="font-mono text-[13px] text-rose-600 dark:text-rose-400 tabular-nums">{fmtP(-filteredIncomeStmt.operatingResidual)} {sym}</span>
@@ -1918,7 +1940,7 @@ export default function FinancialReportsView({
                         <div className="px-5 py-2.5 bg-gradient-to-l from-amber-500/8 to-transparent border-b border-slate-200 dark:border-slate-800/30">
                           <span className="font-bold text-slate-800 dark:text-slate-100 text-[15px]">٣. المصاريف غير التشغيلية — Non-Operating Expenses</span>
                         </div>
-                        {filteredIncomeStmt.nonOperatingLines.map(l => (
+                        {!isSummary && filteredIncomeStmt.nonOperatingLines.map(l => (
                           <div key={l.key} className="flex justify-between px-5 py-[7px] text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800/30 last:border-b-0">
                             <span className="pr-8">{l.labelAr} <span className="text-[11px] text-slate-400 dark:text-slate-500">{l.labelEn}</span></span>
                             <span className="font-mono text-[13px] text-rose-600 dark:text-rose-400 tabular-nums">{fmtP(-l.amount)} {sym}</span>
@@ -2019,7 +2041,7 @@ export default function FinancialReportsView({
                         </tr>
                       </thead>
                       <tbody>
-                        {bsByAccount.rows.map((r, i) => (
+                        {!isSummary && bsByAccount.rows.map((r, i) => (
                           <tr key={r.accountId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                             <td className="px-2 py-1 border border-slate-200 text-center font-mono text-xs">{i + 1}</td>
                             <td className="px-2 py-1 border border-slate-200 font-mono text-xs">{r.code}</td>
@@ -2873,7 +2895,7 @@ export default function FinancialReportsView({
                           <td className="report-num">{fmt(spec.opening)}</td>
                         </tr>
                       )}
-                      {spec.rows.map((row, i) => {
+                      {!isSummary && spec.rows.map((row, i) => {
                         const run = spec.opening + spec.rows.slice(0, i + 1).reduce((s, r) => s + r.debit - r.credit, 0);
                         return (
                           <tr key={i}>
@@ -2991,7 +3013,7 @@ export default function FinancialReportsView({
                 </tr>
               </thead>
               <tbody>
-                {bsByAccount.rows.map((r, i) => (
+                {!isSummary && bsByAccount.rows.map((r, i) => (
                   <tr key={r.accountId}>
                     <td className="num">{i + 1}</td>
                     <td className="num">{r.code}</td>
@@ -3064,19 +3086,19 @@ export default function FinancialReportsView({
               </thead>
               <tbody>
                 <tr className="is-section"><td>١. الإيرادات — Revenues</td><td></td></tr>
-                {filteredIncomeStmt.revenueLines.map(l => (
+                {!isSummary && filteredIncomeStmt.revenueLines.map(l => (
                   <tr key={l.key}><td className="text-right">{l.labelAr} ({l.labelEn})</td><td className="num">{fmt(l.amount)}</td></tr>
                 ))}
-                {filteredIncomeStmt.revenueResidual !== 0 && (
+                {!isSummary && filteredIncomeStmt.revenueResidual !== 0 && (
                   <tr><td className="text-right">إيرادات أخرى — Other Revenues</td><td className="num">{fmt(filteredIncomeStmt.revenueResidual)}</td></tr>
                 )}
                 <tr className="is-subtotal"><td className="text-right">إجمالي الإيرادات — Total Revenues</td><td className="num">{fmt(filteredIncomeStmt.totalRevenues)}</td></tr>
 
                 <tr className="is-section"><td>٢. المصاريف التشغيلية — Operating Expenses</td><td></td></tr>
-                {filteredIncomeStmt.expenseLines.map(l => (
+                {!isSummary && filteredIncomeStmt.expenseLines.map(l => (
                   <tr key={l.key}><td className="text-right">{l.labelAr} ({l.labelEn})</td><td className="num">{fmtP(-l.amount)}</td></tr>
                 ))}
-                {filteredIncomeStmt.operatingResidual !== 0 && (
+                {!isSummary && filteredIncomeStmt.operatingResidual !== 0 && (
                   <tr><td className="text-right">مصاريف تشغيلية أخرى — Other Operating Expenses</td><td className="num">{fmtP(-filteredIncomeStmt.operatingResidual)}</td></tr>
                 )}
                 <tr className="is-subtotal"><td className="text-right">إجمالي المصاريف التشغيلية</td><td className="num">{fmtP(-filteredIncomeStmt.totalOperatingExpenses)}</td></tr>
@@ -3085,7 +3107,7 @@ export default function FinancialReportsView({
                 {filteredIncomeStmt.nonOperatingLines.length > 0 && (
                   <tr className="is-section"><td>٣. المصاريف غير التشغيلية — Non-Operating Expenses</td><td></td></tr>
                 )}
-                {filteredIncomeStmt.nonOperatingLines.map(l => (
+                {!isSummary && filteredIncomeStmt.nonOperatingLines.map(l => (
                   <tr key={l.key}><td className="text-right">{l.labelAr} ({l.labelEn})</td><td className="num">{fmtP(-l.amount)}</td></tr>
                 ))}
                 {filteredIncomeStmt.totalNonOperatingExpenses !== 0 && (
@@ -3131,7 +3153,7 @@ export default function FinancialReportsView({
                 <tr><th>مدين</th><th>دائن</th><th>مدين</th><th>دائن</th><th>مدين</th><th>دائن</th></tr>
               </thead>
               <tbody>
-                {groupedTB.groups.flatMap(g => g.rows).map((row, i) => (
+                {!isSummary && groupedTB.groups.flatMap(g => g.rows).map((row, i) => (
                   <tr key={row.accountId}>
                     <td>{i + 1}</td>
                     <td className="num">{row.code}</td>
@@ -3207,7 +3229,7 @@ export default function FinancialReportsView({
                       <td className="num" style={{ fontWeight: 700 }}>{fmt(ledger.opening)}</td>
                     </tr>
                   )}
-                  {ledger.rows.map((row, idx) => {
+                  {!isSummary && ledger.rows.map((row, idx) => {
                     const b = balanceLabel(row.running);
                     return (
                       <tr key={idx}>
