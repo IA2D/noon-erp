@@ -80,9 +80,10 @@ export function buildDisbursementJournal(
   advanceAccount: Account,
   sourceAccount: Account
 ): JournalEntry {
-  const narration = `صرف عهدة ${custody.custodyNumber} — ${custody.title} (${custody.employeeName})`;
+  const partySummary = custody.disbursementParties?.map(party => `${party.name} (${party.amount})`).join('، ');
+  const narration = `صرف عهدة ${custody.custodyNumber} — ${custody.title} (${custody.employeeName})${partySummary ? ` — المستفيدون: ${partySummary}` : ''}`;
   return journal(ctx, narration, [
-    {...line(advanceAccount, custody.amount, 0, `صرف عهدة ${custody.custodyNumber} — ${custody.title}`, subLedgerOf(custody)), costCenterId: custody.costCenterId},
+    {...line(advanceAccount, custody.amount, 0, `صرف عهدة ${custody.custodyNumber} — ${custody.title}${partySummary ? ` — ${partySummary}` : ''}`, subLedgerOf(custody)), costCenterId: custody.costCenterId},
     {...line(sourceAccount, 0, custody.amount, `مقابل صرف عهدة ${custody.custodyNumber} لـ ${custody.employeeName}`), ...(custody.disbursementSource ? {subLedgerId: custody.disbursementSource, subLedgerType: custody.disbursementMethod === 'CASH' ? 'CASH_BOX' as const : custody.disbursementMethod === 'EXCHANGE' ? 'EXCHANGER' as const : 'BANK' as const} : {})},
   ]);
 }

@@ -362,6 +362,15 @@ export interface CustodyTransaction {
 /** طريقة صرف العهدة: نقداً من صندوق / حساب بنكي أو شيك / شركة صرافة */
 export type DisbursementMethod = 'CASH' | 'BANK_TRANSFER' | 'EXCHANGE';
 
+/** الطرف الذي استُخدمت العهدة لصالحه عند الصرف. مجموع الأطراف يساوي قيمة العهدة. */
+export interface CustodyDisbursementParty {
+  id: string;
+  name: string;
+  amount: number;
+  referenceNumber?: string;
+  narration?: string;
+}
+
 export interface Custody {
   id: string;
   custodyNumber: string;       // رقم العهدة التلقائي الموحد بصيغة CST-001
@@ -374,6 +383,7 @@ export interface Custody {
   exchangeRate: number;
   disbursementMethod?: DisbursementMethod; // طريقة الصرف: نقداً من صندوق / بنك / شركة صرافة
   disbursementSource?: string; // مصدر التمويل (معرف الصندوق أو البنك أو شركة الصرافة الذي خرجت منه النقدية)
+  disbursementParties?: CustodyDisbursementParty[]; // الأطراف المستفيدة من صرف العهدة
   status: CustodyStatus;
   projectId?: string;          // للعهد المؤقتة — مشروع محدد
   costCenterId?: string;       // مركز التكلفة

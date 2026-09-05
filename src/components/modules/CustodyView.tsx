@@ -38,6 +38,7 @@ import {
   MoreHorizontal,
   ReceiptText,
   Pencil,
+  Trash2,
 } from 'lucide-react';
 import {
   Account,
@@ -51,6 +52,7 @@ import {
   CustodySettlementItem,
   CustodySettlement,
   CustodyTransaction,
+  CustodyDisbursementParty,
   CashBox,
   BankAccount,
   Vendor,
@@ -162,6 +164,25 @@ const CURRENCY_FRACTIONS: Record<string, string> = {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
+const newDisbursementParty = (): CustodyDisbursementParty => ({
+  id: `cdp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  name: '',
+  amount: 0,
+  referenceNumber: '',
+  narration: '',
+});
+
+const disbursementPartyTotal = (parties: CustodyDisbursementParty[] = []) =>
+  round2(parties.reduce((sum, party) => sum + (Number(party.amount) || 0), 0));
+
+const validateDisbursementParties = (parties: CustodyDisbursementParty[] = [], amount: number): string | null => {
+  if (parties.length === 0) return 'أضف طرفاً مستفيداً واحداً على الأقل لصرف العهدة.';
+  if (parties.some(party => !party.name.trim() || !(Number(party.amount) > 0))) return 'أكمل اسم وقيمة كل طرف مستفيد من الصرف.';
+  const total = disbursementPartyTotal(parties);
+  if (Math.abs(total - amount) > 0.01) return `إجمالي الأطراف المستفيدة (${fmt(total)}) يجب أن يساوي قيمة العهدة (${fmt(amount)}).`;
+  return null;
+};
+
 interface CustodyFormState {
   type: CustodyType;
   title: string;
@@ -178,6 +199,7 @@ interface CustodyFormState {
   narration: string;
   disbursementMethod: DisbursementMethod;
   disbursementSource: string;
+  disbursementParties: CustodyDisbursementParty[];
   custodyCode: string;
 }
 
@@ -292,6 +314,9 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
   const selectedEmployee = employees.find(e => e.id === form.employeeId);
   const rateViolation = isBaseCur ? null : rateGuard.violationOf(Number(form.exchangeRate) || 1, curCode);
   const methodSourceMeta = DISBURSE_SOURCE_LABEL[form.disbursementMethod];
+  const partyTotal = disbursementPartyTotal(form.disbursementParties);
+  const updateParty = (index: number, patch: Partial<CustodyDisbursementParty>) =>
+    update({ disbursementParties: form.disbursementParties.map((party, i) => i === index ? { ...party, ...patch } : party) });
   const creditPreview = (() => {
     if (!selectedSource) return null;
     if (form.disbursementMethod === 'CASH') {
@@ -529,6 +554,31 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
             )}
           </p>
         </div>
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-slate-800 dark:text-white">الأطراف المستفيدة من صرف العهدة *</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">بنفس منطق سند الصرف: وزّع كامل مبلغ العهدة على المستفيدين الفعليين.</p>
+            </div>
+            {!locked && <button type="button" onClick={() => update({ disbursementParties: [...form.disbursementParties, newDisbursementParty()] })} className="shrink-0 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold flex items-center gap-1 cursor-pointer"><Plus className="w-3.5 h-3.5" />إضافة طرف</button>}
+          </div>
+          {form.disbursementParties.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">لم تتم إضافة أطراف بعد.</div>
+          ) : form.disbursementParties.map((party, index) => (
+            <div key={party.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-800">
+              <div className="sm:col-span-4"><label className={FORM_LABEL}>اسم الطرف *</label><input disabled={locked} value={party.name} onChange={e => updateParty(index, { name: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
+              <div className="sm:col-span-3"><label className={FORM_LABEL}>المبلغ ({curCode}) *</label><AmountInput disabled={locked} value={party.amount} onChange={value => updateParty(index, { amount: Number(value) || 0 })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
+              <div className="sm:col-span-2"><label className={FORM_LABEL}>رقم المرجع</label><input disabled={locked} value={party.referenceNumber || ''} onChange={e => updateParty(index, { referenceNumber: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
+              <div className="sm:col-span-2"><label className={FORM_LABEL}>البيان</label><input disabled={locked} value={party.narration || ''} onChange={e => updateParty(index, { narration: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
+              <div className="sm:col-span-1 flex items-end"><button type="button" disabled={locked} onClick={() => update({ disbursementParties: form.disbursementParties.filter((_, i) => i !== index) })} className="w-full h-10 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50 cursor-pointer flex items-center justify-center" title="حذف الطرف"><Trash2 className="w-4 h-4" /></button></div>
+            </div>
+          ))}
+          <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-bold ${Math.abs(partyTotal - (Number(form.amount) || 0)) < 0.01 && form.disbursementParties.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+            <span>إجمالي الأطراف: {fmtC(partyTotal, curCode)}</span>
+            <span>المطلوب: {fmtC(Number(form.amount) || 0, curCode)}</span>
+          </div>
+        </div>
       </section>
 
       <div>
@@ -585,6 +635,7 @@ export default function CustodyView({
     narration: '',
     disbursementMethod: 'CASH' as DisbursementMethod,
     disbursementSource: '',
+    disbursementParties: [],
     custodyCode: '',
   });
 
@@ -606,6 +657,7 @@ export default function CustodyView({
     narration: '',
     disbursementMethod: 'CASH' as DisbursementMethod,
     disbursementSource: '',
+    disbursementParties: [],
     custodyCode: '',
   });
   const [editError, setEditError] = useState('');
@@ -773,6 +825,7 @@ export default function CustodyView({
     narration: '',
     disbursementMethod: 'CASH' as DisbursementMethod,
     disbursementSource: '',
+    disbursementParties: [],
     custodyCode: '',
   });
 
@@ -807,6 +860,7 @@ export default function CustodyView({
         narration: c.narration || '',
         disbursementMethod: c.disbursementMethod || 'CASH',
         disbursementSource: c.disbursementSource || '',
+        disbursementParties: c.disbursementParties || [],
         custodyCode: c.custodyNumber,
       });
       setEditTarget(c);
@@ -855,6 +909,11 @@ export default function CustodyView({
           return;
         }
       }
+      const partiesError = validateDisbursementParties(form.disbursementParties, amount);
+      if (partiesError) {
+        setEditError(partiesError);
+        return;
+      }
     }
 
     const updates: Partial<Custody> = {
@@ -867,6 +926,7 @@ export default function CustodyView({
       exchangeRate: disbursed ? c.exchangeRate : Number(form.exchangeRate) || 1,
       disbursementMethod: disbursed ? c.disbursementMethod : form.disbursementMethod,
       disbursementSource: disbursed ? c.disbursementSource : form.disbursementSource,
+      disbursementParties: disbursed ? c.disbursementParties : form.disbursementParties.map(party => ({ ...party, name: party.name.trim(), referenceNumber: party.referenceNumber?.trim() || undefined, narration: party.narration?.trim() || undefined })),
       costCenterId: form.costCenterId || undefined,
       assetDescription: form.type === 'ASSET' ? form.assetDescription.trim() : undefined,
       maxBalance: form.type === 'PETTY_CASH' ? Number(form.maxBalance) || amount : undefined,
@@ -914,6 +974,11 @@ export default function CustodyView({
       setCreateError(validation.errors.join(' '));
       return;
     }
+    const partiesError = validateDisbursementParties(createForm.disbursementParties, amount);
+    if (partiesError) {
+      setCreateError(partiesError);
+      return;
+    }
     if (createForm.type === 'TEMPORARY') {
       const violation = findOverdueViolation(createForm.employeeId, custodies);
       if (violation) {
@@ -947,6 +1012,7 @@ export default function CustodyView({
       exchangeRate: rate,
       disbursementMethod: createForm.disbursementMethod,
       disbursementSource: createForm.disbursementSource || '',
+      disbursementParties: createForm.disbursementParties.map(party => ({ ...party, name: party.name.trim(), referenceNumber: party.referenceNumber?.trim() || undefined, narration: party.narration?.trim() || undefined })),
       status: 'CREATED',
       costCenterId: createForm.costCenterId || undefined,
       assetDescription: createForm.type === 'ASSET' ? createForm.assetDescription.trim() : undefined,
@@ -1063,6 +1129,11 @@ export default function CustodyView({
     }
     if (disburseTarget.disbursedAmount > 0) {
       toast('error', 'العهدة مصروفة بالفعل.');
+      return;
+    }
+    const partiesError = validateDisbursementParties(disburseTarget.disbursementParties, disburseTarget.amount);
+    if (partiesError) {
+      toast('error', partiesError);
       return;
     }
     const advanceAcc = advanceAccountOf(disburseTarget);
@@ -1968,6 +2039,23 @@ export default function CustodyView({
                 </div>
               )}
 
+              <div>
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5 mb-2">
+                  <Users className="w-3.5 h-3.5 text-sky-600" />
+                  الأطراف المستفيدة من الصرف ({c.disbursementParties?.length || 0})
+                </p>
+                {c.disbursementParties?.length ? (
+                  <div className="space-y-1.5">
+                    {c.disbursementParties.map((party, index) => (
+                      <div key={party.id} className="rounded-xl p-2.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0"><span className="font-bold text-slate-900 dark:text-white">{index + 1}. {party.name}</span>{party.narration && <span className="block mt-0.5 text-slate-500 dark:text-slate-400 truncate">{party.narration}</span>}</div>
+                        <div className="shrink-0 text-left"><span className="font-mono font-bold text-sky-700">{fmtC(party.amount, c.currency || baseCurrency)}</span>{party.referenceNumber && <span className="block text-slate-500 dark:text-slate-400">مرجع: {party.referenceNumber}</span>}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <div className="rounded-xl p-3 border border-dashed border-slate-300 dark:border-slate-700 text-center text-xs text-slate-500 dark:text-slate-400">لم تسجل أطراف مستفيدة لهذه العهدة.</div>}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <DetailField label="قيمة العهدة" value={<span className="font-mono">{fmtC(c.amount, c.currency || baseCurrency)}</span>} />
                 <DetailField label="المصروف" value={<span className="font-mono text-slate-900 dark:text-white">{fmtC(c.disbursedAmount, c.currency || baseCurrency)}</span>} />
@@ -2124,6 +2212,7 @@ export default function CustodyView({
                     { label: 'طريقة الصرف', value: c.disbursementMethod ? DISBURSE_METHOD_META[c.disbursementMethod].label : '—' },
                     { label: 'مصدر النقدية (دائن)', value: srcLabel },
                     { label: 'حساب العهدة (مدين)', value: `${advanceAcc.code} — ${advanceAcc.nameAr}` },
+                    ...(c.disbursementParties?.length ? [{ label: 'الأطراف المستفيدة', value: c.disbursementParties.map(party => `${party.name} (${fmtC(party.amount, curCode)})`).join('، ') }] : []),
                     ...(c.costCenterId ? [{ label: 'مركز التكلفة', value: costCenters.find(x => x.id === c.costCenterId)?.nameAr ?? c.costCenterId }] : []),
                     ...(c.referenceNumber ? [{ label: 'رقم المرجع', value: c.referenceNumber }] : []),
                     ...(c.expectedClearanceDate ? [{ label: 'تاريخ الانقضاء', value: formatDate(c.expectedClearanceDate) }] : []),
