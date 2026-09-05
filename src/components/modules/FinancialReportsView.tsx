@@ -470,10 +470,6 @@ export default function FinancialReportsView({
   const [fromEntityCode, setFromEntityCode] = useState<string>('');
   const [toEntityId, setToEntityId] = useState<string>('');
   const [toEntityCode, setToEntityCode] = useState<string>('');
-  // التقارير التحليلية تبدأ بالحساب الرئيسي؛ لا يُتاح التحليلي قبل اختياره.
-  const [fromMainAccountId, setFromMainAccountId] = useState<string>('');
-  const [toMainAccountId, setToMainAccountId] = useState<string>('');
-
   const isEntityOrCostCenterReport =
     ['EMPLOYEES_REPORT', 'CUSTOMERS_REPORT', 'VENDORS_REPORT', 'CASHBOX_REPORT', 'BANK_REPORT', 'TRUSTS_REPORT', 'COST_CENTERS'].includes(reportType);
 
@@ -482,8 +478,6 @@ export default function FinancialReportsView({
     setFromEntityCode('');
     setToEntityId('');
     setToEntityCode('');
-    setFromMainAccountId('');
-    setToMainAccountId('');
   }, [reportType]);
 
   const currencyOptions = useMemo(
@@ -779,8 +773,6 @@ export default function FinancialReportsView({
     setFromEntityCode('');
     setToEntityId('');
     setToEntityCode('');
-    setFromMainAccountId('');
-    setToMainAccountId('');
     setFromAccount('');
     setToAccount('');
     setSelectedAccountId('');
@@ -832,21 +824,8 @@ export default function FinancialReportsView({
     }
   }, [reportType, employees, customers, vendors, cashBoxes, bankAccounts, costCenters]);
 
-  const reportMainAccounts = useMemo(() => {
-    const linkedIds = new Set(currentEntitiesList.map(entity => entity.linkedAccountId).filter(Boolean));
-    // مركز التكلفة لا يملك حساباً تحليلياً مباشراً؛ يظل الحساب الرئيسي فلتر حركة التقرير.
-    return accounts.filter(account => isPostingAccount(account) && (reportType === 'COST_CENTERS' || linkedIds.has(account.id)));
-  }, [accounts, currentEntitiesList, reportType]);
-
-  const entitiesForMainAccount = (mainAccountId: string) =>
-    currentEntitiesList.filter(entity => reportType === 'COST_CENTERS' || entity.linkedAccountId === mainAccountId);
-
-  const scopedEntityList = useMemo(() => {
-    const selectedMainIds = [fromMainAccountId, toMainAccountId].filter(Boolean);
-    if (!selectedMainIds.length) return currentEntitiesList;
-    if (reportType === 'COST_CENTERS') return currentEntitiesList;
-    return currentEntitiesList.filter(entity => selectedMainIds.includes(entity.linkedAccountId || ''));
-  }, [currentEntitiesList, fromMainAccountId, toMainAccountId, reportType]);
+  // التقارير التشغيلية تُختار فيها الجهة التحليلية مباشرةً؛ لا تحتاج اختيار حساب رئيسي وسيط.
+  const scopedEntityList = currentEntitiesList;
 
   const { rangeLo, rangeHi } = useMemo(() => {
     const list = scopedEntityList;
@@ -994,14 +973,12 @@ export default function FinancialReportsView({
     if (reportType === 'COST_CENTERS') {
       const scopedIds = new Set(scopedEntities.map(e => e.id));
       const scopedCC = costCenters.filter(cc => scopedIds.has(cc.id));
-      const mainAccountIds = new Set([fromMainAccountId, toMainAccountId].filter(Boolean));
       const allRows: PrintableStatementRow[] = [];
 
       scopedCC.forEach(cc => {
         documentJournals.forEach(j =>
           j.lines.forEach(l => {
             if (lineCostCenterId(l) !== cc.id) return;
-            if (mainAccountIds.size && !mainAccountIds.has(l.accountId)) return;
             allRows.push(toRow(j, l));
           })
         );
@@ -1096,7 +1073,7 @@ export default function FinancialReportsView({
     }
 
     return [];
-  }, [reportType, journalsInRange, documentJournals, reportJournals, scopedEntities, reportAccounts, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, costCenters, docTypeByJournal, fromEntityId, toEntityId, fromDate, toDate, includeOpening, isOriginalCurrencyReport, currency, baseCode, vouchers, receiptVouchers, fromMainAccountId, toMainAccountId]);
+  }, [reportType, journalsInRange, documentJournals, reportJournals, scopedEntities, reportAccounts, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, costCenters, docTypeByJournal, fromEntityId, toEntityId, fromDate, toDate, includeOpening, isOriginalCurrencyReport, currency, baseCode, vouchers, receiptVouchers]);
 
   // Each original currency is an independent statement in the same print job.
   // This preserves a complete pagination run for one currency before the next starts.
@@ -1450,19 +1427,10 @@ export default function FinancialReportsView({
               {isEntityOrCostCenterReport && (
                 <section aria-label="اختيار نطاق الحسابات للتقرير" className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2">
                   {([
-                    { side: 'from' as const, label: 'من', mainId: fromMainAccountId, entityId: fromEntityId, entityCode: fromEntityCode },
-                    { side: 'to' as const, label: 'إلى', mainId: toMainAccountId, entityId: toEntityId, entityCode: toEntityCode },
-                  ]).map(({ side, label, mainId, entityId, entityCode }) => {
-                    const selectedMain = reportMainAccounts.find(account => account.id === mainId);
-                    const selectableEntities = entitiesForMainAccount(mainId);
+                    { side: 'from' as const, label: 'من', entityId: fromEntityId, entityCode: fromEntityCode },
+                    { side: 'to' as const, label: 'إلى', entityId: toEntityId, entityCode: toEntityCode },
+                  ]).map(({ side, label, entityId, entityCode }) => {
                     const entityLabel = reportType === 'COST_CENTERS' ? 'مركز التكلفة' : 'الحساب التحليلي';
-                    const setMain = (account?: Account) => {
-                      if (side === 'from') {
-                        setFromMainAccountId(account?.id || ''); setFromEntityId(''); setFromEntityCode('');
-                      } else {
-                        setToMainAccountId(account?.id || ''); setToEntityId(''); setToEntityCode('');
-                      }
-                    };
                     const setEntity = (entity?: ReportEntityOption) => {
                       if (side === 'from') {
                         setFromEntityId(entity?.id || ''); setFromEntityCode(entity?.code || '');
@@ -1473,41 +1441,22 @@ export default function FinancialReportsView({
                     return (
                       <fieldset key={side} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3">
                         <legend className="px-1 text-xs font-black text-sky-700">{label}</legend>
-                        <div className="grid grid-cols-1 gap-3">
-                          <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">الحساب الرئيسي</label>
-                            <F9SearchInput<Account>
-                              value={selectedMain?.code || ''}
-                              onChange={(value) => setMain(reportMainAccounts.find(account => account.code.toLowerCase() === value.toLowerCase()))}
-                              onSelect={setMain}
-                              items={reportMainAccounts}
-                              columns={[
-                                { label: 'الكود', render: account => account.code, className: 'w-24 font-mono text-sky-600' },
-                                { label: 'الحساب الرئيسي', render: account => account.nameAr },
-                              ]}
-                              searchText={account => `${account.code} ${account.nameAr} ${account.nameEn}`}
-                              browseTitle={`اختيار ${label} الحساب الرئيسي`}
-                              inputProps={{ 'aria-label': `${label} الحساب الرئيسي`, placeholder: 'اضغط F9 لاختيار الحساب الرئيسي' }}
-                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">{entityLabel}</label>
-                            <F9SearchInput<ReportEntityOption>
-                              value={entityCode}
-                              onChange={(value) => setEntity(selectableEntities.find(entity => entity.code.toLowerCase() === value.toLowerCase()))}
-                              onSelect={setEntity}
-                              items={selectableEntities}
-                              columns={[
-                                { label: 'الكود', render: entity => entity.code, className: 'w-24 font-mono text-sky-600' },
-                                { label: entityLabel, render: entity => entity.name },
-                              ]}
-                              searchText={entity => `${entity.code} ${entity.name}`}
-                              browseTitle={`اختيار ${label} ${entityLabel}`}
-                              inputProps={{ disabled: !mainId || !selectableEntities.length, 'aria-label': `${label} ${entityLabel}`, placeholder: mainId ? `اضغط F9 لاختيار ${entityLabel}` : 'اختر الحساب الرئيسي أولاً' }}
-                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600 disabled:bg-slate-100 disabled:text-slate-400"
-                            />
-                          </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-bold text-slate-700">{entityLabel}</label>
+                          <F9SearchInput<ReportEntityOption>
+                            value={entityCode}
+                            onChange={(value) => setEntity(currentEntitiesList.find(entity => entity.code.toLowerCase() === value.toLowerCase()))}
+                            onSelect={setEntity}
+                            items={currentEntitiesList}
+                            columns={[
+                              { label: 'الكود', render: entity => entity.code, className: 'w-24 font-mono text-sky-600' },
+                              { label: entityLabel, render: entity => entity.name },
+                            ]}
+                            searchText={entity => `${entity.code} ${entity.name}`}
+                            browseTitle={`اختيار ${label} ${entityLabel}`}
+                            inputProps={{ disabled: !currentEntitiesList.length, 'aria-label': `${label} ${entityLabel}`, placeholder: `اضغط F9 لاختيار ${entityLabel}` }}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600 disabled:bg-slate-100 disabled:text-slate-400"
+                          />
                         </div>
                       </fieldset>
                     );
