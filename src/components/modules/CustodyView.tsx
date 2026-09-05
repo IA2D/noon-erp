@@ -44,6 +44,7 @@ import {
   Account,
   JournalEntry,
   Employee,
+  Customer,
   Custody,
   CustodyType,
   CustodyStatus,
@@ -109,12 +110,15 @@ import { useExchangeRateGuard } from '../../hooks/useExchangeRateGuard';
 import { tafqeet } from '../../utils/tafqeet';
 import VoucherPrintTemplate from '../ui/VoucherPrintTemplate';
 import { handleCurrencyFieldChange } from '../../utils/currencyMath';
+import SubLedgerF9Cell from '../ui/SubLedgerF9Cell';
+import { subLedgerTypeOf, type SubLedgerDataset } from '../../utils/subLedger';
 
 interface Props {
   custodies: Custody[];
   accounts: Account[];
   journals: JournalEntry[];
   employees: Employee[];
+  customers: Customer[];
   cashBoxes: CashBox[];
   bankAccounts: BankAccount[];
   vendors: Vendor[];
@@ -272,12 +276,15 @@ const StatusChip = ({ status, overdue }: { status: CustodyStatus; overdue?: bool
 
 type SourceEntity = { id: string; label: string; accountId: string; account: Account };
 
-const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCenters, cashBoxes, bankAccounts, cashSourceEntities, bankSourceEntities, exchangeSourceEntities, createCurrencyOptions, rateGuard, changeCurrency }: {
+const CustodyFormFields = ({ form, setForm, locked, baseCode, accounts, employees, customers, vendors, costCenters, cashBoxes, bankAccounts, cashSourceEntities, bankSourceEntities, exchangeSourceEntities, createCurrencyOptions, rateGuard, changeCurrency }: {
   form: CustodyFormState;
   setForm: React.Dispatch<React.SetStateAction<CustodyFormState>>;
   locked: boolean;
   baseCode: string;
+  accounts: Account[];
   employees: Employee[];
+  customers: Customer[];
+  vendors: Vendor[];
   costCenters: CostCenter[];
   cashBoxes: CashBox[];
   bankAccounts: BankAccount[];
@@ -315,6 +322,8 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
   const rateViolation = isBaseCur ? null : rateGuard.violationOf(Number(form.exchangeRate) || 1, curCode);
   const methodSourceMeta = DISBURSE_SOURCE_LABEL[form.disbursementMethod];
   const partyTotal = disbursementPartyTotal(form.disbursementParties);
+  const subLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
+  const postingAccounts = accounts.filter(isPostingAccount);
   const updateParty = (index: number, patch: Partial<CustodyDisbursementParty>) =>
     update({ disbursementParties: form.disbursementParties.map((party, i) => i === index ? { ...party, ...patch } : party) });
   const creditPreview = (() => {
@@ -558,22 +567,27 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, employees, costCen
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-black text-slate-800 dark:text-white">الأطراف المستفيدة من صرف العهدة *</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">بنفس منطق سند الصرف: وزّع كامل مبلغ العهدة على المستفيدين الفعليين.</p>
+              <p className="text-sm font-black text-slate-800 dark:text-white">جدول الحسابات والبنود المستفيدة من صرف العهدة *</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">بنفس نظام سند الصرف: الحساب الرئيسي ثم الحساب التحليلي عند الحاجة، مع البيان والمركز والمرجع لكل بند.</p>
             </div>
             {!locked && <button type="button" onClick={() => update({ disbursementParties: [...form.disbursementParties, newDisbursementParty()] })} className="shrink-0 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold flex items-center gap-1 cursor-pointer"><Plus className="w-3.5 h-3.5" />إضافة طرف</button>}
           </div>
           {form.disbursementParties.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">لم تتم إضافة أطراف بعد.</div>
-          ) : form.disbursementParties.map((party, index) => (
-            <div key={party.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-800">
-              <div className="sm:col-span-4"><label className={FORM_LABEL}>اسم الطرف *</label><input disabled={locked} value={party.name} onChange={e => updateParty(index, { name: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
-              <div className="sm:col-span-3"><label className={FORM_LABEL}>المبلغ ({curCode}) *</label><AmountInput disabled={locked} value={party.amount} onChange={value => updateParty(index, { amount: Number(value) || 0 })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
+          ) : form.disbursementParties.map((party, index) => {
+            const account = postingAccounts.find(item => item.id === party.accountId);
+            const requiresAnalytical = subLedgerTypeOf(account, subLedgerDataset) !== 'NONE';
+            return <div key={party.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50 dark:bg-slate-800">
+              <div className="sm:col-span-4"><label className={FORM_LABEL}>الحساب المحاسبي (المستوى 5) *</label><F9SearchInput<Account> value={account ? `${account.code} - ${account.nameAr}` : party.name} onChange={value => updateParty(index, { name: value, accountId: '', accountCode: '', accountNameAr: '', subLedgerType: undefined, subLedgerId: undefined, subLedgerName: undefined })} items={postingAccounts} columns={[{ label: 'الرقم', render: item => <span className="font-mono">{item.code}</span> }, { label: 'اسم الحساب', render: item => item.nameAr }]} searchText={item => `${item.code} ${item.nameAr} ${item.nameEn}`} browseTitle="اختيار الحساب المستفيد" onSelect={item => updateParty(index, { name: item.nameAr, accountId: item.id, accountCode: item.code, accountNameAr: item.nameAr, subLedgerType: subLedgerTypeOf(item, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined })} inputProps={{ disabled: locked }} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
+              <div className="sm:col-span-3"><label className={FORM_LABEL}>الحساب التحليلي</label>{account ? <SubLedgerF9Cell dataset={subLedgerDataset} account={account} subLedgerId={party.subLedgerId} subLedgerName={party.subLedgerName} disabled={locked} compact onChange={(subLedgerId, subLedgerName) => updateParty(index, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} /> : <div className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-500 flex items-center">اختر الحساب الرئيسي أولاً</div>}</div>
+              <div className="sm:col-span-2"><label className={FORM_LABEL}>المبلغ ({curCode}) *</label><AmountInput disabled={locked} value={party.amount} onChange={value => updateParty(index, { amount: Number(value) || 0 })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
+              <div className="sm:col-span-3"><label className={FORM_LABEL}>البيان التفصيلي</label><input disabled={locked} value={party.narration || ''} onChange={e => updateParty(index, { narration: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
+              <div className="sm:col-span-3"><label className={FORM_LABEL}>مركز التكلفة</label><select disabled={locked} value={party.costCenterId || ''} onChange={e => updateParty(index, { costCenterId: e.target.value || undefined })} className={`${FORM_INPUT} ${LOCKED_CLS}`}><option value="">بدون مركز</option>{costCenters.map(center => <option key={center.id} value={center.id}>{center.code} — {center.nameAr}</option>)}</select></div>
               <div className="sm:col-span-2"><label className={FORM_LABEL}>رقم المرجع</label><input disabled={locked} value={party.referenceNumber || ''} onChange={e => updateParty(index, { referenceNumber: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
-              <div className="sm:col-span-2"><label className={FORM_LABEL}>البيان</label><input disabled={locked} value={party.narration || ''} onChange={e => updateParty(index, { narration: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></div>
-              <div className="sm:col-span-1 flex items-end"><button type="button" disabled={locked} onClick={() => update({ disbursementParties: form.disbursementParties.filter((_, i) => i !== index) })} className="w-full h-10 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50 cursor-pointer flex items-center justify-center" title="حذف الطرف"><Trash2 className="w-4 h-4" /></button></div>
-            </div>
-          ))}
+              <div className="sm:col-span-1 flex items-end"><button type="button" disabled={locked} onClick={() => update({ disbursementParties: form.disbursementParties.filter((_, i) => i !== index) })} className="w-full h-10 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50 cursor-pointer flex items-center justify-center" title="حذف البند"><Trash2 className="w-4 h-4" /></button></div>
+              {requiresAnalytical && !party.subLedgerId && <div className="sm:col-span-12 text-[11px] text-amber-700 dark:text-amber-300">اختر الحساب التحليلي لهذا الحساب قبل حفظ العهدة.</div>}
+            </div>;
+          })}
           <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-bold ${Math.abs(partyTotal - (Number(form.amount) || 0)) < 0.01 && form.disbursementParties.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
             <span>إجمالي الأطراف: {fmtC(partyTotal, curCode)}</span>
             <span>المطلوب: {fmtC(Number(form.amount) || 0, curCode)}</span>
@@ -594,6 +608,7 @@ export default function CustodyView({
   accounts,
   journals,
   employees,
+  customers,
   cashBoxes,
   bankAccounts,
   vendors,
@@ -1752,7 +1767,7 @@ export default function CustodyView({
                   <span>{createError}</span>
                 </div>
               )}
-              <CustodyFormFields form={createForm} setForm={setCreateForm} locked={false} baseCode={baseCode} employees={employees} costCenters={costCenters} cashBoxes={cashBoxes} bankAccounts={bankAccounts} cashSourceEntities={cashSourceEntities} bankSourceEntities={bankSourceEntities} exchangeSourceEntities={exchangeSourceEntities} createCurrencyOptions={createCurrencyOptions} rateGuard={rateGuard} changeCurrency={changeCurrency} />
+              <CustodyFormFields form={createForm} setForm={setCreateForm} locked={false} baseCode={baseCode} accounts={accounts} employees={employees} customers={customers} vendors={vendors} costCenters={costCenters} cashBoxes={cashBoxes} bankAccounts={bankAccounts} cashSourceEntities={cashSourceEntities} bankSourceEntities={bankSourceEntities} exchangeSourceEntities={exchangeSourceEntities} createCurrencyOptions={createCurrencyOptions} rateGuard={rateGuard} changeCurrency={changeCurrency} />
               <AttachmentPicker documents={attachments} onChange={setAttachments} uploadedBy={currentUserName} documentType="CUSTODY_SUPPORT" />
 
               <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-end gap-3">
@@ -1793,7 +1808,7 @@ export default function CustodyView({
                   <span>{editError}</span>
                 </div>
               )}
-              <CustodyFormFields form={editForm} setForm={setEditForm} locked={locked} baseCode={baseCode} employees={employees} costCenters={costCenters} cashBoxes={cashBoxes} bankAccounts={bankAccounts} cashSourceEntities={cashSourceEntities} bankSourceEntities={bankSourceEntities} exchangeSourceEntities={exchangeSourceEntities} createCurrencyOptions={createCurrencyOptions} rateGuard={rateGuard} changeCurrency={changeCurrency} />
+              <CustodyFormFields form={editForm} setForm={setEditForm} locked={locked} baseCode={baseCode} accounts={accounts} employees={employees} customers={customers} vendors={vendors} costCenters={costCenters} cashBoxes={cashBoxes} bankAccounts={bankAccounts} cashSourceEntities={cashSourceEntities} bankSourceEntities={bankSourceEntities} exchangeSourceEntities={exchangeSourceEntities} createCurrencyOptions={createCurrencyOptions} rateGuard={rateGuard} changeCurrency={changeCurrency} />
 
               <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-end gap-3">
                 <div className="flex-1 text-sm text-slate-500 dark:text-slate-400">

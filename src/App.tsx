@@ -1875,6 +1875,7 @@ function AppInner() {
             accounts={accounts}
             journals={journals}
             employees={employees}
+            customers={customers}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
             vendors={vendors}

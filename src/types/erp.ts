@@ -369,6 +369,14 @@ export interface CustodyDisbursementParty {
   amount: number;
   referenceNumber?: string;
   narration?: string;
+  /** تفاصيل بند الصرف، بنفس نمط جدول سند الصرف. */
+  accountId?: string;
+  accountCode?: string;
+  accountNameAr?: string;
+  subLedgerType?: SubLedgerType;
+  subLedgerId?: string;
+  subLedgerName?: string;
+  costCenterId?: string;
 }
 
 export interface Custody {
