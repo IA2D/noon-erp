@@ -686,6 +686,14 @@ export default function CustodyView({
   const printablePaperRef = useRef<HTMLDivElement>(null);
   const handlePrintPreview = () => openDesktopPrintPreview(printablePaperRef.current, `كشف عهدة ${printCustody?.custodyNumber || ''}`, 'portrait');
 
+  /** The receipt voucher is evidence of the actual disbursement, never of a draft request. */
+  const disbursementJournalFor = (custody: Custody): JournalEntry | null => {
+    const disbursement = [...(custody.transactions || [])].reverse().find(transaction => transaction.type === 'DISBURSE');
+    if (disbursement?.journalEntryId) return journals.find(journal => journal.id === disbursement.journalEntryId) || null;
+    // Supports custody records created before transaction IDs were persisted.
+    return journals.find(journal => journal.reference === `CUSTODY-${custody.custodyNumber}` && journal.narration.includes('صرف عهدة')) || null;
+  };
+
   const [approveTarget, setApproveTarget] = useState<Custody | null>(null);
   const [disburseTarget, setDisburseTarget] = useState<Custody | null>(null);
   const [disburseSource, setDisburseSource] = useState('');
@@ -1086,8 +1094,13 @@ export default function CustodyView({
   };
 
   const openPrint = (c: Custody) => {
+    const journal = disbursementJournalFor(c);
+    if (!journal) {
+      toast('info', 'لا يمكن طباعة سند استلام العهدة قبل اعتمادها وصرفها وترحيل قيد الصرف الآلي.');
+      return;
+    }
     setPrintCustody(c);
-    setPrintJournal(null);
+    setPrintJournal(journal);
     setIsPrintOpen(true);
   };
 
@@ -2319,10 +2332,10 @@ export default function CustodyView({
                   <Eye className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                   تفاصيل وحركة العهدة
                 </button>
-                <button type="button" onClick={() => { openPrint(c); setRowMenu(null); }} className={menuItem}>
+                {disbursementJournalFor(c) && <button type="button" onClick={() => { openPrint(c); setRowMenu(null); }} className={menuItem}>
                   <Printer className="w-4 h-4 text-sky-600" />
-                  طباعة سند تسليم
-                </button>
+                  طباعة سند استلام العهدة
+                </button>}
                 <button type="button" onClick={() => { setStatementTarget(c); setRowMenu(null); }} className={menuItem}>
                   <ReceiptText className="w-4 h-4 text-emerald-600" />
                   كشف حساب العهدة
