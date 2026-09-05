@@ -1,5 +1,5 @@
 import { renderReportPdf } from './report-pdf.mjs';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -283,6 +283,28 @@ function registerPrintIpc() {
   });
 }
 
+function registerAttachmentIpc() {
+  ipcMain.handle('desktop-file:open-attachment', async (_event, attachment = {}) => {
+    const dataUrl = typeof attachment.dataUrl === 'string' ? attachment.dataUrl : '';
+    const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(dataUrl);
+    if (!match) return { ok: false, error: 'ATTACHMENT_DATA_INVALID' };
+
+    const suppliedName = typeof attachment.fileName === 'string' ? attachment.fileName : 'attachment';
+    const fileName = path.basename(suppliedName).replace(/[^\p{L}\p{N}._() -]/gu, '_') || 'attachment';
+    const openRoot = path.join(app.getPath('temp'), 'FULLERP', 'opened-attachments');
+    const targetPath = path.join(openRoot, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${fileName}`);
+
+    try {
+      fs.mkdirSync(openRoot, { recursive: true });
+      fs.writeFileSync(targetPath, Buffer.from(match[2].replace(/\s/g, ''), 'base64'), { flag: 'wx' });
+      const error = await shell.openPath(targetPath);
+      return error ? { ok: false, error } : { ok: true, path: targetPath };
+    } catch (error) {
+      return { ok: false, error: String(error?.message || error) };
+    }
+  });
+}
+
 function createWindow() {
   const appIcon = path.join(__dirname, '..', 'build', 'icon.png');
   const window = new BrowserWindow({
@@ -370,6 +392,7 @@ app.whenReady().then(() => {
     registerStorageIpc();
     lastBackup = createVerifiedBackup(db, backupRoot);
     registerPrintIpc();
+    registerAttachmentIpc();
     const window = createWindow();
     if (smokeMode) runPackagedSmoke(window);
   } catch (error) {

@@ -73,6 +73,9 @@ declare global {
         returnPdf?: boolean;
       }): Promise<{ opened: boolean; landscape: boolean; previewPath?: string; bytes?: Uint8Array }>;
     };
+    desktopFiles?: {
+      openAttachment(attachment: { dataUrl: string; fileName: string; mimeType?: string }): Promise<{ ok: boolean; path?: string; error?: string }>;
+    };
     desktopWindow?: {
       getUiScale(): { percent: number; zoomFactor: number };
       setUiScalePercent(percent: number): { ok: boolean; percent: number; zoomFactor: number };
