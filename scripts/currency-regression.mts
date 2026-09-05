@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import type { Account } from '../src/types/erp';
 import { amountsEqual, currencyDecimals, fromMinorUnits, multiplyMoney, roundTo, toMinorUnits } from '../src/utils/money';
 import { buildRealizedExchangeDifferenceJournal, buildUnrealizedRevaluationJournal, calculateRealizedExchangeDifference, deriveForeignBalancePositions, revalueForeignPosition } from '../src/utils/currencyRevaluation';
-import { accountsWithCurrencyOpenings, projectPostedJournalsToCurrency } from '../src/utils/currencyReporting';
+import { accountsWithCurrencyOpenings, normalizeVoucherSourceJournalCurrencies, projectPostedJournalsToCurrency } from '../src/utils/currencyReporting';
 import { validateJournalForPosting } from '../src/utils/postingValidation';
 import { entityOpening, entityOpeningsByCurrency } from '../src/utils/reportData';
 import { tafqeetAmount } from '../src/utils/tafqeetHelper';
@@ -43,6 +43,11 @@ assert.equal(derived[0].foreignBalance, 100);
 assert.equal(derived[0].historicalRate, 500);
 const projectedAtAnyCurrentRate = projectPostedJournalsToCurrency([{ id: 'j-history', entryNumber: 'JV-H', date: '2026-01-01', reference: '', narration: '', lines: [{ id: 'l-history', accountId: cashUsd.id, accountCode: cashUsd.code, accountNameAr: cashUsd.nameAr, debit: 50_000, credit: 0, debitForeign: 100, currency: 'USD', exchangeRate: 500, description: '' }], totalDebit: 50_000, totalCredit: 50_000, currency: 'YER', exchangeRate: 1, status: 'POSTED', createdBy: '', createdAt: '' }], 'USD', 'YER', 2);
 assert.equal(projectedAtAnyCurrentRate[0].lines[0].debit, 100);
+const legacyVoucherJournal: any = { id: 'pv-journal', entryNumber: 'JV-PV-1', date: '2026-01-01', reference: 'PV-1', referenceCode: 'PV-1', narration: '', lines: [{ id: 'source', accountId: 'bank-usd', debit: 0, credit: 50_000, currency: 'YER', exchangeRate: 1, description: '' }], totalDebit: 50_000, totalCredit: 50_000, currency: 'USD', exchangeRate: 500, status: 'POSTED', createdBy: '', createdAt: '' };
+const correctedSource = normalizeVoucherSourceJournalCurrencies([legacyVoucherJournal], [{ journalEntryId: 'pv-journal', sourceAccountId: 'bank-usd', currency: 'USD', exchangeRate: 500, totalAmount: 100, voucherNumber: 'PV-1' }], 'YER', 2);
+assert.equal(correctedSource[0].lines[0].currency, 'USD');
+assert.equal(correctedSource[0].lines[0].creditForeign, 100);
+assert.equal(projectPostedJournalsToCurrency(correctedSource, 'USD', 'YER', 2)[0].lines[0].credit, 100);
 const openingUsd = accountsWithCurrencyOpenings([{ ...cashUsd, openingBalances: [{ id: 'op-usd', accountId: cashUsd.id, currency: 'USD', exchangeRate: 490, debit: 25.5, credit: 0, debitLocal: 12_495, creditLocal: 0 }] }], 'USD', 'YER', 2);
 assert.equal(openingUsd[0].openingBalance, 25.5);
 const cashBoxOpening = {
@@ -64,4 +69,4 @@ assert.equal(journal!.totalCredit, 3_000);
 assert.equal(journal!.lines[0].rateType, 'CLOSING');
 assert.equal(journal!.rateSource, 'PERIOD_REVALUATION');
 
-console.log('CURRENCY_REGRESSION_OK currencyDecimals=true currencyTafqeet=true minorUnits=true deterministicRounding=true historicalRate=true historicalReportInvariant=true originalOpening=true cashBoxOpening=true derivedPositions=true realizedDifference=2500 realizedJournalBalanced=true unrealizedDifference=3000 balancedRevaluation=true rateEvidence=true');
+console.log('CURRENCY_REGRESSION_OK currencyDecimals=true currencyTafqeet=true minorUnits=true deterministicRounding=true historicalRate=true historicalReportInvariant=true originalOpening=true voucherSourceCurrency=true cashBoxOpening=true derivedPositions=true realizedDifference=2500 realizedJournalBalanced=true unrealizedDifference=3000 balancedRevaluation=true rateEvidence=true');

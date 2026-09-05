@@ -2,6 +2,65 @@ import type { Account, JournalEntry } from '../types/erp';
 import { roundTo } from './money';
 
 /**
+ * The source side of older payment/receipt voucher journals was stored in the
+ * base currency even when the voucher itself was foreign-currency.  Keep the
+ * ledger's local debit/credit intact, but restore the source line's original
+ * currency metadata from the voucher before a report projects or groups it.
+ *
+ * This is deliberately a read-model normalization: historical journals remain
+ * immutable while every report sees the same original-currency source amount.
+ */
+export function normalizeVoucherSourceJournalCurrencies(
+  journals: JournalEntry[],
+  vouchers: Array<{
+    journalEntryId?: string;
+    sourceAccountId?: string;
+    currency?: string;
+    exchangeRate?: number;
+    totalAmount?: number;
+    voucherNumber?: string;
+    receiptNumber?: string;
+  }>,
+  baseCurrency: string,
+  decimals: number,
+): JournalEntry[] {
+  const byJournalId = new Map<string, typeof vouchers[number]>();
+  const byDocumentNumber = new Map<string, typeof vouchers[number]>();
+  vouchers.forEach(voucher => {
+    if (voucher.journalEntryId) byJournalId.set(voucher.journalEntryId, voucher);
+    const documentNumber = voucher.voucherNumber || voucher.receiptNumber;
+    if (documentNumber) byDocumentNumber.set(documentNumber, voucher);
+  });
+
+  return journals.map(journal => {
+    const voucher = byJournalId.get(journal.id) || byDocumentNumber.get(journal.referenceCode || journal.reference);
+    const sourceCurrency = voucher?.currency || baseCurrency;
+    if (!voucher?.sourceAccountId || sourceCurrency === baseCurrency) return journal;
+
+    const sourceAmount = roundTo(voucher.totalAmount || 0, decimals);
+    if (!(sourceAmount > 0)) return journal;
+    let changed = false;
+    const lines = journal.lines.map(line => {
+      if (line.accountId !== voucher.sourceAccountId) return line;
+      // Correct only the legacy shape. Newly generated entries already carry
+      // their original source-line currency and foreign amount.
+      const isLegacyBaseLine = !line.currency || line.currency === baseCurrency;
+      const hasForeignAmount = (line.debitForeign ?? 0) !== 0 || (line.creditForeign ?? 0) !== 0;
+      if (!isLegacyBaseLine || hasForeignAmount) return line;
+      changed = true;
+      return {
+        ...line,
+        currency: sourceCurrency,
+        exchangeRate: voucher.exchangeRate || line.exchangeRate || 1,
+        debitForeign: line.debit > 0 ? sourceAmount : undefined,
+        creditForeign: line.credit > 0 ? sourceAmount : undefined,
+      };
+    });
+    return changed ? { ...journal, lines } : journal;
+  });
+}
+
+/**
  * Projects the immutable stored ledger either to base-local values or to the
  * stored original-currency debit/credit. It never divides historical local
  * values by today's currency master rate.

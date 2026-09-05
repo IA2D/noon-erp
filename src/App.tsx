@@ -926,6 +926,11 @@ function AppInner() {
       return multiplyMoney(l.amount, rate, baseDecimals);
     };
     const totalLocal = roundTo(voucher.lines.reduce((s, l) => s + lineLocalOf(l), 0), baseDecimals);
+    const sourceCurrency = voucher.currency || baseCode;
+    const sourceDecimals = currencyDecimals(sourceCurrency, currencies);
+    const sourceAmount = sourceCurrency === baseCode
+      ? totalLocal
+      : roundTo(voucher.totalAmount || 0, sourceDecimals);
     const label = isPayment ? 'سند صرف' : 'سند قبض';
     const lines: JournalLine[] = [
       {
@@ -935,8 +940,12 @@ function AppInner() {
         accountNameAr: voucher.sourceAccountNameAr,
         debit: isPayment ? 0 : totalLocal,
         credit: isPayment ? totalLocal : 0,
-        currency: baseCode,
-        exchangeRate: 1,
+        // المصدر يحتفظ بعملة السند الأصلية؛ القيم المحلية تبقى في debit/credit
+        // والقيمة الأجنبية تُستخدم عند عرض كشف العملة وتقسيمه.
+        currency: sourceCurrency,
+        exchangeRate: sourceCurrency === baseCode ? 1 : (voucher.exchangeRate || 1),
+        debitForeign: !isPayment && sourceCurrency !== baseCode ? sourceAmount : undefined,
+        creditForeign: isPayment && sourceCurrency !== baseCode ? sourceAmount : undefined,
         rateType: 'TRANSACTION' as const,
         rateEffectiveDate: voucher.date,
         rateSource: 'VOUCHER_SOURCE',
