@@ -43,6 +43,7 @@ import {
 import {
   Account,
   JournalEntry,
+  JournalLine,
   Employee,
   Customer,
   Custody,
@@ -2211,18 +2212,16 @@ export default function CustodyView({
       {isPrintOpen && printCustody && (() => {
         const c = printCustody;
         const j = printJournal;
-        const srcBox = cashBoxes.find(b => b.id === c.disbursementSource);
-        const srcBank = bankAccounts.find(b => b.id === c.disbursementSource);
-        const srcLabel = srcBox
-          ? `${srcBox.code} — صندوق: ${srcBox.nameAr}`
-          : srcBank
-            ? `${srcBank.code} — ${srcBank.entityType === 'BANK' ? 'بنك' : 'شركة صرافة'}: ${srcBank.bankNameAr}`
-            : '—';
-        const advanceAcc = advanceAccountOf(c);
         const curCode = c.currency || baseCurrency;
         const curNameAr = currencies.find(x => x.code === curCode)?.nameAr || curCode;
         const curFrac = CURRENCY_FRACTIONS[curCode] || 'جزء من المئة';
         const localEquiv = round2(Number(c.amount) * (Number(c.exchangeRate) || 1));
+        // Custody journals keep accounting amounts in the base currency and retain
+        // original-currency amounts per line. The receipt must show its own currency.
+        const foreignReceipt = Boolean(j && curCode !== baseCurrency && j.currency === curCode);
+        const lineAmount = (line: JournalLine, side: 'debit' | 'credit') => Number(foreignReceipt ? (side === 'debit' ? line.debitForeign ?? line.debit : line.creditForeign ?? line.credit) : line[side]) || 0;
+        const receiptDebit = j ? j.lines.reduce((sum, line) => sum + lineAmount(line, 'debit'), 0) : 0;
+        const receiptCredit = j ? j.lines.reduce((sum, line) => sum + lineAmount(line, 'credit'), 0) : 0;
         return (
           <ModalShell
             id="custody-print"
@@ -2267,15 +2266,8 @@ export default function CustodyView({
                   currentUserName={currentUserName}
                   metadata={[
                     { label: 'الموظف المكلف', value: c.employeeName },
-                    { label: 'نوع العهدة', value: CUSTODY_TYPE_LABEL[c.type] },
-                    { label: 'طريقة الصرف', value: c.disbursementMethod ? DISBURSE_METHOD_META[c.disbursementMethod].label : '—' },
-                    { label: 'مصدر النقدية (دائن)', value: srcLabel },
-                    { label: 'حساب العهدة (مدين)', value: `${advanceAcc.code} — ${advanceAcc.nameAr}` },
-                    ...(c.disbursementParties?.length ? [{ label: 'الأطراف المستفيدة', value: c.disbursementParties.map(party => `${party.name} (${fmtC(party.amount, curCode)})`).join('، ') }] : []),
-                    ...(c.costCenterId ? [{ label: 'مركز التكلفة', value: costCenters.find(x => x.id === c.costCenterId)?.nameAr ?? c.costCenterId }] : []),
                     ...(c.referenceNumber ? [{ label: 'رقم المرجع', value: c.referenceNumber }] : []),
-                    ...(c.expectedClearanceDate ? [{ label: 'تاريخ الانقضاء', value: formatDate(c.expectedClearanceDate) }] : []),
-                    { label: 'سعر الصرف', value: String(c.exchangeRate || 1) },
+                    ...(foreignReceipt ? [{ label: 'سعر الصرف', value: String(c.exchangeRate || 1) }] : []),
                     { label: 'البيان', value: c.title },
                     ...(j ? [{ label: 'رقم القيد المرتبط', value: j.entryNumber }] : []),
                   ]}
@@ -2308,16 +2300,16 @@ export default function CustodyView({
                             <td className="font-mono">{line.accountCode}</td>
                             <td className="font-semibold">{line.accountNameAr}</td>
                             <td className="text-slate-600">{line.description}</td>
-                            <td className="font-bold text-left font-mono whitespace-nowrap">{line.debit > 0 ? line.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
-                            <td className="font-bold text-left font-mono whitespace-nowrap">{line.credit > 0 ? line.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+                            <td className="font-bold text-left font-mono whitespace-nowrap">{lineAmount(line, 'debit') > 0 ? lineAmount(line, 'debit').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+                            <td className="font-bold text-left font-mono whitespace-nowrap">{lineAmount(line, 'credit') > 0 ? lineAmount(line, 'credit').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr>
                           <td colSpan={4} className="text-left font-bold">الإجمالي:</td>
-                          <td className="font-bold text-left font-mono whitespace-nowrap">{j.totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="font-bold text-left font-mono whitespace-nowrap">{j.totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="font-bold text-left font-mono whitespace-nowrap">{receiptDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="font-bold text-left font-mono whitespace-nowrap">{receiptCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       </tfoot>
                     </table>
