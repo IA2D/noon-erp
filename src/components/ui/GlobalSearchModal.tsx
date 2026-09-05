@@ -322,13 +322,18 @@ export default function GlobalSearchModal({ open, onClose, onToggleOpen, onNavig
   // اختصار عالمي Ctrl/Cmd + K لفتح/إغلاق نافذة البحث — يعمل حتى أثناء إخفائها.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      // `key` يتغير مع لغة لوحة المفاتيح (مثل ك عند الكتابة بالعربية)،
+      // بينما `code` يظل KeyK؛ لذلك نعتمد عليه كي يبقى الاختصار ثابتاً.
+      const isSearchShortcut = (e.ctrlKey || e.metaKey) && !e.altKey && (e.code === 'KeyK' || e.key.toLowerCase() === 'k');
+      if (isSearchShortcut) {
         e.preventDefault();
+        e.stopPropagation();
         toggleOpenRef.current?.();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    // الالتقاط يسبق معالجات الحقول والنوافذ المنبثقة التي قد توقف انتشار الحدث.
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, []);
 
   // إغلاق بمفتاح Escape حتى لو خرج التركيز من حقل البحث.

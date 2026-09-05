@@ -63,7 +63,7 @@ import { applyOpeningBalances, cleanupOpeningBalanceDuplicates, reconcileControl
 import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
 import { useLocalStorageState } from './utils/useLocalStorageState';
 import { isPeriodClosed } from './utils/periodGuard';
-import { reindexAccountCodes, ensureEmployeeAdvanceGroup, employeeAdvanceGeneralAccount, nextJournalNumber, calculateAccountActivity, netAccountBalance, isPostingAccount, accountFinancialType } from './utils/accountingEngine';
+import { reindexAccountCodes, ensureEmployeeAdvanceGroup, employeeAdvanceGeneralAccount, monthlyEmployeeAdvancesAccount, nextJournalNumber, calculateAccountActivity, netAccountBalance, isPostingAccount, accountFinancialType } from './utils/accountingEngine';
 import { CUSTODY_TYPE_LABEL, CUSTODY_STATUS_LABEL } from './utils/custodyEngine';
 import { deriveLegacySubLedgerType } from './utils/subLedger';
 import { validateGeneratedJournalForPosting, validateJournalForPosting, validateOpeningBalancesForPosting, validateVoucherForPosting } from './utils/postingValidation';
@@ -572,6 +572,23 @@ function AppInner() {
         accs = [...accs, defaultAccount];
       } else if (existingControl.nameAr !== defaultAccount.nameAr || existingControl.nameEn !== defaultAccount.nameEn || existingControl.parentId !== group.id) {
         accs = accs.map(account => account.id === existingControl.id ? { ...account, nameAr: defaultAccount.nameAr, nameEn: defaultAccount.nameEn, parentId: group.id, subLedgerType: 'EMPLOYEE' } : account);
+      }
+
+      const monthlyAdvances = monthlyEmployeeAdvancesAccount();
+      const existingMonthlyAdvances = accs.find(account =>
+        account.id === monthlyAdvances.id || (account.parentId === group.id && account.code === monthlyAdvances.code)
+      );
+      if (!existingMonthlyAdvances) {
+        accs = [...accs, monthlyAdvances];
+      } else if (
+        existingMonthlyAdvances.nameAr !== monthlyAdvances.nameAr ||
+        existingMonthlyAdvances.nameEn !== monthlyAdvances.nameEn ||
+        existingMonthlyAdvances.parentId !== group.id
+      ) {
+        accs = accs.map(account => account.id === existingMonthlyAdvances.id
+          ? { ...account, nameAr: monthlyAdvances.nameAr, nameEn: monthlyAdvances.nameEn, parentId: group.id, subLedgerType: 'EMPLOYEE' }
+          : account
+        );
       }
       return accs;
     });

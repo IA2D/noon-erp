@@ -37,6 +37,7 @@ const journalSearch = read('src/components/modules/JournalSearchBar.tsx');
 const narration = read('src/hooks/useNarrationContextMenu.ts');
 const openingGrid = read('src/components/modules/opening/OpeningBalancesGrid.tsx');
 const subLedgerCell = read('src/components/ui/SubLedgerF9Cell.tsx');
+const globalSearch = read('src/components/ui/GlobalSearchModal.tsx');
 
 assert.match(registry, /document\.addEventListener\('keydown', handleShortcut, true\)/);
 assert.match(registry, /querySelectorAll<HTMLElement>\('\[role="dialog"\]'\)/);
@@ -51,6 +52,8 @@ assert.match(subLedgerCell, /getElement: \(\) => cellRef\.current/);
 assert.doesNotMatch(subLedgerCell, /addEventListener\('keydown'/);
 assert.doesNotMatch(f9Input, /if \(e\.key === 'F9'\)/);
 assert.doesNotMatch(journalSearch, /window\.addEventListener\('keydown'/);
+assert.match(globalSearch, /e\.code === 'KeyK'/);
+assert.match(globalSearch, /window\.addEventListener\('keydown', handleKeyDown, true\)/);
 
 // Other repeated row shortcuts stay on the focused row/grid rather than
 // receiving document/window listeners.

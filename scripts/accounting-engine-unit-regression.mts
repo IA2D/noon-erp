@@ -4,7 +4,7 @@ import {
   aggregateAccountBalance, calculateAccountActivity, calculateBalanceSheet,
   calculateCashFlowStatement, calculateEquityChangesStatement, calculateIncomeStatement,
   calculateTrialBalance, canDeleteAccount, canPromoteToParent, childLevelOf,
-  expectedCodeLength, isPostingAccount, monthKey, nextAccountCode, nextDocumentNumber,
+  expectedCodeLength, isPostingAccount, monthKey, monthlyEmployeeAdvancesAccount, nextAccountCode, nextDocumentNumber,
   nextEntityCode, percentChange, validateAccountCode, validateJournalEntryLines,
 } from '../src/utils/accountingEngine';
 
@@ -43,4 +43,10 @@ assert.equal(nextDocumentNumber('JV', [{ entryNumber: 'JV-9' }]), 'JV-10');
 assert.equal(percentChange(120, 100), 20);
 assert.equal(percentChange(1, 0), null);
 assert.equal(monthKey(new Date(2026, 7, 27)), '2026-08');
+const monthlyAdvances = monthlyEmployeeAdvancesAccount();
+assert.equal(monthlyAdvances.code, '1102050002');
+assert.equal(monthlyAdvances.nameAr, 'سلف الموظفين الشهرية');
+assert.equal(monthlyAdvances.level, 5);
+assert.ok(accounts.some(account => account.code === '1102050001' && account.nameAr === 'عُهد الموظفين'));
+assert.ok(accounts.some(account => account.code === '1102050002' && account.nameAr === 'سلف الموظفين الشهرية'));
 console.log('ACCOUNTING_ENGINE_UNIT_OK validation=true hierarchy=true activity=true statements=true numbering=true periods=true');

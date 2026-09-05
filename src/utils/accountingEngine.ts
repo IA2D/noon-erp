@@ -319,6 +319,8 @@ export function employeeAdvancePostingAccounts(accounts: Account[], currentLinke
 
 export const EMPLOYEE_ADVANCE_GROUP_CODE = '110205';
 export const EMPLOYEE_ADVANCE_GROUP_NAME = 'عُهد الموظفين';
+export const MONTHLY_EMPLOYEE_ADVANCES_ACCOUNT_CODE = '1102050002';
+export const MONTHLY_EMPLOYEE_ADVANCES_ACCOUNT_NAME = 'سلف الموظفين الشهرية';
 
 /** ضمان وجود مجموعة "عُهد الموظفين" في الدليل — تُضاف تلقائياً إن لم تكن موجودة (ميفريشن للبيانات المحفوظة) */
 export function ensureEmployeeAdvanceGroup(accounts: Account[]): { accounts: Account[]; group: Account } {
@@ -358,6 +360,35 @@ export function employeeAdvanceGeneralAccount(): Account {
     code: '1102050001',
     nameAr: EMPLOYEE_ADVANCE_GROUP_NAME,
     nameEn: 'Employee Custodies',
+    level: 5,
+    accountType: 2,
+    reportType: 1,
+    parentId: EMPLOYEE_ADVANCE_GROUP_CODE,
+    nature: 'DEBIT',
+    category: 'RECEIVABLE',
+    subLedgerType: 'EMPLOYEE',
+    currencies: [
+      { id: `cur-${ts}-yer`, code: 'YER', isDefault: true, isActive: true },
+      { id: `cur-${ts}-usd`, code: 'USD', isDefault: false, isActive: true }
+    ],
+    defaultCurrency: 'YER',
+    openingBalance: 0,
+    isActive: true
+  };
+}
+
+/**
+ * السلف الشهرية حساب مستقل عن حساب عُهد الموظفين التشغيلي.
+ * أُنشئ حساب العُهد تحت نفس المجموعة سابقاً، فصار الحساب القديم يحمل اسمه؛
+ * هذا الضمان يعيد السلف إلى الدليل من دون تغيير حساب العُهد أو أي قيود قائمة عليه.
+ */
+export function monthlyEmployeeAdvancesAccount(): Account {
+  const ts = Date.now();
+  return {
+    id: MONTHLY_EMPLOYEE_ADVANCES_ACCOUNT_CODE,
+    code: MONTHLY_EMPLOYEE_ADVANCES_ACCOUNT_CODE,
+    nameAr: MONTHLY_EMPLOYEE_ADVANCES_ACCOUNT_NAME,
+    nameEn: 'Monthly Employee Advances',
     level: 5,
     accountType: 2,
     reportType: 1,
