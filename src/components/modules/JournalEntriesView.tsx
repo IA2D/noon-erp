@@ -25,6 +25,8 @@ import AttachmentPicker from '../ui/AttachmentPicker';
 import type { SupportingDocument } from '../../types/supportingDocuments';
 import { openDesktopPrintPreview } from '../../utils/desktopPrintPreview';
 import { replacementJournal } from '../../utils/supportingDocuments';
+import { journalPrintAmount } from '../../utils/journalPrintAmounts';
+import { currencyDecimals } from '../../utils/money';
 
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -73,6 +75,11 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
   const { isMaximized, mode, toggleMaximize, hide, restore } = useMaximizableWindow();
 
   const { active: currencyOptions, baseCode } = useActiveCurrencies(currencies);
+
+  const formatPrintedJournalAmount = (amount: number, currency: string) => amount.toLocaleString('en-US', {
+    minimumFractionDigits: currencyDecimals(currency, currencies),
+    maximumFractionDigits: currencyDecimals(currency, currencies)
+  });
 
   // واقي حدود سعر التحويل: نطاق كل عملة (min/max) من دليل العملات
   const rateGuard = useExchangeRateGuard(currencies);
@@ -1190,8 +1197,8 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
            })() : '—'}
           </td>
           <td className="text-center font-mono">{line.currency || selectedEntry.currency || '—'}</td>
-          <td className="font-bold text-left font-mono whitespace-nowrap">{line.debit > 0 ? line.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
-          <td className="font-bold text-left font-mono whitespace-nowrap">{line.credit > 0 ? line.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
+          <td className="font-bold text-left font-mono whitespace-nowrap">{line.debit > 0 ? formatPrintedJournalAmount(journalPrintAmount(line, 'debit', baseCode), line.currency || selectedEntry.currency || baseCode) : '—'}</td>
+          <td className="font-bold text-left font-mono whitespace-nowrap">{line.credit > 0 ? formatPrintedJournalAmount(journalPrintAmount(line, 'credit', baseCode), line.currency || selectedEntry.currency || baseCode) : '—'}</td>
          </tr>
         ))}
        </tbody>
@@ -1199,15 +1206,15 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
         {Object.entries(selectedEntry.lines.reduce<Record<string, { debit: number; credit: number }>>((totals, line) => {
           const code = line.currency || selectedEntry.currency || '—';
           const current = totals[code] || { debit: 0, credit: 0 };
-          current.debit += line.debit || 0;
-          current.credit += line.credit || 0;
+          current.debit += journalPrintAmount(line, 'debit', baseCode);
+          current.credit += journalPrintAmount(line, 'credit', baseCode);
           totals[code] = current;
           return totals;
         }, {})).map(([code, totals]) => (
           <tr key={code}>
             <td colSpan={7} className="text-left font-bold">إجمالي العملة {code}:</td>
-            <td className="font-bold text-left font-mono whitespace-nowrap">{totals.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-            <td className="font-bold text-left font-mono whitespace-nowrap">{totals.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td className="font-bold text-left font-mono whitespace-nowrap">{formatPrintedJournalAmount(totals.debit, code)}</td>
+            <td className="font-bold text-left font-mono whitespace-nowrap">{formatPrintedJournalAmount(totals.credit, code)}</td>
           </tr>
         ))}
        </tfoot>

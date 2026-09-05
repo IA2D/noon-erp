@@ -31,6 +31,7 @@
     "command:regression": "node scripts/accounting-command-regression.mjs",
     "period:regression": "tsx scripts/period-lifecycle-regression.mts",
     "currency:regression": "tsx scripts/currency-regression.mts",
+    "journal-print:regression": "tsx scripts/journal-print-currency-regression.mts",
     "control-transfer:regression": "tsx scripts/control-account-transfer-regression.mts",
     "recovery:regression": "node scripts/database-recovery-regression.mjs",
     "auth:regression": "node scripts/auth-regression.mjs",
