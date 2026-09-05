@@ -9,7 +9,6 @@ import {
     FileCheck2,
     Receipt,
     BookOpen
-    ,FileSignature
 } from 'lucide-react';
 import { Account, BankAccount, CashBox, CostCenter, Currency, JournalEntry, PaymentVoucher } from '../../types/erp';
 import { ERPModule } from '../../constants/permissions';
@@ -69,14 +68,6 @@ export default function OperationsView({ journals, vouchers = [], accounts = [],
             iconClass: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
             meta: 'سندات القبض',
             module: 'RECEIPT_VOUCHERS'
-        },
-        {
-            id: 'op-contracts',
-            icon: FileSignature,
-            title: 'العقود والالتزامات',
-            iconClass: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
-            meta: 'اعتماد واستحقاقات',
-            module: 'CONTRACTS'
         },
         {
             id: 'op-custody',

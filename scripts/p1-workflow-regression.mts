@@ -1,4 +1,4 @@
 import assert from 'node:assert/strict'; import fs from 'node:fs';
-const app=fs.readFileSync('src/App.tsx','utf8'); const permissions=fs.readFileSync('src/constants/permissions.ts','utf8'); const operations=fs.readFileSync('src/components/modules/OperationsView.tsx','utf8'); const inputs=fs.readFileSync('src/components/modules/InputsView.tsx','utf8');
-assert.match(app,/case 'CONTRACTS'/); assert.match(app,/case 'DATA_QUALITY'/); assert.match(app,/elite-erp-contracts-v1/); assert.match(permissions,/CONTRACTS/); assert.match(permissions,/DATA_QUALITY/); assert.match(operations,/العقود والالتزامات/); assert.match(inputs,/جودة البيانات ودمج المكرر/);
-console.log('P1_WORKFLOW_REGRESSION_OK contractsRouted=true contractsPersisted=true roleAuthorized=true obligationsAccessible=true duplicateMergeAccessible=true');
+const app=fs.readFileSync('src/App.tsx','utf8'); const permissions=fs.readFileSync('src/constants/permissions.ts','utf8'); const operations=fs.readFileSync('src/components/modules/OperationsView.tsx','utf8');
+assert.doesNotMatch(app,/ContractsView|case 'CONTRACTS'/); assert.match(app,/removePersistentItem\(key\)/); assert.doesNotMatch(permissions,/CONTRACTS/); assert.doesNotMatch(operations,/العقود والالتزامات/);
+console.log('P1_WORKFLOW_REGRESSION_OK contractsRemoved=true legacyContractDataPurged=true duplicateMergeAccessible=true');

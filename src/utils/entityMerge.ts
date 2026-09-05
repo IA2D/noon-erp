@@ -1,5 +1,4 @@
 import type { AccountCurrency, Customer, Employee, EntityMergeRecord, Vendor } from '../types/erp';
-import type { ERPContract } from '../types/contracts';
 
 export type MergeEntityKind = 'CUSTOMER' | 'VENDOR' | 'EMPLOYEE';
 export type MergeEntity = Customer | Vendor | Employee;
@@ -30,7 +29,7 @@ const mergeCurrencies = (target: AccountCurrency[], source: AccountCurrency[]) =
   return Array.from(map.values());
 };
 
-export interface MergeData { customers: Customer[]; vendors: Vendor[]; employees: Employee[]; contracts: ERPContract[] }
+export interface MergeData { customers: Customer[]; vendors: Vendor[]; employees: Employee[] }
 export interface MergeResult extends MergeData { ok: boolean; errors: string[]; record?: EntityMergeRecord }
 
 export function mergeDuplicateEntity(kind: MergeEntityKind, sourceId: string, targetId: string, actor: string, reason: string, data: MergeData): MergeResult {
@@ -57,9 +56,8 @@ export function mergeDuplicateEntity(kind: MergeEntityKind, sourceId: string, ta
   } as MergeEntity;
   const archived = { ...source, isActive: false, mergedIntoId: targetId, mergeHistory: [...(source.mergeHistory || []), record] } as MergeEntity;
   const mergedList = list.map(item => item.id === targetId ? combined : item.id === sourceId ? archived : item);
-  const contracts = data.contracts.map(contract => contract.partyType === kind && contract.partyId === sourceId && ['CREATED', 'UNDER_REVIEW', 'REJECTED'].includes(contract.status) ? { ...contract, partyId: targetId, partyName: target.nameAr, updatedAt: new Date().toISOString() } : contract);
   return {
-    ok: true, errors: [], record, contracts,
+    ok: true, errors: [], record,
     customers: kind === 'CUSTOMER' ? mergedList as Customer[] : data.customers,
     vendors: kind === 'VENDOR' ? mergedList as Vendor[] : data.vendors,
     employees: kind === 'EMPLOYEE' ? mergedList as Employee[] : data.employees

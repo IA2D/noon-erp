@@ -28,7 +28,6 @@ import ClosingView from './components/modules/ClosingView';
 import AuditAndSecurityView from './components/modules/AuditAndSecurityView';
 import SettingsView from './components/modules/SettingsView';
 import AboutUs from './components/modules/AboutUs';
-import ContractsView from './components/modules/ContractsView';
 import { ToastProvider } from './components/ui/Toast';
 import RateViolationToastBridge from './components/ui/RateViolationToastBridge';
 import StorageConflictToastBridge from './components/ui/StorageConflictToastBridge';
@@ -38,7 +37,7 @@ import TabKeepAliveContainer from './components/ui/TabKeepAliveContainer';
 import { TabsProvider, useTabs, tabIdFor } from './tabs/TabsContext';
 import { LanguageProvider, useI18n } from './i18n';
 import { useTheme } from './utils/useTheme';
-import { commitAccountingCommand, getPersistentItem, persistentVersion } from './utils/desktopStorage';
+import { commitAccountingCommand, getPersistentItem, persistentVersion, removePersistentItem } from './utils/desktopStorage';
 import { accountingCommandError, type DailyPostingBatchResult, type DailyPostingRequest } from './utils/dailyPosting';
 
 import {
@@ -59,7 +58,6 @@ import {
 } from './data/initialData';
 
 import { Account, AccountCurrency, JournalEntry, JournalLine, AuditLog, CostCenter, Trust, Custody, CashBox, BankAccount, PaymentVoucher, ReceiptVoucher, Employee, Customer, Vendor, Currency, SubLedgerType } from './types/erp';
-import type { ERPContract } from './types/contracts';
 import type { SavePayload } from './components/modules/opening/types';
 import { applyOpeningBalances, cleanupOpeningBalanceDuplicates, reconcileControlAccountOpenings } from './services/openingBalancesService';
 import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
@@ -110,7 +108,6 @@ const K = {
   customers: 'elite-erp-customers-v1',
   vendors: 'elite-erp-vendors-v1',
   currencies: 'elite-erp-currencies-v1',
-  contracts: 'elite-erp-contracts-v1',
   closedYears: 'elite-erp-closed-years-v1',
   closedMonths: 'elite-erp-closed-months-v1',
   openingBalancesStatus: 'elite-erp-opening-balances-status-v1',
@@ -120,7 +117,7 @@ const K = {
 
 const REMOVED_MODULE_KEYS = [
   'elite-erp-customers-v6', 'elite-erp-vendors-v6', 'elite-erp-employees-v6',
-  'elite-erp-invoices-v6',
+  'elite-erp-invoices-v6', 'elite-erp-contracts-v1',
   'elite-erp-accounts-v8', 'elite-erp-accounts-v7', 'elite-erp-accounts-v6'
 ];
 
@@ -140,7 +137,7 @@ function sanitizeMasterData<T extends { id: string; code: string; nameAr: string
 function initializeCleanState() {
   if (typeof window === 'undefined') return;
   try {
-    REMOVED_MODULE_KEYS.forEach(key => window.localStorage.removeItem(key));
+    REMOVED_MODULE_KEYS.forEach(key => { window.localStorage.removeItem(key); removePersistentItem(key); });
     const bootFlagKey = 'elite-erp-clean-boot-v5';
     if (window.localStorage.getItem(bootFlagKey) === '1') return;
 
@@ -214,7 +211,6 @@ function AppInner() {
   const [customers, setCustomers] = useLocalStorageState<Customer[]>(K.customers, initialCustomers);
   const [vendors, setVendors] = useLocalStorageState<Vendor[]>(K.vendors, initialVendors);
   const [currencies, setCurrencies] = useLocalStorageState<Currency[]>(K.currencies, initialCurrencies);
-  const [contracts, setContracts] = useLocalStorageState<ERPContract[]>(K.contracts, []);
   const [closedYears, setClosedYears] = useLocalStorageState<string[]>(K.closedYears, []);
   const [closedMonths, setClosedMonths] = useLocalStorageState<string[]>(K.closedMonths, []);
   const [periodStates, setPeriodStates] = useLocalStorageState<FinancialPeriodRecord[]>(K.periodStates, []);
@@ -266,12 +262,11 @@ function AppInner() {
   }, []);
 
   useEffect(() => {
-    const migrated = migrateLegacyWorkflowStatuses({ journals, payments: vouchers, receipts: receiptVouchers, custodies, contracts });
+    const migrated = migrateLegacyWorkflowStatuses({ journals, payments: vouchers, receipts: receiptVouchers, custodies });
     if (migrated.journals !== journals) setJournals(migrated.journals);
     if (migrated.payments !== vouchers) setVouchers(migrated.payments);
     if (migrated.receipts !== receiptVouchers) setReceiptVouchers(migrated.receipts);
     if (migrated.custodies !== custodies) setCustodies(migrated.custodies);
-    if (migrated.contracts !== contracts) setContracts(migrated.contracts);
     // Run once: persisted SQLite/local compatibility conversion is idempotent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -666,11 +661,6 @@ function AppInner() {
     } catch {}
     const newLog = createAuditLog(module, action, details, actorName);
     setAuditLogs(prev => [newLog, ...prev]);
-  };
-
-  const handleContractsChange = (nextContracts: ERPContract[], details: string) => {
-    setContracts(nextContracts);
-    addAuditLog('GENERAL_LEDGER', 'UPDATE', `العقود والالتزامات: ${details}`);
   };
 
   const commitAccountingState = (
@@ -2010,21 +2000,6 @@ function AppInner() {
             onCreateOpeningEntry={handleCreateOpeningEntry}
             onCreateRevaluationJournal={handleAddJournal}
             currentUserName={currentUserName}
-          />
-        );
-      case 'CONTRACTS':
-        return (
-          <ContractsView
-            contracts={contracts}
-            customers={customers}
-            vendors={vendors}
-            accounts={accounts}
-            costCenters={costCenters}
-            currencies={currencies}
-            paymentVouchers={vouchers}
-            receiptVouchers={receiptVouchers}
-            currentUserName={currentUserName}
-            onChange={handleContractsChange}
           />
         );
       case 'AUDIT_SECURITY':

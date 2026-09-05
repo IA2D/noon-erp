@@ -1,5 +1,4 @@
 import type { Custody, JournalEntry, PaymentVoucher, ReceiptVoucher } from '../types/erp';
-import type { ERPContract } from '../types/contracts';
 
 type LegacyStatusRecord = { status: string };
 export const LEGACY_PRE_POSTING_STATUS = ['DRA', 'FT'].join('');
@@ -20,13 +19,11 @@ export function migrateLegacyWorkflowStatuses(data: {
   payments: PaymentVoucher[];
   receipts: ReceiptVoucher[];
   custodies: Custody[];
-  contracts: ERPContract[];
 }) {
   return {
     journals: migrateStatus(data.journals as Array<JournalEntry & LegacyStatusRecord>, 'PENDING_POSTING') as JournalEntry[],
     payments: migrateStatus(data.payments as Array<PaymentVoucher & LegacyStatusRecord>, 'PENDING_POSTING') as PaymentVoucher[],
     receipts: migrateStatus(data.receipts as Array<ReceiptVoucher & LegacyStatusRecord>, 'PENDING_POSTING') as ReceiptVoucher[],
     custodies: migrateStatus(data.custodies as Array<Custody & LegacyStatusRecord>, 'CREATED') as Custody[],
-    contracts: migrateStatus(data.contracts as Array<ERPContract & LegacyStatusRecord>, 'CREATED') as ERPContract[],
   };
 }

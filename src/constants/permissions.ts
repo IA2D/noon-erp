@@ -17,7 +17,6 @@ export type ERPModule =
   | 'CURRENCIES'
   | 'TRUSTS'
   | 'CUSTODY'
-  | 'CONTRACTS'
   | 'REPORTS'
   | 'STATEMENT_ACCOUNT'
   | 'AGING'
@@ -45,7 +44,6 @@ export const ALL_MODULES: ERPModule[] = [
   'CURRENCIES',
   'TRUSTS',
   'CUSTODY',
-  'CONTRACTS',
   'REPORTS',
   'STATEMENT_ACCOUNT',
   'AGING',
@@ -104,7 +102,6 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
       'CURRENCIES',
       'TRUSTS',
       'CUSTODY',
-      'CONTRACTS',
       'REPORTS',
       'STATEMENT_ACCOUNT',
       'AGING',

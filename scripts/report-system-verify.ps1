@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $root
-$tests=@('lint','engine:unit','accounting:regression','daily-posting:regression','posting:regression','lifecycle:regression','period:regression','currency:regression','control-transfer:regression','domain:regression','contracts:regression','entity-merge:regression','p1-workflow:regression','opening-interaction:regression','print:smoke','print:orientation','print:unified-preview','print:empty-reports','report-footer-bottom:regression')
+$tests=@('lint','engine:unit','accounting:regression','daily-posting:regression','posting:regression','lifecycle:regression','period:regression','currency:regression','control-transfer:regression','domain:regression','entity-merge:regression','p1-workflow:regression','opening-interaction:regression','print:smoke','print:orientation','print:unified-preview','print:empty-reports','report-footer-bottom:regression')
 $log=Join-Path $root 'transition_artifacts/report-system-v2/modified-tests.txt'
 $results=@()
 foreach($task in $tests){
