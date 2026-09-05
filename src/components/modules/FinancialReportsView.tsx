@@ -1,6 +1,6 @@
 import {openDesktopPrintPreview} from '../../utils/desktopPrintPreview';
 import { dateToIso, dateToDisplay, inDateRange } from '../../utils/dateInput';
-import { reportDocuments, lineCostCenterId, entityOpening, lineBelongsToEntity, isBeforeReport, voucherReportAmount } from '../../utils/reportData';
+import { reportDocuments, lineCostCenterId, entityOpening, entityOpeningsByCurrency, lineBelongsToEntity, isBeforeReport, voucherReportAmount } from '../../utils/reportData';
 import React, { useState, useMemo, useRef, Fragment, useEffect } from 'react';
 import { Account, JournalEntry, CostCenter, Currency, Employee, Customer, Vendor, CashBox, BankAccount, Trust, Custody, SubLedgerType, PaymentVoucher, ReceiptVoucher } from '../../types/erp';
 import {
@@ -1053,10 +1053,7 @@ export default function FinancialReportsView({
             openingBalance += amount;
             openingByCurrency[currency] = round2((openingByCurrency[currency] || 0) + amount);
           } else {
-            const balances = entity.openingBalances?.length
-              ? entity.openingBalances.map(row => ({ code: row.currency || baseCode, amount: (row.debit ?? row.debitLocal ?? 0) - (row.credit ?? row.creditLocal ?? 0) }))
-              : [{ code: entity.openingCurrency || entity.defaultCurrency || baseCode, amount: entity.openingBalance || 0 }];
-            balances.forEach(({ code, amount }) => {
+            Object.entries(entityOpeningsByCurrency(entity, baseCode)).forEach(([code, amount]) => {
               openingByCurrency[code] = round2((openingByCurrency[code] || 0) + amount);
               openingBalance += amount;
             });

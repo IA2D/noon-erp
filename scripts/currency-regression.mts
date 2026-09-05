@@ -4,6 +4,7 @@ import { amountsEqual, currencyDecimals, fromMinorUnits, multiplyMoney, roundTo,
 import { buildRealizedExchangeDifferenceJournal, buildUnrealizedRevaluationJournal, calculateRealizedExchangeDifference, deriveForeignBalancePositions, revalueForeignPosition } from '../src/utils/currencyRevaluation';
 import { accountsWithCurrencyOpenings, projectPostedJournalsToCurrency } from '../src/utils/currencyReporting';
 import { validateJournalForPosting } from '../src/utils/postingValidation';
+import { entityOpening, entityOpeningsByCurrency } from '../src/utils/reportData';
 
 const currencies = [
   { id: 'yer', code: 'YER', nameAr: 'ريال', nameEn: 'Rial', symbol: 'ر.ي', decimals: 0, isBase: true, exchangeRate: 1, minExchangeRate: 1, maxExchangeRate: 1, isActive: true, createdAt: '' },
@@ -40,6 +41,18 @@ const projectedAtAnyCurrentRate = projectPostedJournalsToCurrency([{ id: 'j-hist
 assert.equal(projectedAtAnyCurrentRate[0].lines[0].debit, 100);
 const openingUsd = accountsWithCurrencyOpenings([{ ...cashUsd, openingBalances: [{ id: 'op-usd', accountId: cashUsd.id, currency: 'USD', exchangeRate: 490, debit: 25.5, credit: 0, debitLocal: 12_495, creditLocal: 0 }] }], 'USD', 'YER', 2);
 assert.equal(openingUsd[0].openingBalance, 25.5);
+const cashBoxOpening = {
+  id: 'cash-usd',
+  openingBalance: 12_495,
+  openingBalanceForeign: 25.5,
+  openingCurrency: 'USD',
+  openingBalances: [{ id: 'legacy-usd-opening', accountId: 'cash-usd', currency: 'USD', exchangeRate: 490, debit: 0, credit: 0, debitLocal: 0, creditLocal: 0, amount: 12_495, foreignAmount: 25.5 }],
+};
+assert.equal(entityOpening(cashBoxOpening, 'USD', 'YER'), 25.5);
+assert.equal(entityOpening(cashBoxOpening, 'YER', 'YER'), 12_495);
+assert.deepEqual(entityOpeningsByCurrency(cashBoxOpening, 'YER'), { USD: 25.5 });
+const legacyCashBox = { id: 'legacy-cash-usd', openingBalance: 12_495, openingBalanceForeign: 25.5, openingCurrency: 'USD' };
+assert.deepEqual(entityOpeningsByCurrency(legacyCashBox, 'YER'), { USD: 25.5 });
 const journal = buildUnrealizedRevaluationJournal({ id: 'fx-1', entryNumber: 'JV-FX-1', date: '2026-12-31', baseCurrency: 'YER', positions: [position], gainAccount: gain, lossAccount: loss, actor: 'tester', localDecimals: 0 });
 assert.ok(journal);
 assert.equal(journal!.totalDebit, 3_000);
@@ -47,4 +60,4 @@ assert.equal(journal!.totalCredit, 3_000);
 assert.equal(journal!.lines[0].rateType, 'CLOSING');
 assert.equal(journal!.rateSource, 'PERIOD_REVALUATION');
 
-console.log('CURRENCY_REGRESSION_OK currencyDecimals=true minorUnits=true deterministicRounding=true historicalRate=true historicalReportInvariant=true originalOpening=true derivedPositions=true realizedDifference=2500 realizedJournalBalanced=true unrealizedDifference=3000 balancedRevaluation=true rateEvidence=true');
+console.log('CURRENCY_REGRESSION_OK currencyDecimals=true minorUnits=true deterministicRounding=true historicalRate=true historicalReportInvariant=true originalOpening=true cashBoxOpening=true derivedPositions=true realizedDifference=2500 realizedJournalBalanced=true unrealizedDifference=3000 balancedRevaluation=true rateEvidence=true');

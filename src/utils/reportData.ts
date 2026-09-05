@@ -11,12 +11,43 @@ export interface ReportEntity {
   id: string; linkedAccountId?: string; openingBalance?: number; openingBalances?: OpeningBalanceRecord[];
   openingCurrency?: string; openingBalanceForeign?: number;
 }
+
+/**
+ * Return an opening-balance record in the currency used by the report.
+ * Older local data may only have `amount` / `foreignAmount`, while current
+ * records carry debit/credit pairs. A default zero pair must not hide a
+ * populated legacy balance.
+ */
+export function openingRecordAmount(record: OpeningBalanceRecord, currency: string, base: string): number {
+  if (currency === base) {
+    const rate = record.exchangeRate || record.rate || 1;
+    const local = (record.debitLocal ?? (record.debit || 0) * rate) - (record.creditLocal ?? (record.credit || 0) * rate);
+    return local !== 0 || record.amount == null ? local : record.amount;
+  }
+  const original = (record.debit || 0) - (record.credit || 0);
+  return original !== 0 || record.foreignAmount == null ? original : record.foreignAmount;
+}
+
+/** Opening balances grouped by original currency for analytical statements. */
+export function entityOpeningsByCurrency(entity: ReportEntity, base: string): Record<string, number> {
+  const totals: Record<string, number> = {};
+  const add = (code: string, amount: number) => { totals[code] = (totals[code] || 0) + amount; };
+  if (entity.openingBalances?.length) {
+    entity.openingBalances.forEach(record => {
+      const code = record.currency || base;
+      add(code, openingRecordAmount(record, code, base));
+    });
+    return totals;
+  }
+  const code = entity.openingCurrency || base;
+  add(code, code === base ? (entity.openingBalance || 0) : (entity.openingBalanceForeign ?? entity.openingBalance ?? 0));
+  return totals;
+}
+
 export function entityOpening(entity: ReportEntity, currency: string, base: string): number {
   if (entity.openingBalances?.length) return entity.openingBalances.reduce((sum, row) => {
     if (currency !== base && row.currency !== currency) return sum;
-    return sum + (currency === base
-      ? (row.debitLocal == null && row.creditLocal == null && row.amount != null ? row.amount : (row.debitLocal ?? (row.debit || 0) * (row.exchangeRate || row.rate || 1)) - (row.creditLocal ?? (row.credit || 0) * (row.exchangeRate || row.rate || 1)))
-      : (row.debit == null && row.credit == null ? row.foreignAmount || 0 : (row.debit || 0) - (row.credit || 0)));
+    return sum + openingRecordAmount(row, currency, base);
   }, 0);
   return currency === base ? (entity.openingBalance || 0) : entity.openingCurrency === currency ? (entity.openingBalanceForeign || 0) : 0;
 }
