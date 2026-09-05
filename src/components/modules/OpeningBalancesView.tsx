@@ -32,16 +32,17 @@ interface Props {
   vendors: Vendor[];
   currencies?: Currency[];
   status: 'NONE' | 'DRAFT' | 'POSTED';
+  attachments: SupportingDocument[];
+  onAttachmentsChange: (documents: SupportingDocument[]) => void;
   onSaveDraft: (payload: SavePayload) => void;
   onPost: (payload: SavePayload) => void;
 }
 
-export default function OpeningBalancesView({ currentUserName = '—', accounts, cashBoxes, bankAccounts, employees, customers, vendors, currencies = [], status, onSaveDraft, onPost }: Props) {
+export default function OpeningBalancesView({ currentUserName = '—', accounts, cashBoxes, bankAccounts, employees, customers, vendors, currencies = [], status, attachments, onAttachmentsChange, onSaveDraft, onPost }: Props) {
   const toast = useToast();
 
   const [lines, setLines] = useState<EntryLine[]>([]);
   const [saving, setSaving] = useState(false);
-  const [attachments, setAttachments] = useState<SupportingDocument[]>([]);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isPostConfirmOpen, setIsPostConfirmOpen] = useState(false);
   const [incompleteBrowseKeys, setIncompleteBrowseKeys] = useState<string[]>([]);
@@ -904,7 +905,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
         onPrint={() => setIsPrintOpen(true)}
         onBrowse={handleBrowseWithAutoSave}
       />
-      <AttachmentPicker documents={attachments} onChange={setAttachments} uploadedBy="current-user" documentType="OPENING_SUPPORT" />
+      <AttachmentPicker documents={attachments} onChange={onAttachmentsChange} uploadedBy={currentUserName} documentType="OPENING_SUPPORT" />
 
       <OpeningBalancesGrid
         lines={gridLines}

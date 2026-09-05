@@ -70,6 +70,7 @@ import { CUSTODY_TYPE_LABEL, CUSTODY_STATUS_LABEL } from './utils/custodyEngine'
 import { deriveLegacySubLedgerType } from './utils/subLedger';
 import { validateGeneratedJournalForPosting, validateJournalForPosting, validateOpeningBalancesForPosting, validateVoucherForPosting } from './utils/postingValidation';
 import type { AttachmentRequirement } from './utils/supportingDocuments';
+import type { SupportingDocument } from './types/supportingDocuments';
 import { currencyDecimals, multiplyMoney, roundTo } from './utils/money';
 import { accountRemovalDecision, costCenterRemovalDecision, currencyRemovalDecision, entityRemovalDecision } from './utils/masterDataGuards';
 import { buildLinkedReversal, linkOriginalToReversal } from './utils/accountingLifecycle';
@@ -113,6 +114,7 @@ const K = {
   closedYears: 'elite-erp-closed-years-v1',
   closedMonths: 'elite-erp-closed-months-v1',
   openingBalancesStatus: 'elite-erp-opening-balances-status-v1',
+  openingBalanceAttachments: 'elite-erp-opening-balance-attachments-v1',
   periodStates: 'elite-erp-period-states-v1'
 };
 
@@ -233,6 +235,9 @@ function AppInner() {
     });
   }, [closedYears, closedMonths, setPeriodStates]);
   const [openingBalancesStatus, setOpeningBalancesStatus] = useLocalStorageState<'NONE' | 'DRAFT' | 'POSTED'>(K.openingBalancesStatus, 'NONE');
+  // Opening balances are a document in their own right; retain their supporting
+  // documents independently from the per-account balance rows.
+  const [openingBalanceAttachments, setOpeningBalanceAttachments] = useLocalStorageState<SupportingDocument[]>(K.openingBalanceAttachments, []);
 
   const [statementNavParams, setStatementNavParams] = useState<{ kind: string; id: string } | null>(null);
 
@@ -714,6 +719,7 @@ function AppInner() {
     setCustomers(next.customers);
     setVendors(next.vendors);
     setEmployees(next.employees);
+    if (payload.attachments) setOpeningBalanceAttachments(payload.attachments);
     setOpeningBalancesStatus('DRAFT');
     addAuditLog(
       'OPENING_BALANCES',
@@ -744,6 +750,7 @@ function AppInner() {
       { key: K.accounts, value: next.accounts }, { key: K.cashBoxes, value: next.cashBoxes }, { key: K.bankAccounts, value: next.bankAccounts },
       { key: K.customers, value: next.customers }, { key: K.vendors, value: next.vendors }, { key: K.employees, value: next.employees },
       { key: K.openingBalancesStatus, value: 'POSTED' },
+      { key: K.openingBalanceAttachments, value: payload.attachments || openingBalanceAttachments },
     ];
     if (!commitAccountingState({ idempotencyKey: 'POST:OPENING_BALANCES:INITIAL', commandType: 'POST', documentType: 'OPENING_BALANCES', documentNumber: 'INITIAL' }, openingChanges, audit)) return false;
     setAccounts(next.accounts);
@@ -752,6 +759,7 @@ function AppInner() {
     setCustomers(next.customers);
     setVendors(next.vendors);
     setEmployees(next.employees);
+    setOpeningBalanceAttachments(payload.attachments || openingBalanceAttachments);
     setOpeningBalancesStatus('POSTED');
     setAuditLogs(prev => [audit, ...prev]);
     return true;
@@ -1816,6 +1824,8 @@ function AppInner() {
             vendors={vendors}
             currencies={currencies}
             status={openingBalancesStatus}
+            attachments={openingBalanceAttachments}
+            onAttachmentsChange={setOpeningBalanceAttachments}
             onSaveDraft={handleSaveDraftOpeningBalances}
             onPost={handlePostOpeningBalances}
           />
