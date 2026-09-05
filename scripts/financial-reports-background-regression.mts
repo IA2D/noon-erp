@@ -11,7 +11,7 @@ assert.match(source, /return scopedCC\.map\(cc =>/);
 assert.match(source, /return scopedEntities\.flatMap\(en =>/);
 assert.match(source, /key: `\$\{spec\.key\}-\$\{code\}`/);
 assert.match(source, /printableStatementSpecs\.map\(spec =>/);
-assert.match(source, /const usesDirectAnalyticalSelection = reportType === 'BANK_REPORT' \|\| reportType === 'EMPLOYEES_REPORT'/);
+assert.match(source, /'EMPLOYEES_REPORT',[\s\S]*'CUSTOMERS_REPORT',[\s\S]*'VENDORS_REPORT',[\s\S]*'TRUSTS_REPORT',[\s\S]*'COST_CENTERS'/);
 assert.match(source, /!usesDirectAnalyticalSelection && \(/);
 assert.match(source, /الحساب التحليلي — سلف الموظفين الشهرية/);
 assert.match(source, /الحساب التحليلي — عُهد الموظفين/);

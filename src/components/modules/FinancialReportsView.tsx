@@ -470,11 +470,17 @@ export default function FinancialReportsView({
   const [fromEntityCode, setFromEntityCode] = useState<string>('');
   const [toEntityId, setToEntityId] = useState<string>('');
   const [toEntityCode, setToEntityCode] = useState<string>('');
-  // التقارير التحليلية تبدأ بالحساب الرئيسي، ما عدا كشف البنك والموظف حيث
-  // يكون الاختيار المباشر من الحساب التحليلي هو المسار العملي.
+  // يبقى كشف البنك/الصراف مقيداً بالحساب الرئيسي ثم التحليلي. أما التقارير
+  // المباشرة فتختار الكيان/الحساب التحليلي دون خطوة وسيطة.
   const [fromMainAccountId, setFromMainAccountId] = useState<string>('');
   const [toMainAccountId, setToMainAccountId] = useState<string>('');
-  const usesDirectAnalyticalSelection = reportType === 'BANK_REPORT' || reportType === 'EMPLOYEES_REPORT';
+  const usesDirectAnalyticalSelection = [
+    'EMPLOYEES_REPORT',
+    'CUSTOMERS_REPORT',
+    'VENDORS_REPORT',
+    'TRUSTS_REPORT',
+    'COST_CENTERS',
+  ].includes(reportType);
 
   const isEntityOrCostCenterReport =
     ['EMPLOYEES_REPORT', 'CUSTOMERS_REPORT', 'VENDORS_REPORT', 'CASHBOX_REPORT', 'BANK_REPORT', 'TRUSTS_REPORT', 'COST_CENTERS'].includes(reportType);
