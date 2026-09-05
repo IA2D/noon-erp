@@ -16,7 +16,13 @@ export async function attachmentFromFile(file: File, documentType: string, uploa
   const buffer = await file.arrayBuffer();
   const digest = await crypto.subtle.digest('SHA-256', buffer);
   const sha256 = Array.from(new Uint8Array(digest)).map(value => value.toString(16).padStart(2, '0')).join('');
-  return { id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, documentType, fileName: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size, sha256, uploadedBy, uploadedAt: new Date().toISOString(), status: 'VERIFIED' };
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('تعذر قراءة الملف المرفق.'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsDataURL(file);
+  });
+  return { id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, documentType, fileName: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size, sha256, uploadedBy, uploadedAt: new Date().toISOString(), status: 'VERIFIED', dataUrl };
 }
 export function verifiedDocumentsFor(record: { attachments?: SupportingDocument[] }): SupportingDocument[] { return (record.attachments || []).filter(document => document.status === 'VERIFIED'); }
 export function replacementJournal(original: JournalEntry, replacement: JournalEntry, actor: string, reason: string): JournalEntry {

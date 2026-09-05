@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Paperclip, X } from 'lucide-react';
+import { Eye, Paperclip, X } from 'lucide-react';
 import type { SupportingDocument } from '../../types/supportingDocuments';
 import { attachmentFromFile } from '../../utils/supportingDocuments';
 
@@ -11,5 +11,9 @@ export default function AttachmentPicker({ documents, onChange, uploadedBy, docu
     onChange([...documents, ...added]);
     event.target.value = '';
   };
-  return <div className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 space-y-2"><div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-300">المستندات المؤيدة</span><button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs font-bold text-sky-300"><Paperclip className="w-3.5 h-3.5" />إرفاق ملف</button><input ref={inputRef} type="file" multiple className="hidden" onChange={add} /></div>{documents.length ? <div className="space-y-1">{documents.map(doc => <div key={doc.id} className="flex items-center gap-2 text-xs text-slate-300"><span className="truncate flex-1">{doc.fileName}</span><span className={doc.status === 'VERIFIED' ? 'text-emerald-300' : doc.status === 'REJECTED' ? 'text-rose-300' : 'text-amber-300'}>{doc.status === 'VERIFIED' ? 'مُرفق ومعتمد' : doc.status === 'REJECTED' ? 'مرفوض' : 'بانتظار التحقق'}</span><button type="button" onClick={() => onChange(documents.filter(item => item.id !== doc.id))} className="text-slate-500 hover:text-red-300" title="حذف المرفق"><X className="w-3.5 h-3.5" /></button></div>)}</div> : <p className="text-[11px] text-slate-500">لا توجد مرفقات. تُعتمد المرفقات مباشرةً عند الإرفاق.</p>}</div>;
+  const preview = (doc: SupportingDocument) => {
+    if (!doc.dataUrl) return;
+    window.open(doc.dataUrl, '_blank', 'noopener,noreferrer');
+  };
+  return <div className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 space-y-2"><div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-300">المستندات المؤيدة</span><button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs font-bold text-sky-300"><Paperclip className="w-3.5 h-3.5" />إرفاق ملف</button><input ref={inputRef} type="file" multiple className="hidden" onChange={add} /></div>{documents.length ? <div className="space-y-1">{documents.map(doc => <div key={doc.id} className="flex items-center gap-2 text-xs text-slate-300"><span className="truncate flex-1">{doc.fileName}</span><span className={doc.status === 'VERIFIED' ? 'text-emerald-300' : doc.status === 'REJECTED' ? 'text-rose-300' : 'text-amber-300'}>{doc.status === 'VERIFIED' ? 'مُرفق ومعتمد' : doc.status === 'REJECTED' ? 'مرفوض' : 'بانتظار التحقق'}</span><button type="button" onClick={() => preview(doc)} disabled={!doc.dataUrl} className="text-sky-300 hover:text-sky-100 disabled:cursor-not-allowed disabled:text-slate-600" title={doc.dataUrl ? 'عرض المستند' : 'هذا المرفق القديم لا يحتوي نسخة قابلة للعرض'}><Eye className="w-3.5 h-3.5" /></button><button type="button" onClick={() => onChange(documents.filter(item => item.id !== doc.id))} className="text-slate-500 hover:text-red-300" title="حذف المرفق"><X className="w-3.5 h-3.5" /></button></div>)}</div> : <p className="text-[11px] text-slate-500">لا توجد مرفقات. تُعتمد المرفقات مباشرةً عند الإرفاق.</p>}</div>;
 }

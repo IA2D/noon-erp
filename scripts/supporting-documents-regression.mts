@@ -9,6 +9,8 @@ assert.equal(validateSupportingDocuments([], required).length, 1);
 assert.equal(validateSupportingDocuments([doc('PENDING')], required).length, 1);
 assert.equal(validateSupportingDocuments([doc('VERIFIED')], required).length, 0);
 assert.equal(validateSupportingDocuments([], required, false).length, 0);
+const previewable = { ...doc('VERIFIED'), dataUrl: 'data:application/pdf;base64,JVBERi0=' };
+assert.ok(previewable.dataUrl.startsWith('data:application/pdf'));
 const original = { id: 'j-posted', status: 'POSTED', entryNumber: 'JV-1' } as JournalEntry;
 const pending = { id: 'j-replacement', status: 'PENDING_POSTING', entryNumber: 'JV-2' } as JournalEntry;
 const replacement = replacementJournal(original, pending, 'maker', 'تصحيح المستند');
