@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('desktopStore', {
   version: key => ipcRenderer.sendSync('desktop-store:version', key),
   accountingCommand: payload => ipcRenderer.sendSync('desktop-store:accounting-command', payload),
   createBackup: () => ipcRenderer.sendSync('desktop-store:create-backup'),
+  exportBackup: () => ipcRenderer.invoke('desktop-store:export-backup'),
+  restoreBackup: () => ipcRenderer.invoke('desktop-store:restore-backup'),
   login: (username, password) => ipcRenderer.sendSync('auth:login', username, password),
   session: token => ipcRenderer.sendSync('auth:session', token),
   logout: token => ipcRenderer.sendSync('auth:logout', token),

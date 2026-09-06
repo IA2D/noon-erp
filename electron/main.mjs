@@ -1,12 +1,12 @@
 import { renderReportPdf } from './report-pdf.mjs';
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRelationalStore } from './relational-store.mjs';
 import { createAccountingCommandStore } from './accounting-command-store.mjs';
-import { assertSupportedDataPath, createVerifiedBackup, listVerifiedBackups, restoreLatestVerifiedBackup, verifyDatabaseFile } from './database-recovery.mjs';
+import { assertSupportedDataPath, createVerifiedBackup, createVerifiedBackupAt, listVerifiedBackups, restoreLatestVerifiedBackup, restoreVerifiedBackup, verifyDatabaseFile, verifyFullerpBackupFile } from './database-recovery.mjs';
 import { createAuthStore } from './auth-store.mjs';
 import { bindConfiguredUiScale, normalizeUiScalePercent, uiScaleToZoomFactor } from './ui-scale.mjs';
 
@@ -21,10 +21,31 @@ let lastBackup = null;
 let startupRecovery = null;
 let authStore;
 let activeSessionToken = null;
+let backupScheduleTimer = null;
 const printPreviewWindows = new Set();
 const smokeResultPath = process.env.FULLERP_SMOKE_RESULT || '';
 const smokeMode = process.env.FULLERP_SMOKE_TEST === '1' && Boolean(smokeResultPath);
 const SETTINGS_STORAGE_KEY = 'elite-erp-settings-v6';
+
+function backupFrequencyMs(value) {
+  return ({ daily: 24 * 60 * 60_000, weekly: 7 * 24 * 60 * 60_000, monthly: 30 * 24 * 60 * 60_000 })[String(value)] ?? null;
+}
+
+function createInternalBackup(reason) {
+  const snapshot = createVerifiedBackup(db, backupRoot);
+  lastBackup = { ...snapshot, reason, createdAt: new Date().toISOString() };
+  return lastBackup;
+}
+
+function configureBackupSchedule(settings = {}) {
+  if (backupScheduleTimer) clearInterval(backupScheduleTimer);
+  backupScheduleTimer = null;
+  const interval = backupFrequencyMs(settings.backupFrequency);
+  if (!interval || !db) return;
+  backupScheduleTimer = setInterval(() => {
+    try { createInternalBackup('scheduled'); } catch (error) { console.error('[database-backup:scheduled]', error); }
+  }, interval);
+}
 function readUiScalePercent() {
   try {
     const raw = db?.prepare('SELECT value FROM kv_store WHERE key = ?').get(SETTINGS_STORAGE_KEY)?.value;
@@ -77,6 +98,7 @@ function openDatabase() {
     const rawSettings = db.prepare("SELECT value FROM kv_store WHERE key='elite-erp-settings-v6'").get()?.value;
     const savedSettings = rawSettings ? JSON.parse(rawSettings) : {};
     authStore.configureSecurity({ sessionTimeoutMinutes: Number(savedSettings.sessionTimeout || 30) });
+    configureBackupSchedule(savedSettings);
   } catch {}
   return databasePath;
 }
@@ -108,6 +130,9 @@ function registerStorageIpc() {
       relationalStore.syncCollection(name, String(value));
       accountingCommandStore.bumpVersion(name);
       db.exec('COMMIT');
+      if (name === SETTINGS_STORAGE_KEY) {
+        try { configureBackupSchedule(JSON.parse(String(value))); } catch { configureBackupSchedule({}); }
+      }
       event.returnValue = true;
     } catch (error) {
       try { db.exec('ROLLBACK'); } catch {}
@@ -168,8 +193,42 @@ function registerStorageIpc() {
     event.returnValue = { databasePath, engine: 'SQLite', schemaVersion: 3, entries: entries.all().length, relational: relationalStore.info(), diagnostics: relationalStore.diagnostics(), authority: 'RELATIONAL_SQLITE', recovery: { dataPathPolicy: 'LOCAL_DISK_ONLY', backupRoot, verifiedBackups: listVerifiedBackups(backupRoot).length, lastBackup, startupRecovery } };
   });
   ipcMain.on('desktop-store:create-backup', event => {
-    try { lastBackup = createVerifiedBackup(db, backupRoot); event.returnValue = { ok: true, ...lastBackup }; }
+    try { event.returnValue = { ok: true, ...createInternalBackup('manual-safety') }; }
     catch (error) { event.returnValue = { ok: false, error: String(error) }; }
+  });
+  ipcMain.handle('desktop-store:export-backup', async event => {
+    const suggestedName = `NOON-ERP-${new Date().toISOString().slice(0, 10)}.sqlite`;
+    const choice = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender) ?? undefined, {
+      title: 'حفظ نسخة كاملة من بيانات NOON ERP', defaultPath: suggestedName,
+      filters: [{ name: 'NOON ERP SQLite Backup', extensions: ['sqlite'] }],
+    });
+    if (choice.canceled || !choice.filePath) return { ok: false, canceled: true };
+    if (path.resolve(choice.filePath) === path.resolve(databasePath)) return { ok: false, error: 'BACKUP_TARGET_IS_ACTIVE_DATABASE' };
+    try { return { ok: true, ...createVerifiedBackupAt(db, choice.filePath) }; }
+    catch (error) { return { ok: false, error: String(error) }; }
+  });
+  ipcMain.handle('desktop-store:restore-backup', async event => {
+    const choice = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender) ?? undefined, {
+      title: 'اختيار نسخة NOON ERP للاستعادة', properties: ['openFile'],
+      filters: [{ name: 'NOON ERP SQLite Backup', extensions: ['sqlite', 'db'] }],
+    });
+    if (choice.canceled || !choice.filePaths[0]) return { ok: false, canceled: true };
+    const source = choice.filePaths[0];
+    if (path.resolve(source) === path.resolve(databasePath)) return { ok: false, error: 'RESTORE_SOURCE_IS_ACTIVE_DATABASE' };
+    const verification = verifyFullerpBackupFile(source);
+    if (!verification.ok) return { ok: false, error: `BACKUP_INTEGRITY_${verification.integrity}` };
+    try {
+      const safetyBackup = createInternalBackup('before-restore');
+      db.close();
+      db = undefined;
+      const result = restoreVerifiedBackup(databasePath, source);
+      if (!result.restored) throw new Error(result.error || 'RESTORE_VERIFICATION_FAILED');
+      setTimeout(() => { app.relaunch(); app.exit(0); }, 350);
+      return { ok: true, integrity: result.integrity, safetyBackup: safetyBackup.path, restarting: true };
+    } catch (error) {
+      try { if (!db) openDatabase(); } catch (reopenError) { console.error('[database-restore:reopen]', reopenError); }
+      return { ok: false, error: String(error) };
+    }
   });
   ipcMain.on('desktop-store:version', (event, key) => {
     event.returnValue = accountingCommandStore.versionOf(String(key));
@@ -398,7 +457,7 @@ app.whenReady().then(() => {
   try {
     openDatabase();
     registerStorageIpc();
-    lastBackup = createVerifiedBackup(db, backupRoot);
+    lastBackup = createInternalBackup('startup');
     registerPrintIpc();
     registerAttachmentIpc();
     const window = createWindow();
@@ -418,8 +477,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  if (backupScheduleTimer) clearInterval(backupScheduleTimer);
   if (db) {
-    try { lastBackup = createVerifiedBackup(db, backupRoot); } catch (error) { console.error('[database-backup:quit]', error); }
+    try { createInternalBackup('shutdown'); } catch (error) { console.error('[database-backup:quit]', error); }
     db.close();
   }
 });

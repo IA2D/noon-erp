@@ -213,6 +213,8 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   const [tab, setTab] = useState<SettingsTab>('company');
   const [activeModal, setActiveModal] = useState<SettingsTab | null>(null);
   const [pendingRestore, setPendingRestore] = useState<Record<string, unknown> | null>(null);
+  const [pendingDatabaseRestore, setPendingDatabaseRestore] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
   const [storageReport, setStorageReport] = useState(getPersistentStorageReport);
   const [lastRestore, setLastRestore] = useState<PersistentRestoreResult | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -317,6 +319,19 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   };
 
   const handleBackup = async () => {
+    if (window.desktopStore?.exportBackup) {
+      const result = await window.desktopStore.exportBackup();
+      if (result.canceled) return;
+      if (!result.ok) {
+        toast('error', 'تعذر إنشاء نسخة SQLite الكاملة.');
+        return;
+      }
+      toast('success', `تم حفظ نسخة SQLite كاملة ومتحقق منها: ${result.integrity}`);
+      return;
+    }
+
+    // The browser fallback remains a logical data export; the desktop path above
+    // is the authoritative, complete backup including authentication data.
     const suggestedName = `fullerp-sqlite-backup-${new Date().toISOString().split('T')[0]}.json`;
     const backupData = collectBackupData(settings);
 
@@ -344,7 +359,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
     a.download = suggestedName;
     a.click();
     URL.revokeObjectURL(url);
-    toast('success', 'تم إنشاء نسخة احتياطية كاملة من بيانات النظام.');
+    toast('success', 'تم إنشاء تصدير JSON لبيانات النظام.');
   };
 
   const handleRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -374,6 +389,9 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
         const k = String(key);
         if (k.startsWith('elite-erp-')) entries.push([k, typeof value === 'string' ? value : JSON.stringify(value)]);
       });
+      if (entries.length === 0) throw new Error('No ERP records in backup');
+      const safety = window.desktopStore?.createBackup();
+      if (safety && !safety.ok) throw new Error(safety.error || 'Safety backup failed');
       const result = replacePersistentEntries(entries);
       if (!result.ok) throw new Error(result.error || 'SQLite restore failed');
       clearLegacyPersistentEntries();
@@ -387,6 +405,26 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
     } catch {
       toast('error', 'تعذر استعادة النسخة الاحتياطية — الملف غير صالح.');
       setPendingRestore(null);
+    }
+  };
+
+  const applyDatabaseRestore = async () => {
+    if (!window.desktopStore?.restoreBackup) {
+      toast('error', 'استعادة SQLite الكاملة متاحة داخل تطبيق سطح المكتب فقط.');
+      return;
+    }
+    setRestoreBusy(true);
+    try {
+      const result = await window.desktopStore.restoreBackup();
+      if (result.canceled) return;
+      if (!result.ok) {
+        toast('error', 'تعذر التحقق من نسخة SQLite أو استعادتها.');
+        return;
+      }
+      setPendingDatabaseRestore(false);
+      toast('success', 'تمت استعادة النسخة الكاملة والتحقق منها. سيُعاد تشغيل التطبيق الآن.');
+    } finally {
+      setRestoreBusy(false);
     }
   };
 
@@ -688,20 +726,28 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                       className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-500 transition hover:bg-emerald-500/20 cursor-pointer"
                     >
                       <Download className="w-4 h-4" />
-                      نسخة احتياطية
+                      تصدير نسخة كاملة (SQLite)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDatabaseRestore(true)}
+                      className="flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-500 transition hover:bg-sky-500/20 cursor-pointer"
+                    >
+                      <Upload className="w-4 h-4" />
+                      استعادة نسخة كاملة (SQLite)
                     </button>
                     <button
                       type="button"
                       onClick={() => restoreInputRef.current?.click()}
-                      className="flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-500 transition hover:bg-sky-500/20 cursor-pointer"
+                      className="flex items-center gap-2 rounded-lg border border-slate-500/30 bg-slate-500/10 px-4 py-2.5 text-sm font-semibold text-slate-400 transition hover:bg-slate-500/20 cursor-pointer"
                     >
                       <Upload className="w-4 h-4" />
-                      استرجاع نسخة سابقة
+                      استيراد JSON قديم
                     </button>
                   </div>
                   <p className="text-xs text-slate-500 mt-3 flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    تنبيه: استرجاع نسخة سابقة يستبدل البيانات الحالية في النظام بالبيانات المحفوظة في الملف المحدد.
+                    نسخة SQLite تشمل كامل قاعدة البيانات، بما فيها المستخدمون والإعدادات. يُنشئ النظام تلقائيًا نسخة أمان قبل كل استعادة.
                   </p>
 
                   <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
@@ -768,7 +814,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                   </div>
 
                   <div className="mt-6">
-                    <label className={labelCls}>الجدولة التلقائية للحفظ</label>
+                    <label className={labelCls}>الجدولة التلقائية للنسخ (أثناء تشغيل التطبيق)</label>
                     <div className="max-w-sm">
                       <select value={settings.backupFrequency} onChange={e => set('backupFrequency', e.target.value)} className={selectCls}>
                         <option value="daily">يومي</option>
@@ -933,6 +979,32 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer"
               >
                 نعم، استعادة النسخة
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {pendingDatabaseRestore && (
+        <ModalShell
+          id="settings-database-restore"
+          open={pendingDatabaseRestore}
+          onClose={() => !restoreBusy && setPendingDatabaseRestore(false)}
+          title="استعادة قاعدة بيانات كاملة"
+          icon={Database}
+          size="sm"
+          footer={null}
+          closeOnBackdrop={!restoreBusy}
+          bodyClassName="p-0"
+        >
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-slate-400 leading-relaxed">
+              ستستبدل النسخة المحددة كامل بيانات NOON ERP، بما فيها المستخدمون والإعدادات وسجل العمليات. ينشئ النظام نسخة SQLite آمنة من الوضع الحالي أولاً، ثم يتحقق من النسخة المحددة قبل إعادة تشغيل التطبيق.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" disabled={restoreBusy} onClick={() => setPendingDatabaseRestore(false)} className="px-4 py-2 text-slate-400 hover:bg-slate-900 rounded-xl text-sm font-medium cursor-pointer disabled:opacity-50">إلغاء</button>
+              <button type="button" disabled={restoreBusy} onClick={applyDatabaseRestore} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-50">
+                {restoreBusy ? 'جارٍ التحقق والاستعادة...' : 'اختيار النسخة واستعادتها'}
               </button>
             </div>
           </div>
