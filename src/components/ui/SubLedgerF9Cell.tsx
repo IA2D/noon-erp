@@ -12,6 +12,8 @@ interface Props {
   subLedgerId?: string;
   subLedgerName?: string;       // اسم الكيان التحليلي المختار (للعرض دون جلب إضافي)
   onChange: (subLedgerId: string, subLedgerName: string) => void;
+  /** متابعة تسلسل Enter بعد اختيار الحساب التحليلي. */
+  onAfterSelect?: () => void;
   disabled?: boolean;
   compact?: boolean;            // وضع مختصر (سطر تفاصيل ضيق)
 }
@@ -28,6 +30,7 @@ export default function SubLedgerF9Cell({
   subLedgerId,
   subLedgerName,
   onChange,
+  onAfterSelect,
   disabled = false,
   compact = false,
 }: Props) {
@@ -39,7 +42,10 @@ export default function SubLedgerF9Cell({
   const handleSelect = (entity: SubLedgerEntity) => {
     onChange(entity.id, entity.nameAr);
     setOpen(false);
-    window.setTimeout(() => cellRef.current?.focus(), 40);
+    window.setTimeout(() => {
+      if (onAfterSelect) onAfterSelect();
+      else cellRef.current?.focus({ preventScroll: true });
+    }, 40);
   };
 
   // شارك سجل الاختصارات العام حتى تفوز خلية الحساب التحليلي المركزة على

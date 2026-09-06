@@ -21,6 +21,8 @@ interface Props<T> {
   emptyMessage?: string;
   showBadge?: boolean;
   onSelect?: (item: T) => void;
+  /** يُستدعى بعد اختيار سجل وإغلاق نافذة F9؛ يُستخدم لاستكمال تسلسل Enter. */
+  onAfterSelect?: (item: T) => void;
   /** يُستدعى عند الضغط Enter على الحقل (لتسليم النص المدخل يدوياً) */
   onEnter?: (value: string) => void;
   /** يُستدعى عند مغادرة الحقل (لتسليم النص المدخل يدوياً) */
@@ -45,6 +47,7 @@ export default function F9SearchInput<T>({
   emptyMessage = 'لا توجد سجلات مطابقة للبحث.',
   showBadge = true,
   onSelect,
+  onAfterSelect,
   onEnter,
   onBlur,
   inputProps,
@@ -107,7 +110,10 @@ export default function F9SearchInput<T>({
     closeBrowse();
     // Return focus to the originating field after the modal closes so Enter-as-Tab
     // continues into the next field (including analytical-account selectors).
-    window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
+    window.requestAnimationFrame(() => {
+      if (onAfterSelect) onAfterSelect(item);
+      else inputRef.current?.focus({ preventScroll: true });
+    });
   };
 
   const handleModalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

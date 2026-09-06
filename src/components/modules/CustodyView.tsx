@@ -1431,6 +1431,9 @@ export default function CustodyView({
       setItems(items.map((it, i) => (i === idx ? recomputeItem({ ...it, ...patch }) : it)));
     };
     const vendorName = (id: string) => vendors.find(v => v.id === id)?.nameAr ?? '';
+    const focusSettlementField = (selector: string) => {
+      window.setTimeout(() => document.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true }), 90);
+    };
     const addItem = () => setItems([...items, newItem()]);
     const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
     const subLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
@@ -1486,6 +1489,12 @@ export default function CustodyView({
                           searchText={account => `${account.code} ${account.nameAr} ${account.nameEn}`}
                           browseTitle="اختيار الحساب المحاسبي"
                           onSelect={account => updateItem(idx, { accountId: account.id, accountCode: account.code, accountNameAr: account.nameAr, subLedgerType: subLedgerTypeOf(account, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined })}
+                          onAfterSelect={account => {
+                            const needsAnalytical = subLedgerTypeOf(account, subLedgerDataset) !== 'NONE';
+                            focusSettlementField(needsAnalytical
+                              ? `[data-settlement-analytical=\"${it.id}\"] [tabindex=\"0\"]`
+                              : `[data-settlement-party=\"${it.id}\"]`);
+                          }}
                           inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي' }}
                           className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
                         />
@@ -1493,9 +1502,9 @@ export default function CustodyView({
                       <td className="p-2">
                         {!it.accountId ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">اختر الحساب أولاً</div>
                           : it.subLedgerType === 'NONE' ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">بدون حساب تحليلي</div>
-                          : <SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(account => account.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} />}
+                          : <div data-settlement-analytical={it.id}><SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(account => account.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} onAfterSelect={() => focusSettlementField(`[data-settlement-party=\"${it.id}\"]`)} /></div>}
                       </td>
-                      <td className="p-2"><input data-enter-nav-field={`settlement-party-${it.id}`} type="text" list="custody-vendor-options" value={it.partyName ?? vendorName(it.vendorId ?? '')} onChange={event => { const vendor = vendors.find(candidate => candidate.nameAr === event.target.value); updateItem(idx, vendor ? { partyName: vendor.nameAr, vendorId: vendor.id, vendorName: vendor.nameAr, vendorVatNumber: vendor.vatNumber } : { partyName: event.target.value, vendorId: undefined, vendorName: undefined }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                      <td className="p-2"><input data-enter-nav-field={`settlement-party-${it.id}`} data-settlement-party={it.id} type="text" list="custody-vendor-options" defaultValue={it.partyName ?? vendorName(it.vendorId ?? '')} onBlur={event => { const partyName = event.currentTarget.value; const vendor = vendors.find(candidate => candidate.nameAr === partyName); updateItem(idx, vendor ? { partyName: vendor.nameAr, vendorId: vendor.id, vendorName: vendor.nameAr, vendorVatNumber: vendor.vatNumber } : { partyName, vendorId: undefined, vendorName: undefined }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                       <td className="p-2">
                         <F9SearchInput
                           value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
@@ -1505,11 +1514,12 @@ export default function CustodyView({
                           searchText={center => `${center.code} ${center.nameAr}`}
                           browseTitle="اختيار مركز التكلفة"
                           onSelect={center => updateItem(idx, { costCenterId: center.id })}
+                          onAfterSelect={() => focusSettlementField(`[data-settlement-description=\"${it.id}\"]`)}
                           inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة' }}
                           className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
                         />
                       </td>
-                      <td className="p-2"><input data-enter-nav-field={`settlement-description-${it.id}`} type="text" value={it.description} onChange={event => updateItem(idx, { description: event.target.value })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                      <td className="p-2"><input data-enter-nav-field={`settlement-description-${it.id}`} data-settlement-description={it.id} type="text" value={it.description} onChange={event => updateItem(idx, { description: event.target.value })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                       <td className="p-2"><AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={value => updateItem(idx, { amount: Number(value) })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                       <td className="p-2"><div className="relative"><AmountInput value={it.taxRate} onChange={value => updateItem(idx, { taxRate: Number(value) / 100 })} className="w-full h-9 px-2 pl-6 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /><Percent className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" /></div></td>
                       <td className="p-2 text-center"><label className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={it.vatInclusive} onChange={event => updateItem(idx, { vatInclusive: event.target.checked })} className="accent-sky-500" /> نعم</label></td>
