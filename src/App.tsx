@@ -243,14 +243,25 @@ function AppInner() {
     };
     const onInput = (event: Event) => fit(event.target as Element);
     const onFocus = (event: FocusEvent) => fit(event.target as Element);
+    // بعض حقول المبالغ تنسّق القيمة عند فقدان التركيز (مثل إضافة .00).
+    // نعيد القياس بعد اكتمال تحديث React حتى تدخل الكسور الجديدة في الحساب.
+    const onBlur = (event: FocusEvent) => {
+      const input = event.target as Element;
+      window.requestAnimationFrame(() => {
+        fit(input);
+        window.setTimeout(() => fit(input), 0);
+      });
+    };
     const onResize = () => document.querySelectorAll<HTMLInputElement>('input[data-amount-input="true"], input[type="number"], input[inputmode="decimal"]').forEach(fitAmountInput);
     document.addEventListener('input', onInput, true);
     document.addEventListener('focusin', onFocus, true);
+    document.addEventListener('focusout', onBlur, true);
     window.addEventListener('resize', onResize);
     onResize();
     return () => {
       document.removeEventListener('input', onInput, true);
       document.removeEventListener('focusin', onFocus, true);
+      document.removeEventListener('focusout', onBlur, true);
       window.removeEventListener('resize', onResize);
     };
   }, []);
