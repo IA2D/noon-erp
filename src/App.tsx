@@ -63,7 +63,7 @@ import { applyOpeningBalances, cleanupOpeningBalanceDuplicates, reconcileControl
 import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
 import { useLocalStorageState } from './utils/useLocalStorageState';
 import { isPeriodClosed } from './utils/periodGuard';
-import { reindexAccountCodes, ensureEmployeeAdvanceGroup, employeeAdvanceGeneralAccount, monthlyEmployeeAdvancesAccount, nextJournalNumber, calculateAccountActivity, netAccountBalance, isPostingAccount, accountFinancialType } from './utils/accountingEngine';
+import { reindexAccountCodes, ensureEmployeeAdvanceGroup, ensureMonthlyEmployeeAdvancesGroup, employeeAdvanceGeneralAccount, monthlyEmployeeAdvancesAccount, nextJournalNumber, calculateAccountActivity, netAccountBalance, isPostingAccount, accountFinancialType } from './utils/accountingEngine';
 import { CUSTODY_TYPE_LABEL, CUSTODY_STATUS_LABEL } from './utils/custodyEngine';
 import { deriveLegacySubLedgerType } from './utils/subLedger';
 import { validateGeneratedJournalForPosting, validateJournalForPosting, validateOpeningBalancesForPosting, validateVoucherForPosting } from './utils/postingValidation';
@@ -564,7 +564,8 @@ function AppInner() {
     setAccounts(prev => {
       const reindexed = reindexAccountCodes(prev, journals).accounts;
       const { accounts: ensured, group } = ensureEmployeeAdvanceGroup(reindexed);
-      let accs = ensured;
+      const { accounts: monthlyEnsured, group: monthlyGroup } = ensureMonthlyEmployeeAdvancesGroup(ensured);
+      let accs = monthlyEnsured;
 
       const defaultAccount = employeeAdvanceGeneralAccount();
       const existingControl = accs.find(account => account.id === defaultAccount.id || (account.parentId === group.id && account.code === defaultAccount.code));
@@ -576,17 +577,19 @@ function AppInner() {
 
       const monthlyAdvances = monthlyEmployeeAdvancesAccount();
       const existingMonthlyAdvances = accs.find(account =>
-        account.id === monthlyAdvances.id || (account.parentId === group.id && account.code === monthlyAdvances.code)
+        account.id === monthlyAdvances.id || account.id === '1102050002' || account.code === '1102050002' ||
+        (account.parentId === monthlyGroup.id && account.code === monthlyAdvances.code)
       );
       if (!existingMonthlyAdvances) {
         accs = [...accs, monthlyAdvances];
       } else if (
         existingMonthlyAdvances.nameAr !== monthlyAdvances.nameAr ||
         existingMonthlyAdvances.nameEn !== monthlyAdvances.nameEn ||
-        existingMonthlyAdvances.parentId !== group.id
+        existingMonthlyAdvances.code !== monthlyAdvances.code ||
+        existingMonthlyAdvances.parentId !== monthlyGroup.id
       ) {
         accs = accs.map(account => account.id === existingMonthlyAdvances.id
-          ? { ...account, nameAr: monthlyAdvances.nameAr, nameEn: monthlyAdvances.nameEn, parentId: group.id, subLedgerType: 'EMPLOYEE' }
+          ? { ...account, code: monthlyAdvances.code, nameAr: monthlyAdvances.nameAr, nameEn: monthlyAdvances.nameEn, parentId: monthlyGroup.id, subLedgerType: 'EMPLOYEE' }
           : account
         );
       }

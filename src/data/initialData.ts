@@ -132,6 +132,7 @@ const l4_110202 = ac('110202', 'أوراق قبض', 'Notes Receivable', 4, '1102
 const l4_110203 = ac('110203', 'ذمم مدينة أخرى', 'Other Receivables', 4, '1102', 'DEBIT', 'RECEIVABLE');
 const l4_110204 = ac('110204', 'مخصص الديون المشكوك في تحصيلها', 'Allowance for Doubtful Debts', 4, '1102', 'CREDIT', 'RECEIVABLE');
 const l4_110205 = ac('110205', 'عُهد الموظفين', 'Employee Custodies', 4, '1102', 'DEBIT', 'RECEIVABLE');
+const l4_110206 = ac('110206', 'سلف الموظفين الشهرية', 'Monthly Employee Advances', 4, '1102', 'DEBIT', 'RECEIVABLE');
 
 const l4_110301 = ac('110301', 'مصاريف مدفوعة مقدماً', 'Prepaid Expenses', 4, '1103', 'DEBIT', 'BALANCE_SHEET');
 const l4_110302 = ac('110302', 'دفعات مقدمة', 'Advances Paid', 4, '1103', 'DEBIT', 'BALANCE_SHEET');
@@ -194,7 +195,7 @@ const l5_1102030001 = ac('1102030001', 'ذمم موظفين', 'Employee Receivab
 const l5_1102030002 = ac('1102030002', 'ذمم مدينة أخرى متنوعة', 'Other Receivables', 5, '110203', 'DEBIT', 'RECEIVABLE');
 const l5_1102040001 = ac('1102040001', 'مخصص الديون المشكوك في تحصيلها', 'Allowance for Doubtful Debts', 5, '110204', 'CREDIT', 'RECEIVABLE');
 const l5_1102050001 = ac('1102050001', 'عُهد الموظفين', 'Employee Custodies', 5, '110205', 'DEBIT', 'RECEIVABLE', true, 'EMPLOYEE');
-const l5_1102050002 = ac('1102050002', 'سلف الموظفين الشهرية', 'Monthly Employee Advances', 5, '110205', 'DEBIT', 'RECEIVABLE', true, 'EMPLOYEE');
+const l5_1102060001 = ac('1102060001', 'سلف الموظفين الشهرية', 'Monthly Employee Advances', 5, '110206', 'DEBIT', 'RECEIVABLE', true, 'EMPLOYEE');
 
 const l5_1103010001 = ac('1103010001', 'مصاريف إيجار مدفوعة مسبقاً', 'Prepaid Rent', 5, '110301', 'DEBIT', 'BALANCE_SHEET');
 const l5_1103020001 = ac('1103020001', 'دفعات مقدمة للموردين', 'Advances to Suppliers', 5, '110302', 'DEBIT', 'BALANCE_SHEET');
@@ -258,7 +259,7 @@ export const initialAccounts: Account[] = [
   l3_4101, l3_4102, l3_4103, l3_4104, l3_4105, l3_4201, l3_4202,
 
   l4_110101, l4_110102,
-  l4_110201, l4_110202, l4_110203, l4_110204, l4_110205,
+  l4_110201, l4_110202, l4_110203, l4_110204, l4_110205, l4_110206,
   l4_110301, l4_110302,
   l4_120101, l4_120102, l4_120103, l4_120104,
   l4_120201, l4_120301,
@@ -271,7 +272,7 @@ export const initialAccounts: Account[] = [
   l4_420101, l4_420201, l4_420202,
 
   l5_1101010001, l5_1101010002, l5_1101020001, l5_1101020002,
-  l5_1102010001, l5_1102010002, l5_1102020001, l5_1102030001, l5_1102030002, l5_1102040001, l5_1102050001, l5_1102050002,
+  l5_1102010001, l5_1102010002, l5_1102020001, l5_1102030001, l5_1102030002, l5_1102040001, l5_1102050001, l5_1102060001,
   l5_1103010001, l5_1103020001,
   l5_1201010001, l5_1201020001, l5_1201030001, l5_1201040001, l5_1201040002,
   l5_1202010001, l5_1203010001,

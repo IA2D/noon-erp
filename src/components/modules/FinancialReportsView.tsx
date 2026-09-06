@@ -836,7 +836,7 @@ export default function FinancialReportsView({
 
   type ReportEntityOption = { id: string; code: string; name: string; linkedAccountId?: string };
   const currentEntitiesList: ReportEntityOption[] = useMemo(() => {
-    const monthlyEmployeeAccountId = accounts.find(account => account.code === '1102050002')?.id;
+    const monthlyEmployeeAccountId = accounts.find(account => account.code === '1102060001')?.id;
     const employeeCustodyAccountId = accounts.find(account => account.code === '1102050001')?.id;
     switch (reportType) {
       case 'EMPLOYEES_REPORT': return employees.map(e => ({ id: e.id, code: e.code, name: e.nameAr, linkedAccountId: monthlyEmployeeAccountId || e.linkedAccountId }));

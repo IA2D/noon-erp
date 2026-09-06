@@ -3,7 +3,7 @@ import { initialAccounts } from '../src/data/initialData';
 import {
   aggregateAccountBalance, calculateAccountActivity, calculateBalanceSheet,
   calculateCashFlowStatement, calculateEquityChangesStatement, calculateIncomeStatement,
-  calculateTrialBalance, canDeleteAccount, canPromoteToParent, childLevelOf,
+  calculateTrialBalance, canDeleteAccount, canPromoteToParent, childLevelOf, employeeAdvancePostingAccounts,
   expectedCodeLength, isPostingAccount, monthKey, monthlyEmployeeAdvancesAccount, nextAccountCode, nextDocumentNumber,
   nextEntityCode, percentChange, validateAccountCode, validateJournalEntryLines,
 } from '../src/utils/accountingEngine';
@@ -44,9 +44,11 @@ assert.equal(percentChange(120, 100), 20);
 assert.equal(percentChange(1, 0), null);
 assert.equal(monthKey(new Date(2026, 7, 27)), '2026-08');
 const monthlyAdvances = monthlyEmployeeAdvancesAccount();
-assert.equal(monthlyAdvances.code, '1102050002');
+assert.equal(monthlyAdvances.code, '1102060001');
 assert.equal(monthlyAdvances.nameAr, 'سلف الموظفين الشهرية');
 assert.equal(monthlyAdvances.level, 5);
 assert.ok(accounts.some(account => account.code === '1102050001' && account.nameAr === 'عُهد الموظفين'));
-assert.ok(accounts.some(account => account.code === '1102050002' && account.nameAr === 'سلف الموظفين الشهرية'));
+assert.ok(accounts.some(account => account.code === '110206' && account.level === 4 && account.nameAr === 'سلف الموظفين الشهرية'));
+assert.ok(accounts.some(account => account.code === '1102060001' && account.parentId === '110206' && account.nameAr === 'سلف الموظفين الشهرية'));
+assert.deepEqual(employeeAdvancePostingAccounts(accounts).map(account => account.code).filter(code => code === '1102050001' || code === '1102060001'), ['1102050001', '1102060001']);
 console.log('ACCOUNTING_ENGINE_UNIT_OK validation=true hierarchy=true activity=true statements=true numbering=true periods=true');

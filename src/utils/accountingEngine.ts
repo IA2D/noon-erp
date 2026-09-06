@@ -304,7 +304,12 @@ export function payablePostingAccounts(accounts: Account[], currentLinkedId?: st
 }
 
 export function employeeAdvancePostingAccounts(accounts: Account[], currentLinkedId?: string): Account[] {
-  const list = postingAccountsForDomain(accounts, 'EMPLOYEE_ADVANCE', currentLinkedId);
+  const groupIds = new Set(
+    accounts
+      .filter(account => account.level === 4 && (account.code === EMPLOYEE_ADVANCE_GROUP_CODE || account.code === MONTHLY_EMPLOYEE_ADVANCES_GROUP_CODE))
+      .map(account => account.id)
+  );
+  const list = accounts.filter(account => account.level === 5 && account.isActive && groupIds.has(level4GroupOf(account, accounts)?.id || ''));
 
   // مرونة: إن وُجد حساب تشغيلي باسم "عُهد الموظفين" في مكان آخر بالدليل — يُدرج للربط
   if (list.length === 0 || !list.some(a => a.nameAr === EMPLOYEE_ADVANCE_GROUP_NAME)) {
@@ -319,7 +324,9 @@ export function employeeAdvancePostingAccounts(accounts: Account[], currentLinke
 
 export const EMPLOYEE_ADVANCE_GROUP_CODE = '110205';
 export const EMPLOYEE_ADVANCE_GROUP_NAME = 'عُهد الموظفين';
-export const MONTHLY_EMPLOYEE_ADVANCES_ACCOUNT_CODE = '1102050002';
+export const MONTHLY_EMPLOYEE_ADVANCES_GROUP_CODE = '110206';
+export const MONTHLY_EMPLOYEE_ADVANCES_GROUP_NAME = 'سلف الموظفين الشهرية';
+export const MONTHLY_EMPLOYEE_ADVANCES_ACCOUNT_CODE = '1102060001';
 export const MONTHLY_EMPLOYEE_ADVANCES_ACCOUNT_NAME = 'سلف الموظفين الشهرية';
 
 /** ضمان وجود مجموعة "عُهد الموظفين" في الدليل — تُضاف تلقائياً إن لم تكن موجودة (ميفريشن للبيانات المحفوظة) */
@@ -377,10 +384,38 @@ export function employeeAdvanceGeneralAccount(): Account {
   };
 }
 
+/** ضمان وجود مجموعة مستقلة للسلف الشهرية، بمستوى رابع وحساب تشغيلي خامس. */
+export function ensureMonthlyEmployeeAdvancesGroup(accounts: Account[]): { accounts: Account[]; group: Account } {
+  const existing = accounts.find(account =>
+    account.level === 4 && (account.code === MONTHLY_EMPLOYEE_ADVANCES_GROUP_CODE || account.nameAr === MONTHLY_EMPLOYEE_ADVANCES_GROUP_NAME)
+  );
+  if (existing) {
+    const group = { ...existing, code: MONTHLY_EMPLOYEE_ADVANCES_GROUP_CODE, nameAr: MONTHLY_EMPLOYEE_ADVANCES_GROUP_NAME, nameEn: 'Monthly Employee Advances', parentId: '1102', subLedgerType: 'EMPLOYEE' as const };
+    const changed = group.code !== existing.code || group.nameAr !== existing.nameAr || group.nameEn !== existing.nameEn || group.parentId !== existing.parentId || group.subLedgerType !== existing.subLedgerType;
+    return { accounts: changed ? accounts.map(account => account.id === existing.id ? group : account) : accounts, group };
+  }
+  const group: Account = {
+    id: MONTHLY_EMPLOYEE_ADVANCES_GROUP_CODE,
+    code: MONTHLY_EMPLOYEE_ADVANCES_GROUP_CODE,
+    nameAr: MONTHLY_EMPLOYEE_ADVANCES_GROUP_NAME,
+    nameEn: 'Monthly Employee Advances',
+    level: 4,
+    accountType: 1,
+    reportType: 1,
+    parentId: '1102',
+    nature: 'DEBIT',
+    category: 'RECEIVABLE',
+    subLedgerType: 'EMPLOYEE',
+    currencies: [],
+    defaultCurrency: 'YER',
+    openingBalance: 0,
+    isActive: true,
+  };
+  return { accounts: [...accounts, group], group };
+}
+
 /**
- * السلف الشهرية حساب مستقل عن حساب عُهد الموظفين التشغيلي.
- * أُنشئ حساب العُهد تحت نفس المجموعة سابقاً، فصار الحساب القديم يحمل اسمه؛
- * هذا الضمان يعيد السلف إلى الدليل من دون تغيير حساب العُهد أو أي قيود قائمة عليه.
+ * الحساب التشغيلي للسلف الشهرية تحت مجموعته المستقلة في المستوى الرابع.
  */
 export function monthlyEmployeeAdvancesAccount(): Account {
   const ts = Date.now();
@@ -392,7 +427,7 @@ export function monthlyEmployeeAdvancesAccount(): Account {
     level: 5,
     accountType: 2,
     reportType: 1,
-    parentId: EMPLOYEE_ADVANCE_GROUP_CODE,
+    parentId: MONTHLY_EMPLOYEE_ADVANCES_GROUP_CODE,
     nature: 'DEBIT',
     category: 'RECEIVABLE',
     subLedgerType: 'EMPLOYEE',
@@ -414,6 +449,10 @@ export function isLinkedOutOfDomain(
   if (!currentLinkedId) return false;
   const current = accounts.find(a => a.id === currentLinkedId);
   if (!current) return false;
+  if (domain === 'EMPLOYEE_ADVANCE') {
+    const acceptedGroupIds = new Set(accounts.filter(account => account.level === 4 && (account.code === EMPLOYEE_ADVANCE_GROUP_CODE || account.code === MONTHLY_EMPLOYEE_ADVANCES_GROUP_CODE)).map(account => account.id));
+    return !acceptedGroupIds.has(level4GroupOf(current, accounts)?.id || '');
+  }
   const group = domainGroup(accounts, domain);
   if (!group) return false;
   return level4GroupOf(current, accounts)?.id !== group.id;
