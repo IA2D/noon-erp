@@ -111,8 +111,6 @@ import { useExchangeRateGuard } from '../../hooks/useExchangeRateGuard';
 import { tafqeet } from '../../utils/tafqeet';
 import VoucherPrintTemplate from '../ui/VoucherPrintTemplate';
 import { handleCurrencyFieldChange } from '../../utils/currencyMath';
-import SubLedgerF9Cell from '../ui/SubLedgerF9Cell';
-import { subLedgerTypeOf, type SubLedgerDataset } from '../../utils/subLedger';
 
 interface Props {
   custodies: Custody[];
@@ -169,25 +167,6 @@ const CURRENCY_FRACTIONS: Record<string, string> = {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-const newDisbursementParty = (): CustodyDisbursementParty => ({
-  id: `cdp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  name: '',
-  amount: 0,
-  referenceNumber: '',
-  narration: '',
-});
-
-const disbursementPartyTotal = (parties: CustodyDisbursementParty[] = []) =>
-  round2(parties.reduce((sum, party) => sum + (Number(party.amount) || 0), 0));
-
-const validateDisbursementParties = (parties: CustodyDisbursementParty[] = [], amount: number): string | null => {
-  if (parties.length === 0) return 'أضف طرفاً مستفيداً واحداً على الأقل لصرف العهدة.';
-  if (parties.some(party => !party.name.trim() || !(Number(party.amount) > 0))) return 'أكمل اسم وقيمة كل طرف مستفيد من الصرف.';
-  const total = disbursementPartyTotal(parties);
-  if (Math.abs(total - amount) > 0.01) return `إجمالي الأطراف المستفيدة (${fmt(total)}) يجب أن يساوي قيمة العهدة (${fmt(amount)}).`;
-  return null;
-};
-
 interface CustodyFormState {
   type: CustodyType;
   title: string;
@@ -204,6 +183,7 @@ interface CustodyFormState {
   narration: string;
   disbursementMethod: DisbursementMethod;
   disbursementSource: string;
+  /** Legacy field retained for historical custody records; new allocation is settled in the final stage. */
   disbursementParties: CustodyDisbursementParty[];
   custodyCode: string;
 }
@@ -322,11 +302,6 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, accounts, employee
   const selectedEmployee = employees.find(e => e.id === form.employeeId);
   const rateViolation = isBaseCur ? null : rateGuard.violationOf(Number(form.exchangeRate) || 1, curCode);
   const methodSourceMeta = DISBURSE_SOURCE_LABEL[form.disbursementMethod];
-  const partyTotal = disbursementPartyTotal(form.disbursementParties);
-  const subLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
-  const postingAccounts = accounts.filter(isPostingAccount);
-  const updateParty = (index: number, patch: Partial<CustodyDisbursementParty>) =>
-    update({ disbursementParties: form.disbursementParties.map((party, i) => i === index ? { ...party, ...patch } : party) });
   const creditPreview = (() => {
     if (!selectedSource) return null;
     if (form.disbursementMethod === 'CASH') {
@@ -565,57 +540,8 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, accounts, employee
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-black text-slate-800 dark:text-white">جدول الحسابات والبنود المستفيدة من صرف العهدة *</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">بنفس نظام سند الصرف: الحساب الرئيسي ثم الحساب التحليلي عند الحاجة، مع البيان والمركز والمرجع لكل بند.</p>
-            </div>
-            {!locked && <button type="button" onClick={() => update({ disbursementParties: [...form.disbursementParties, newDisbursementParty()] })} className="shrink-0 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold flex items-center gap-1 cursor-pointer"><Plus className="w-3.5 h-3.5" />إضافة طرف</button>}
-          </div>
-          {form.disbursementParties.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">لم تتم إضافة أطراف بعد.</div>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-              <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full min-w-[1240px] table-fixed text-right text-xs">
-                  <thead className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    <tr>
-                      <th className="w-10 px-2 py-2.5 text-center">#</th>
-                      <th className="w-[25%] px-2 py-2.5">الحساب المحاسبي (المستوى 5) *</th>
-                      <th className="w-[18%] px-2 py-2.5">الحساب التحليلي</th>
-                      <th className="w-32 px-2 py-2.5">المبلغ ({curCode}) *</th>
-                      <th className="w-[19%] px-2 py-2.5">البيان التفصيلي</th>
-                      <th className="w-40 px-2 py-2.5">مركز التكلفة</th>
-                      <th className="w-36 px-2 py-2.5">رقم المرجع</th>
-                      <th className="w-11 px-2 py-2.5" aria-label="حذف" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                    {form.disbursementParties.map((party, index) => {
-                      const account = postingAccounts.find(item => item.id === party.accountId);
-                      const requiresAnalytical = subLedgerTypeOf(account, subLedgerDataset) !== 'NONE';
-                      const analyticalMissing = requiresAnalytical && !party.subLedgerId;
-                      return <tr key={party.id} className="bg-white align-middle hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/70">
-                        <td className="px-2 py-2 text-center font-mono text-slate-500">{index + 1}</td>
-                        <td className="px-2 py-2"><F9SearchInput<Account> value={account ? `${account.code} - ${account.nameAr}` : party.name} onChange={value => updateParty(index, { name: value, accountId: '', accountCode: '', accountNameAr: '', subLedgerType: undefined, subLedgerId: undefined, subLedgerName: undefined })} items={postingAccounts} columns={[{ label: 'الرقم', render: item => <span className="font-mono">{item.code}</span> }, { label: 'اسم الحساب', render: item => item.nameAr }]} searchText={item => `${item.code} ${item.nameAr} ${item.nameEn}`} browseTitle="اختيار الحساب المستفيد" onSelect={item => updateParty(index, { name: item.nameAr, accountId: item.id, accountCode: item.code, accountNameAr: item.nameAr, subLedgerType: subLedgerTypeOf(item, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined })} inputProps={{ disabled: locked }} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></td>
-                        <td className="px-2 py-2">{account ? <div className={analyticalMissing ? 'rounded-xl ring-1 ring-amber-400' : ''} title={analyticalMissing ? 'اختر الحساب التحليلي قبل الحفظ' : undefined}><SubLedgerF9Cell dataset={subLedgerDataset} account={account} subLedgerId={party.subLedgerId} subLedgerName={party.subLedgerName} disabled={locked} compact onChange={(subLedgerId, subLedgerName) => updateParty(index, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} /></div> : <div className="h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-500 flex items-center">اختر الحساب الرئيسي أولاً</div>}</td>
-                        <td className="px-2 py-2"><AmountInput disabled={locked} value={party.amount} onChange={value => updateParty(index, { amount: Number(value) || 0 })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></td>
-                        <td className="px-2 py-2"><input disabled={locked} value={party.narration || ''} onChange={e => updateParty(index, { narration: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></td>
-                        <td className="px-2 py-2"><select disabled={locked} value={party.costCenterId || ''} onChange={e => updateParty(index, { costCenterId: e.target.value || undefined })} className={`${FORM_INPUT} ${LOCKED_CLS}`}><option value="">بدون مركز</option>{costCenters.map(center => <option key={center.id} value={center.id}>{center.code} — {center.nameAr}</option>)}</select></td>
-                        <td className="px-2 py-2"><input disabled={locked} value={party.referenceNumber || ''} onChange={e => updateParty(index, { referenceNumber: e.target.value })} className={`${FORM_INPUT} ${LOCKED_CLS}`} /></td>
-                        <td className="px-1 py-2"><button type="button" disabled={locked} onClick={() => update({ disbursementParties: form.disbursementParties.filter((_, i) => i !== index) })} className="flex h-10 w-full items-center justify-center rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50 cursor-pointer" title="حذف البند"><Trash2 className="w-4 h-4" /></button></td>
-                      </tr>;
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-bold ${Math.abs(partyTotal - (Number(form.amount) || 0)) < 0.01 && form.disbursementParties.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-            <span>إجمالي الأطراف: {fmtC(partyTotal, curCode)}</span>
-            <span>المطلوب: {fmtC(Number(form.amount) || 0, curCode)}</span>
-          </div>
+        <div className="rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 p-3 text-xs text-slate-600 dark:text-slate-300">
+          تُحدد الحسابات والبنود المستفيدة عند <span className="font-bold text-sky-700 dark:text-sky-300">تصفية العهدة</span>، وليس عند صرفها؛ لذلك يمكن تسجيل تصفيات جزئية مستقلة دون إلزام بتوزيع كامل مبلغ العهدة.
         </div>
       </section>
 
@@ -958,11 +884,6 @@ export default function CustodyView({
           return;
         }
       }
-      const partiesError = validateDisbursementParties(form.disbursementParties, amount);
-      if (partiesError) {
-        setEditError(partiesError);
-        return;
-      }
     }
 
     const updates: Partial<Custody> = {
@@ -975,7 +896,7 @@ export default function CustodyView({
       exchangeRate: disbursed ? c.exchangeRate : Number(form.exchangeRate) || 1,
       disbursementMethod: disbursed ? c.disbursementMethod : form.disbursementMethod,
       disbursementSource: disbursed ? c.disbursementSource : form.disbursementSource,
-      disbursementParties: disbursed ? c.disbursementParties : form.disbursementParties.map(party => ({ ...party, name: party.name.trim(), referenceNumber: party.referenceNumber?.trim() || undefined, narration: party.narration?.trim() || undefined })),
+      disbursementParties: c.disbursementParties || [],
       costCenterId: form.costCenterId || undefined,
       assetDescription: form.type === 'ASSET' ? form.assetDescription.trim() : undefined,
       maxBalance: form.type === 'PETTY_CASH' ? Number(form.maxBalance) || amount : undefined,
@@ -1024,11 +945,6 @@ export default function CustodyView({
       setCreateError(validation.errors.join(' '));
       return;
     }
-    const partiesError = validateDisbursementParties(createForm.disbursementParties, amount);
-    if (partiesError) {
-      setCreateError(partiesError);
-      return;
-    }
     if (createForm.type === 'TEMPORARY') {
       const violation = findOverdueViolation(createForm.employeeId, custodies);
       if (violation) {
@@ -1062,7 +978,7 @@ export default function CustodyView({
       exchangeRate: rate,
       disbursementMethod: createForm.disbursementMethod,
       disbursementSource: createForm.disbursementSource || '',
-      disbursementParties: createForm.disbursementParties.map(party => ({ ...party, name: party.name.trim(), referenceNumber: party.referenceNumber?.trim() || undefined, narration: party.narration?.trim() || undefined })),
+      disbursementParties: [],
       status: 'CREATED',
       costCenterId: createForm.costCenterId || undefined,
       assetDescription: createForm.type === 'ASSET' ? createForm.assetDescription.trim() : undefined,
@@ -1187,11 +1103,6 @@ export default function CustodyView({
       toast('error', 'العهدة مصروفة بالفعل.');
       return;
     }
-    const partiesError = validateDisbursementParties(disburseTarget.disbursementParties, disburseTarget.amount);
-    if (partiesError) {
-      toast('error', partiesError);
-      return;
-    }
     const advanceAcc = advanceAccountOf(disburseTarget);
     const ctx: JournalBuildContext = {
       journalId: `je-${Date.now()}`,
@@ -1278,7 +1189,6 @@ export default function CustodyView({
     }
 
     const advanceAcc = advanceAccountOf(settleTarget);
-    const settleSource = sourceEntities.find(s => s.id === settleTarget.disbursementSource);
     const ctx: JournalBuildContext = {
       journalId: `je-${Date.now()}`,
       entryNumber: nextJournalNumber(journals),
@@ -1288,13 +1198,13 @@ export default function CustodyView({
       createdBy: currentUserName,
       reference: `CUSTODY-${settleTarget.custodyNumber}`,
     };
-    const journal = buildSettlementJournal(ctx, settleTarget, settleItems, advanceAcc, apAcc ?? null, vatAcc ?? null, settleSource?.account);
+    const journal = buildSettlementJournal(ctx, settleTarget, settleItems, advanceAcc, apAcc ?? null, vatAcc ?? null);
     if (!onAddJournal(journal)) {
       toast('error', 'تعذر ترحيل قيد تصفية العهدة؛ لم تُعدّل العهدة.');
       return;
     }
 
-    const cashRefunded = Math.max(0, remaining - expenseTotal);
+    const cashRefunded = 0;
     const nextStatus = statusAfterSettlement(settleTarget, expenseTotal);
     const settlement: CustodySettlement = {
       id: `ls-${Date.now()}`,
@@ -1516,17 +1426,20 @@ export default function CustodyView({
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-            <ScrollText className="w-3.5 h-3.5 text-sky-600" />
-            بنود المستندات
-          </p>
+          <div>
+            <p className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+              <ScrollText className="w-3.5 h-3.5 text-sky-600" />
+              جدول الحسابات والبنود المستفيدة من تصفية العهدة
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">أضف بنود هذه التصفية فقط؛ لا يلزم أن يساوي مجموعها كامل رصيد العهدة.</p>
+          </div>
           <button type="button" data-enter-nav="add-line" onClick={addItem} className="text-xs font-bold px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 cursor-pointer flex items-center gap-1">
             <Plus className="w-3.5 h-3.5" /> بند
           </button>
         </div>
         {items.length === 0 && (
           <div className="rounded-xl p-3 border border-dashed border-slate-300 dark:border-slate-700 text-center text-xs text-slate-500 dark:text-slate-400">
-            لا بنود بعد — أضف بنود المصروفات / الأصول مع الفواتير والضريبة.
+            لا بنود لهذه التصفية بعد — يمكن حفظ تصفية جزئية ثم إضافة تصفية لاحقة للرصد المتبقي.
           </div>
         )}
         {items.map((it, idx) => {
@@ -1594,7 +1507,7 @@ export default function CustodyView({
         })}
         {items.length > 0 && (
           <div className="rounded-xl p-3 border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 flex items-center justify-between text-sm">
-            <span className="text-slate-500 dark:text-slate-400">إجمالي المستندات (شامل الضريبة):</span>
+            <span className="text-slate-500 dark:text-slate-400">إجمالي هذه التصفية (شامل الضريبة):</span>
             <span className="font-mono font-bold text-slate-900 dark:text-white">{fmtC(itemsTotal(items), currency)}</span>
           </div>
         )}
@@ -1942,7 +1855,7 @@ export default function CustodyView({
         const remaining = outstandingBalance(settleTarget);
         const expenseTotal = itemsTotal(settleItems);
         const excess = Math.max(0, expenseTotal - remaining);
-        const autoRefund = Math.max(0, remaining - expenseTotal);
+        const remainingAfterSettlement = Math.max(0, remaining - expenseTotal);
         return (
           <ModalShell id="custody-settle" open={!!settleTarget} title={`تصفية ${settleTarget.custodyNumber} بالمستندات`} icon={FileSignature} onClose={() => setSettleTarget(null)} footer={null} closeOnBackdrop={false}>
             <form onSubmit={handleSettle} className="space-y-4">
@@ -1961,7 +1874,7 @@ export default function CustodyView({
                   {excess > 0 ? (
                     <div className="flex justify-between text-amber-600"><span className="text-slate-500 dark:text-slate-400">تجاوز عن الرصيد (مستحق للموظف → AP):</span><span className="font-mono font-bold">{fmtC(excess, settleTarget.currency || baseCurrency)}</span></div>
                   ) : (
-                    <div className="flex justify-between text-emerald-600"><span className="text-slate-500 dark:text-slate-400">فائض يُرد للصندوق:</span><span className="font-mono font-bold">{fmtC(autoRefund, settleTarget.currency || baseCurrency)}</span></div>
+                    <div className="flex justify-between text-sky-700"><span className="text-slate-500 dark:text-slate-400">الرصيد المتبقي بعد هذه التصفية:</span><span className="font-mono font-bold">{fmtC(remainingAfterSettlement, settleTarget.currency || baseCurrency)}</span></div>
                   )}
                 </div>
               )}

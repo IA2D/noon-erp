@@ -24,7 +24,7 @@ import {
   Link2
 } from 'lucide-react';
 import { Account, AccountCurrency, Currency, JournalEntry, Employee, EmployeeGender, Trust } from '../../types/erp';
-import { calculateAccountActivity, aggregateAccountBalance, employeeAdvancePostingAccounts, isLinkedOutOfDomain } from '../../utils/accountingEngine';
+import { calculateAccountActivity, aggregateAccountBalance } from '../../utils/accountingEngine';
 import { useActiveCurrencies, defaultIncludedCodes } from '../../hooks/useActiveCurrencies';
 import { useToast } from '../ui/Toast';
 import PageHeader from '../ui/PageHeader';
@@ -177,8 +177,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
     return aggregateAccountBalance(acc, accounts, activity);
   };
 
-  const employeeAdvanceAccounts = (currentLinkedId?: string): Account[] =>
-    employeeAdvancePostingAccounts(accounts, currentLinkedId);
+  const monthlyEmployeeAdvancesAccount = accounts.find(account => account.code === '1102060001');
 
   const filtered = employees.filter(e => {
     const term = searchTerm.trim().toLowerCase();
@@ -200,7 +199,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
 
   const openAdd = () => {
     setFormError('');
-    setModal({ mode: 'add', form: emptyForm(nextEmployeeCode(employees), defaultCodes) });
+    setModal({ mode: 'add', form: { ...emptyForm(nextEmployeeCode(employees), defaultCodes), linkedAccountId: monthlyEmployeeAdvancesAccount?.id || '' } });
   };
 
   const openEdit = (emp: Employee) => {
@@ -223,7 +222,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
         iban: emp.iban,
         notes: emp.notes || '',
         isActive: emp.isActive,
-        linkedAccountId: emp.linkedAccountId || '',
+        linkedAccountId: monthlyEmployeeAdvancesAccount?.id || emp.linkedAccountId || '',
         includedCurrencies: (emp.currencies || []).filter(c => c.isActive).map(c => c.code)
       }
     });
@@ -254,11 +253,12 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
       setFormError('يجب تضمين عملة واحدة على الأقل لراتب الموظف.');
       return;
     }
+    const linkedAccountId = monthlyEmployeeAdvancesAccount?.id;
+    if (!linkedAccountId) {
+      setFormError('حساب سلف الموظفين الشهرية (1102060001) غير موجود في دليل الحسابات.');
+      return;
+    }
     if (modal.mode === 'add') {
-      if (!f.linkedAccountId) {
-        setFormError('يجب ربط الموظف بحساب عُهد الموظفين من دليل الحسابات.');
-        return;
-      }
       if (employees.some(e => e.code.toLowerCase() === entityCode.toLowerCase())) {
         setFormError(`كود الموظف ${entityCode} مستخدم مسبقاً — لا يمكن تكرار الكود.`);
         return;
@@ -283,7 +283,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
         iban: f.iban.trim(),
         notes: f.notes.trim(),
         isActive: f.isActive,
-        linkedAccountId: f.linkedAccountId,
+        linkedAccountId,
         currencies: buildCurrencies(f.includedCurrencies),
         defaultCurrency: f.includedCurrencies[0] || 'YER',
         createdAt: new Date().toISOString().substring(0, 10)
@@ -317,7 +317,7 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
         iban: f.iban.trim(),
         notes: f.notes.trim(),
         isActive: f.isActive,
-        linkedAccountId: f.linkedAccountId || undefined,
+        linkedAccountId,
         currencies: mergeCurrencies(editing?.currencies || [], f.includedCurrencies),
         defaultCurrency: f.includedCurrencies[0] || editing?.defaultCurrency || 'YER'
         });
@@ -787,27 +787,16 @@ export default function EmployeesView({ employees, trusts, accounts, journals, c
                 />
               </div>
 
-              {/* حساب الربط المحاسبي — عُهد الموظفين */}
+              {/* الحساب القياسي للموظف: سلف الموظفين الشهرية فقط */}
               <div className="rounded-xl p-3.5 border border-slate-700/60 bg-slate-900/40">
                 <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                   <Link2 className="w-4 h-4 text-sky-400" />
-                  حساب عُهد الموظفين *
+                  حساب سلف الموظفين الشهرية *
                 </label>
-                <select
-                  required
-                  value={modal.form.linkedAccountId}
-                  onChange={e => setModal({ ...modal, form: { ...modal.form, linkedAccountId: e.target.value } })}
-                  className="w-full px-3 py-2 text-sm glass-input rounded-xl bg-slate-900 text-white font-mono"
-                  dir="ltr"
-                >
-                  <option value="">— اختر حساب السلفة —</option>
-                  {employeeAdvanceAccounts(modal.form.linkedAccountId).map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.code} - {acc.nameAr}</option>
-                  ))}
-                </select>
-                {isLinkedOutOfDomain(accounts, 'EMPLOYEE_ADVANCE', modal.form.linkedAccountId) && (<p className="text-xs text-amber-400 mt-1">
-                    الحساب المرتبط حالياً خارج مجموعة عُهد الموظفين — اختر حساباً من القائمة أعلاه.
-                  </p>)}
+                <div className="w-full px-3 py-2 text-sm glass-input rounded-xl bg-slate-900 text-white font-mono" dir="ltr">
+                  {monthlyEmployeeAdvancesAccount ? `${monthlyEmployeeAdvancesAccount.code} - ${monthlyEmployeeAdvancesAccount.nameAr}` : 'حساب سلف الموظفين الشهرية غير موجود'}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">يُربط كل موظف تلقائياً بهذا الحساب فقط.</p>
               </div>
 
               <div className="flex items-center gap-3 rounded-xl p-3 border border-slate-700/60 bg-slate-900/40">

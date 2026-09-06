@@ -94,14 +94,14 @@ export function buildSettlementJournal(
   items: CustodySettlementItem[],
   advanceAccount: Account,
   apAccount: Account | null,
-  vatAccount: Account | null,
-  sourceAccount?: Account
+  vatAccount: Account | null
 ): JournalEntry {
   const remaining = Math.max(0, Math.round((custody.disbursedAmount - custody.settledAmount - custody.refundedAmount - custody.apTransferredAmount) * 100) / 100);
   const expenseTotal = Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;
   const advanceCredit = Math.min(remaining, expenseTotal);
   const excess = Math.round((expenseTotal - advanceCredit) * 100) / 100;
-  const cashRefunded = Math.max(0, remaining - expenseTotal);
+  // Settlement is deliberately partial-capable. Any unallocated balance remains
+  // on the employee advance account until a later settlement or explicit refund.
 
   const lines: JournalLine[] = [];
   for (const it of items) {
@@ -119,10 +119,6 @@ export function buildSettlementJournal(
     }
   }
   lines.push(line(advanceAccount, 0, advanceCredit, `تصفية عهدة ${custody.custodyNumber} بالمستندات`, subLedgerOf(custody)));
-  if (cashRefunded > 0 && sourceAccount) {
-    lines.push(line(sourceAccount, cashRefunded, 0, `رد فائض نقدي عهدة ${custody.custodyNumber} للصندوق/البنك`));
-    lines.push(line(advanceAccount, 0, cashRefunded, `مقابل رد فائض عهدة ${custody.custodyNumber}`, subLedgerOf(custody)));
-  }
   if (excess > 0) {
     lines.push(line(apAccount ?? advanceAccount, 0, excess, `تجاوز مستندات التصفية الرصيد القائم${apAccount ? ` — مستحق للموظف ${custody.employeeName}` : ''}`));
   }
