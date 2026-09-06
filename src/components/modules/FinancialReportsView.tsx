@@ -1008,8 +1008,11 @@ export default function FinancialReportsView({
         docNumber: t.trustNumber,
         reference: t.referenceNumber || '—',
         description: t.title,
-        debit: round2((t.amount || 0) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
-        credit: round2(((t.settledAmount || 0) + (t.returnedAmount || 0)) * (isOriginalCurrencyReport || t.currency === baseCode ? 1 : t.exchangeRate || 1)),
+        // Custody amounts are persisted in their stated currency. The report is
+        // already split into one print section per currency, so never relabel a
+        // local-currency equivalent as foreign money.
+        debit: round2(t.amount || 0),
+        credit: round2((t.settledAmount || 0) + (t.returnedAmount || 0)),
         currency: t.currency || baseCode,
       }));
 
