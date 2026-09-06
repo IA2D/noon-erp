@@ -28,7 +28,7 @@ interface Props<T> {
   /** يُستدعى عند مغادرة الحقل (لتسليم النص المدخل يدوياً) */
   onBlur?: (value: string) => void;
   /** سمات إضافية تُمرَّر لحقل الإدخال (مثل data-* لربط التركيز) */
-  inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
+  inputProps?: React.InputHTMLAttributes<HTMLInputElement> & { 'data-enter-nav-field'?: string };
   /** عرض زر التكبير/الاستعادة في رأس النافذة — الافتراضي false. */
   maximize?: boolean;
   /** مفتاح الاختصار لهذا الحقل — الافتراضي F9. */

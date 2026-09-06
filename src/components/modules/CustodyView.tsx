@@ -1495,7 +1495,7 @@ export default function CustodyView({
                               ? `[data-settlement-analytical=\"${it.id}\"] [tabindex=\"0\"]`
                               : `[data-settlement-party=\"${it.id}\"]`);
                           }}
-                          inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي' }}
+                          inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي', 'data-enter-nav-field': `settlement-account-${it.id}` }}
                           className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
                         />
                       </td>
@@ -1515,7 +1515,7 @@ export default function CustodyView({
                           browseTitle="اختيار مركز التكلفة"
                           onSelect={center => updateItem(idx, { costCenterId: center.id })}
                           onAfterSelect={() => focusSettlementField(`[data-settlement-description=\"${it.id}\"]`)}
-                          inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة' }}
+                          inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة', 'data-enter-nav-field': `settlement-cost-center-${it.id}` }}
                           className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
                         />
                       </td>
@@ -1897,7 +1897,7 @@ export default function CustodyView({
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-                <ItemEditor items={settleItems} setItems={setSettleItems} vatAccountId={vatAccountId} setVatAccountId={setVatAccountId} showVat currency={settleTarget.currency || baseCurrency} />
+                {ItemEditor({ items: settleItems, setItems: setSettleItems, vatAccountId, setVatAccountId, showVat: true, currency: settleTarget.currency || baseCurrency })}
                 <AttachmentPicker documents={settlementAttachments} onChange={setSettlementAttachments} uploadedBy={currentUserName} documentType="CUSTODY_SETTLEMENT_SUPPORT" />
 
               {expenseTotal > 0 && (
@@ -1962,7 +1962,7 @@ export default function CustodyView({
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">المساحة المتاحة حتى السقف:</span><span className={`font-mono font-bold ${cap > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtC(Math.max(0, cap), replenishTarget.currency || baseCurrency)}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">استعاضات سابقة:</span><span className="font-mono text-sky-600">{fmtC(replenishTarget.replenishedAmount, replenishTarget.currency || baseCurrency)}</span></div>
               </div>
-              <ItemEditor items={replenishItems} setItems={setReplenishItems} vatAccountId={replenishVatAccountId} setVatAccountId={setReplenishVatAccountId} showVat currency={replenishTarget.currency || baseCurrency} />
+              {ItemEditor({ items: replenishItems, setItems: setReplenishItems, vatAccountId: replenishVatAccountId, setVatAccountId: setReplenishVatAccountId, showVat: true, currency: replenishTarget.currency || baseCurrency })}
               <SourceSelect value={replenishSource} onChange={setReplenishSource} />
               {total > 0 && (
                 <div className="rounded-xl p-3 border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-between text-sm">
