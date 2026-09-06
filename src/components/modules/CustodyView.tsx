@@ -2421,7 +2421,7 @@ export default function CustodyView({
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400">الكشف النهائي = أصل العهدة − المصفى بالمستندات − النقدية المعادة − المحوَّل للدائنين (AP).</p>
 
-              <div hidden ref={custodyStatementPaperRef} className="paper print-area bg-white text-slate-900 p-8" dir="rtl">
+              <div ref={custodyStatementPaperRef} style={{ display: 'none' }} className="paper print-area bg-white text-slate-900 p-8" dir="rtl">
                 <VoucherPrintTemplate
                   voucherTitleAr="كشف حساب العهدة المالية"
                   voucherTitleEn="Custody Account Statement"
