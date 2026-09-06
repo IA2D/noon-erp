@@ -252,17 +252,39 @@ function AppInner() {
         window.setTimeout(() => fit(input), 0);
       });
     };
-    const onResize = () => document.querySelectorAll<HTMLInputElement>('input[data-amount-input="true"], input[type="number"], input[inputmode="decimal"]').forEach(fitAmountInput);
+    const amountInputs = () => document.querySelectorAll<HTMLInputElement>('input[data-amount-input="true"], input[type="number"], input[inputmode="decimal"]');
+    let refitFrame = 0;
+    const onResize = () => amountInputs().forEach(input => fit(input));
+    const scheduleRefit = () => {
+      if (refitFrame) return;
+      refitFrame = window.requestAnimationFrame(() => {
+        refitFrame = 0;
+        onResize();
+      });
+    };
+    // Tracks fields created after the app first renders (edit windows/modals),
+    // and each individual field when its container changes width.
+    const resizeObserver = new ResizeObserver(entries => entries.forEach(entry => fit(entry.target)));
+    const observeAmountInputs = () => amountInputs().forEach(input => resizeObserver.observe(input));
+    const mutationObserver = new MutationObserver(() => {
+      observeAmountInputs();
+      scheduleRefit();
+    });
     document.addEventListener('input', onInput, true);
     document.addEventListener('focusin', onFocus, true);
     document.addEventListener('focusout', onBlur, true);
     window.addEventListener('resize', onResize);
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    observeAmountInputs();
     onResize();
     return () => {
       document.removeEventListener('input', onInput, true);
       document.removeEventListener('focusin', onFocus, true);
       document.removeEventListener('focusout', onBlur, true);
       window.removeEventListener('resize', onResize);
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
+      if (refitFrame) window.cancelAnimationFrame(refitFrame);
     };
   }, []);
 
