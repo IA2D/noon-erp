@@ -647,6 +647,7 @@ export default function CustodyView({
   const [disburseTarget, setDisburseTarget] = useState<Custody | null>(null);
   const [disburseSource, setDisburseSource] = useState('');
   const [settleTarget, setSettleTarget] = useState<Custody | null>(null);
+  const [settleMaximized, setSettleMaximized] = useState(false);
   const [settleItems, setSettleItems] = useState<CustodySettlementItem[]>([]);
   const [settlementAttachments, setSettlementAttachments] = useState<SupportingDocument[]>([]);
   const [vatAccountId, setVatAccountId] = useState('');
@@ -1145,6 +1146,7 @@ export default function CustodyView({
   const openSettle = (c: Custody) => {
     openModal(() => {
       setSettleTarget(c);
+      setSettleMaximized(false);
       setSettleItems([]);
       setSettlementAttachments([]);
       setVatAccountId('');
@@ -1247,6 +1249,7 @@ export default function CustodyView({
     });
     toast('success', `تمت تصفية ${settleTarget.custodyNumber} (${fmtC(expenseTotal, settleTarget.currency || baseCurrency)}) وترحيل القيد ${journal.entryNumber}. الحالة: ${CUSTODY_STATUS_LABEL[nextStatus]}`);
     setSettleTarget(null);
+    setSettleMaximized(false);
   };
 
   const openRefund = (c: Custody) => {
@@ -1450,6 +1453,8 @@ export default function CustodyView({
             لا بنود لهذه التصفية بعد — يمكن حفظ تصفية جزئية ثم إضافة تصفية لاحقة للرصد المتبقي.
           </div>
         )}
+        <div className="overflow-x-auto custom-scrollbar pb-2">
+        <div className="min-w-[900px] space-y-2">
         {items.map((it, idx) => {
           const vatAcc = vatAccountId ? accounts.find(a => a.id === vatAccountId) : undefined;
           return (
@@ -1460,26 +1465,30 @@ export default function CustodyView({
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className={FORM_LABEL}>حساب المصروف / الأصل *</label>
-                  <select value={it.accountId} onChange={e => {
-                    const acc = accounts.find(a => a.id === e.target.value);
-                    updateItem(idx, acc ? { accountId: acc.id, accountCode: acc.code, accountNameAr: acc.nameAr, subLedgerType: subLedgerTypeOf(acc, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined } : { accountId: '' });
-                  }} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30">
-                    <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">— اختر —</option>
-                    {postingAccounts.map(a => <option key={a.id} value={a.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">{a.code} - {a.nameAr}</option>)}
-                  </select>
+                  <F9SearchInput
+                    value={it.accountId ? `${it.accountCode} - ${it.accountNameAr}` : ''}
+                    onChange={() => undefined}
+                    items={postingAccounts}
+                    columns={[{ label: 'رقم الحساب', render: account => account.code }, { label: 'اسم الحساب', render: account => account.nameAr }]}
+                    searchText={account => `${account.code} ${account.nameAr} ${account.nameEn}`}
+                    browseTitle="اختيار الحساب المحاسبي"
+                    onSelect={account => updateItem(idx, { accountId: account.id, accountCode: account.code, accountNameAr: account.nameAr, subLedgerType: subLedgerTypeOf(account, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined })}
+                    inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي' }}
+                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
+                  />
                 </div>
                 <div>
                   <label className={FORM_LABEL}>الطرف المستفيد / المورد</label>
-                  <input type="text" list="custody-vendor-options" value={it.partyName ?? vendorName(it.vendorId ?? '')} onChange={e => {
+                  <input data-enter-nav-field={`settlement-party-${it.id}`} type="text" list="custody-vendor-options" value={it.partyName ?? vendorName(it.vendorId ?? '')} onChange={e => {
                     const v = vendors.find(x => x.nameAr === e.target.value);
                     updateItem(idx, v ? { partyName: v.nameAr, vendorId: v.id, vendorName: v.nameAr, vendorVatNumber: v.vatNumber } : { partyName: e.target.value, vendorId: undefined, vendorName: undefined });
                   }} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className={FORM_LABEL}>الحساب التحليلي</label>
                   {!it.accountId ? <div className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">اختر الحساب المحاسبي أولاً</div>
@@ -1488,19 +1497,27 @@ export default function CustodyView({
                 </div>
                 <div>
                   <label className={FORM_LABEL}>مركز التكلفة</label>
-                  <select value={it.costCenterId || ''} onChange={e => updateItem(idx, { costCenterId: e.target.value || undefined })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30">
-                    <option value="">— بدون مركز —</option>{costCenters.map(center => <option key={center.id} value={center.id}>{center.code} - {center.nameAr}</option>)}
-                  </select>
+                  <F9SearchInput
+                    value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
+                    onChange={() => undefined}
+                    items={costCenters}
+                    columns={[{ label: 'الكود', render: center => center.code }, { label: 'مركز التكلفة', render: center => center.nameAr }]}
+                    searchText={center => `${center.code} ${center.nameAr}`}
+                    browseTitle="اختيار مركز التكلفة"
+                    onSelect={center => updateItem(idx, { costCenterId: center.id })}
+                    inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة' }}
+                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
+                  />
                 </div>
               </div>
               <div>
                 <label className={FORM_LABEL}>الوصف *</label>
-                <input type="text" value={it.description} onChange={e => updateItem(idx, { description: e.target.value })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
+                <input data-enter-nav-field={`settlement-description-${it.id}`} type="text" value={it.description} onChange={e => updateItem(idx, { description: e.target.value })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <div>
                   <label className={FORM_LABEL}>القيمة ({currency}) *</label>
-                  <AmountInput value={it.amount} onChange={v => updateItem(idx, { amount: Number(v) })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
+                  <AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={v => updateItem(idx, { amount: Number(v) })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
                 </div>
                 <div>
                   <label className={FORM_LABEL}>الضريبة %</label>
@@ -1531,6 +1548,8 @@ export default function CustodyView({
             </div>
           );
         })}
+        </div>
+        </div>
         {items.length > 0 && (
           <div className="rounded-xl p-3 border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 flex items-center justify-between text-sm">
             <span className="text-slate-500 dark:text-slate-400">إجمالي هذه التصفية (شامل الضريبة):</span>
@@ -1883,17 +1902,20 @@ export default function CustodyView({
         const excess = Math.max(0, expenseTotal - remaining);
         const remainingAfterSettlement = Math.max(0, remaining - expenseTotal);
         return (
-          <ModalShell id="custody-settle" open={!!settleTarget} title={`تصفية ${settleTarget.custodyNumber} بالمستندات`} icon={FileSignature} onClose={() => setSettleTarget(null)} footer={null} closeOnBackdrop={false}>
-            <form onSubmit={handleSettle} className="space-y-4">
-              <div className="rounded-xl p-4 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-2 text-sm">
+          <ModalShell id="custody-settle" open={!!settleTarget} title={`تصفية ${settleTarget.custodyNumber} بالمستندات`} icon={FileSignature} onClose={() => { setSettleTarget(null); setSettleMaximized(false); }} footer={null} closeOnBackdrop={false} size="full" maxWidth="max-w-[96vw]" minWidth={900} minHeight={560} maximized={settleMaximized} onToggleMaximize={() => setSettleMaximized(value => !value)} bodyClassName="p-0">
+            <form onSubmit={handleSettle} className="flex h-full min-h-0 flex-col" data-enter-scope="">
+              <div className="shrink-0 border-b border-slate-200 dark:border-slate-700 p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 rounded-xl p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm">
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">الموظف:</span><span className="font-semibold text-slate-900 dark:text-white">{settleTarget.employeeName}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">المصروف:</span><span className="font-mono text-slate-900 dark:text-white">{fmtC(settleTarget.disbursedAmount, settleTarget.currency || baseCurrency)}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">المصفى سابقاً:</span><span className="font-mono text-emerald-600">{fmtC(settleTarget.settledAmount + settleTarget.apTransferredAmount, settleTarget.currency || baseCurrency)}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">الرصيد القائم:</span><span className="font-mono font-bold text-red-600">{fmtC(remaining, settleTarget.currency || baseCurrency)}</span></div>
               </div>
+              </div>
 
-              <ItemEditor items={settleItems} setItems={setSettleItems} vatAccountId={vatAccountId} setVatAccountId={setVatAccountId} showVat currency={settleTarget.currency || baseCurrency} />
-              <AttachmentPicker documents={settlementAttachments} onChange={setSettlementAttachments} uploadedBy={currentUserName} documentType="CUSTODY_SETTLEMENT_SUPPORT" />
+              <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+                <ItemEditor items={settleItems} setItems={setSettleItems} vatAccountId={vatAccountId} setVatAccountId={setVatAccountId} showVat currency={settleTarget.currency || baseCurrency} />
+                <AttachmentPicker documents={settlementAttachments} onChange={setSettlementAttachments} uploadedBy={currentUserName} documentType="CUSTODY_SETTLEMENT_SUPPORT" />
 
               {expenseTotal > 0 && (
                 <div className="rounded-xl p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-2 text-sm">
@@ -1914,9 +1936,10 @@ export default function CustodyView({
                   </select>
                 </div>
               )}
+              </div>
 
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
-                <button type="button" onClick={() => setSettleTarget(null)} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
+              <div className="shrink-0 p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3 bg-white dark:bg-slate-900">
+                <button type="button" onClick={() => { setSettleTarget(null); setSettleMaximized(false); }} className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-sm font-medium cursor-pointer">إلغاء</button>
                 <button type="submit" className="px-5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-sm font-bold shadow-lg cursor-pointer">تصفية وترحيل القيد</button>
               </div>
             </form>
