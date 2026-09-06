@@ -23,6 +23,9 @@ assert.match(read('src/utils/desktopPrintPreview.ts'), /window\.desktopPrint\.pr
 const custody = read('src/components/modules/CustodyView.tsx');
 assert.match(custody, /style=\{\{ display: 'none' \}\} className="paper print-area/);
 assert.doesNotMatch(custody, /hidden ref=\{custodyStatementPaperRef\}/);
+assert.match(custody, /const printBeneficiaries = \[/);
+assert.match(custody, /تصفية \$\{settlement\.settlementNumber\}/);
+assert.match(custody, /الأطراف والبنود المستفيدة من صرف وتصفية العهدة/);
 const electronMain = read('electron/main.mjs');
 assert.match(electronMain, /if \(owner\.isMinimized\(\)\) owner\.restore\(\)/);
 assert.match(electronMain, /owner\.show\(\);\s*owner\.focus\(\);/);

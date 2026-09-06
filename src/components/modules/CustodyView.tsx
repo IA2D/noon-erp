@@ -2375,6 +2375,36 @@ export default function CustodyView({
           if (t.type === 'CANCEL') running = 0;
           return { ...t, balance: running };
         });
+        // Beneficiaries can be entered when the custody is disbursed or later
+        // on each settlement item. The printable statement must include both.
+        const printBeneficiaries = [
+          ...(c.disbursementParties || []).map(party => ({
+            id: `disbursement-${party.id}`,
+            stage: 'صرف العهدة',
+            name: party.name,
+            accountId: party.accountId,
+            accountCode: party.accountCode,
+            accountNameAr: party.accountNameAr,
+            subLedgerName: party.subLedgerName,
+            costCenterId: party.costCenterId,
+            referenceNumber: party.referenceNumber,
+            narration: party.narration,
+            amount: party.amount,
+          })),
+          ...c.settlements.flatMap(settlement => settlement.items.map(item => ({
+            id: `settlement-${settlement.id}-${item.id}`,
+            stage: `تصفية ${settlement.settlementNumber}`,
+            name: item.partyName || item.vendorName || '—',
+            accountId: item.accountId,
+            accountCode: item.accountCode,
+            accountNameAr: item.accountNameAr,
+            subLedgerName: item.subLedgerName,
+            costCenterId: item.costCenterId,
+            referenceNumber: item.referenceNumber,
+            narration: item.description,
+            amount: item.total,
+          }))),
+        ];
         return (
           <ModalShell id="custody-statement" open={!!statementTarget} title={`كشف حساب ${c.custodyNumber}`} icon={ReceiptText} onClose={() => setStatementTarget(null)} footer={null} closeOnBackdrop={false}>
             <div className="space-y-4">
@@ -2453,17 +2483,17 @@ export default function CustodyView({
                       {rows.map((transaction, index) => <tr key={transaction.id}><td>{index + 2}</td><td>{transaction.date}</td><td>{transaction.narration || TXN_LABEL[transaction.type]}</td><td>{fmtC(transaction.amount, c.currency || baseCurrency)}</td><td>{fmtC(transaction.balance, c.currency || baseCurrency)}</td></tr>)}
                     </tbody>
                   </table>
-                  <h3 className="mb-2 mt-5 text-sm font-bold">الأطراف المستفيدة من صرف العهدة</h3>
-                  {c.disbursementParties?.length ? (
+                  <h3 className="mb-2 mt-5 text-sm font-bold">الأطراف والبنود المستفيدة من صرف وتصفية العهدة</h3>
+                  {printBeneficiaries.length ? (
                     <table>
-                      <thead><tr><th>#</th><th>الطرف</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>المبلغ</th></tr></thead>
-                      <tbody>{c.disbursementParties.map((party, index) => {
-                        const account = party.accountId ? accounts.find(item => item.id === party.accountId) : undefined;
-                        const center = party.costCenterId ? costCenters.find(item => item.id === party.costCenterId) : undefined;
-                        return <tr key={party.id}><td>{index + 1}</td><td>{party.name}</td><td>{account ? `${account.code} — ${account.nameAr}` : party.accountNameAr || '—'}</td><td>{party.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{party.referenceNumber || '—'}</td><td>{party.narration || '—'}</td><td>{fmtC(party.amount, c.currency || baseCurrency)}</td></tr>;
+                      <thead><tr><th>#</th><th>المرحلة</th><th>الطرف</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>المبلغ</th></tr></thead>
+                      <tbody>{printBeneficiaries.map((beneficiary, index) => {
+                        const account = beneficiary.accountId ? accounts.find(item => item.id === beneficiary.accountId) : undefined;
+                        const center = beneficiary.costCenterId ? costCenters.find(item => item.id === beneficiary.costCenterId) : undefined;
+                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.stage}</td><td>{beneficiary.name}</td><td>{account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—'}</td><td>{beneficiary.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{fmtC(beneficiary.amount, c.currency || baseCurrency)}</td></tr>;
                       })}</tbody>
                     </table>
-                  ) : <p className="py-3 text-center text-sm text-slate-500">لا توجد أطراف مستفيدة مسجلة لهذه العهدة.</p>}
+                  ) : <p className="py-3 text-center text-sm text-slate-500">لا توجد أطراف أو بنود تصفية مسجلة لهذه العهدة.</p>}
                 </VoucherPrintTemplate>
               </div>
             </div>
