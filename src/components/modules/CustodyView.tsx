@@ -1453,107 +1453,80 @@ export default function CustodyView({
             لا بنود لهذه التصفية بعد — يمكن حفظ تصفية جزئية ثم إضافة تصفية لاحقة للرصد المتبقي.
           </div>
         )}
-        <div className="overflow-x-auto custom-scrollbar pb-2">
-        <div className="min-w-[900px] space-y-2">
-        {items.map((it, idx) => {
-          const vatAcc = vatAccountId ? accounts.find(a => a.id === vatAccountId) : undefined;
-          return (
-            <div key={it.id} data-enter-row="" className="rounded-xl p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-500 dark:text-slate-400">البند {idx + 1}</span>
-                <button type="button" onClick={() => removeItem(idx)} className="p-1 text-red-600 hover:bg-red-100 rounded cursor-pointer">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={FORM_LABEL}>حساب المصروف / الأصل *</label>
-                  <F9SearchInput
-                    value={it.accountId ? `${it.accountCode} - ${it.accountNameAr}` : ''}
-                    onChange={() => undefined}
-                    items={postingAccounts}
-                    columns={[{ label: 'رقم الحساب', render: account => account.code }, { label: 'اسم الحساب', render: account => account.nameAr }]}
-                    searchText={account => `${account.code} ${account.nameAr} ${account.nameEn}`}
-                    browseTitle="اختيار الحساب المحاسبي"
-                    onSelect={account => updateItem(idx, { accountId: account.id, accountCode: account.code, accountNameAr: account.nameAr, subLedgerType: subLedgerTypeOf(account, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined })}
-                    inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي' }}
-                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className={FORM_LABEL}>الطرف المستفيد / المورد</label>
-                  <input data-enter-nav-field={`settlement-party-${it.id}`} type="text" list="custody-vendor-options" value={it.partyName ?? vendorName(it.vendorId ?? '')} onChange={e => {
-                    const v = vendors.find(x => x.nameAr === e.target.value);
-                    updateItem(idx, v ? { partyName: v.nameAr, vendorId: v.id, vendorName: v.nameAr, vendorVatNumber: v.vatNumber } : { partyName: e.target.value, vendorId: undefined, vendorName: undefined });
-                  }} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={FORM_LABEL}>الحساب التحليلي</label>
-                  {!it.accountId ? <div className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">اختر الحساب المحاسبي أولاً</div>
-                    : it.subLedgerType === 'NONE' ? <div className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">هذا الحساب لا يتطلب حساباً تحليلياً</div>
-                    : <SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(a => a.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} />}
-                </div>
-                <div>
-                  <label className={FORM_LABEL}>مركز التكلفة</label>
-                  <F9SearchInput
-                    value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
-                    onChange={() => undefined}
-                    items={costCenters}
-                    columns={[{ label: 'الكود', render: center => center.code }, { label: 'مركز التكلفة', render: center => center.nameAr }]}
-                    searchText={center => `${center.code} ${center.nameAr}`}
-                    browseTitle="اختيار مركز التكلفة"
-                    onSelect={center => updateItem(idx, { costCenterId: center.id })}
-                    inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة' }}
-                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className={FORM_LABEL}>الوصف *</label>
-                <input data-enter-nav-field={`settlement-description-${it.id}`} type="text" value={it.description} onChange={e => updateItem(idx, { description: e.target.value })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                <div>
-                  <label className={FORM_LABEL}>القيمة ({currency}) *</label>
-                  <AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={v => updateItem(idx, { amount: Number(v) })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
-                </div>
-                <div>
-                  <label className={FORM_LABEL}>الضريبة %</label>
-                  <div className="relative">
-                    <AmountInput value={it.taxRate} onChange={v => updateItem(idx, { taxRate: Number(v) / 100 })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 pl-7" />
-                    <Percent className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 pointer-events-none" />
-                  </div>
-                </div>
-                <div className="flex items-end pb-1.5">
-                  <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
-                    <input type="checkbox" checked={it.vatInclusive} onChange={e => updateItem(idx, { vatInclusive: e.target.checked })} className="accent-sky-500" />
-                    شامل الضريبة
-                  </label>
-                </div>
-                <div>
-                  <label className={FORM_LABEL}>رقم المرجع</label>
-                  <input value={it.referenceNumber || ''} onChange={e => updateItem(idx, { referenceNumber: e.target.value || undefined })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />
-                </div>
-              </div>
-              {it.taxAmount > 0 && (
-                <div className="rounded-lg p-2 border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">ضريبة: <span className="font-mono text-emerald-600">{fmtC(it.taxAmount, currency)}</span></span>
-                  <span className="text-slate-500 dark:text-slate-400">الإجمالي: <span className="font-mono font-bold text-slate-900 dark:text-white">{fmtC(it.total, currency)}</span></span>
-                  {showVat && !vatAcc && <span className="text-amber-400 font-bold">حدد حساب الضريبة</span>}
-                  {showVat && vatAcc && <span className="text-emerald-600 font-bold">→ {vatAcc.code}</span>}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        </div>
-        </div>
         {items.length > 0 && (
-          <div className="rounded-xl p-3 border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 flex items-center justify-between text-sm">
-            <span className="text-slate-500 dark:text-slate-400">إجمالي هذه التصفية (شامل الضريبة):</span>
-            <span className="font-mono font-bold text-slate-900 dark:text-white">{fmtC(itemsTotal(items), currency)}</span>
+          <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-700">
+            <table className="min-w-[1540px] w-full text-right text-xs border-collapse">
+              <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
+                <tr>
+                  <th className="p-2 w-10 text-center">#</th>
+                  <th className="p-2 min-w-[245px]">الحساب المحاسبي *</th>
+                  <th className="p-2 min-w-[180px]">الحساب التحليلي</th>
+                  <th className="p-2 min-w-[185px]">الطرف المستفيد / المورد</th>
+                  <th className="p-2 min-w-[175px]">مركز التكلفة</th>
+                  <th className="p-2 min-w-[230px]">الوصف *</th>
+                  <th className="p-2 min-w-[115px]">القيمة ({currency}) *</th>
+                  <th className="p-2 min-w-[95px]">الضريبة %</th>
+                  <th className="p-2 min-w-[95px]">شامل الضريبة</th>
+                  <th className="p-2 min-w-[130px]">رقم المرجع</th>
+                  <th className="p-2 w-10" aria-label="حذف" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                {items.map((it, idx) => {
+                  const vatAcc = vatAccountId ? accounts.find(account => account.id === vatAccountId) : undefined;
+                  return (
+                    <tr key={it.id} data-enter-row="" className="bg-white dark:bg-slate-900/40 align-middle">
+                      <td className="p-2 text-center font-mono text-slate-500">{idx + 1}</td>
+                      <td className="p-2">
+                        <F9SearchInput
+                          value={it.accountId ? `${it.accountCode} - ${it.accountNameAr}` : ''}
+                          onChange={() => undefined}
+                          items={postingAccounts}
+                          columns={[{ label: 'رقم الحساب', render: account => account.code }, { label: 'اسم الحساب', render: account => account.nameAr }]}
+                          searchText={account => `${account.code} ${account.nameAr} ${account.nameEn}`}
+                          browseTitle="اختيار الحساب المحاسبي"
+                          onSelect={account => updateItem(idx, { accountId: account.id, accountCode: account.code, accountNameAr: account.nameAr, subLedgerType: subLedgerTypeOf(account, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined })}
+                          inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي' }}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
+                        />
+                      </td>
+                      <td className="p-2">
+                        {!it.accountId ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">اختر الحساب أولاً</div>
+                          : it.subLedgerType === 'NONE' ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">بدون حساب تحليلي</div>
+                          : <SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(account => account.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} />}
+                      </td>
+                      <td className="p-2"><input data-enter-nav-field={`settlement-party-${it.id}`} type="text" list="custody-vendor-options" value={it.partyName ?? vendorName(it.vendorId ?? '')} onChange={event => { const vendor = vendors.find(candidate => candidate.nameAr === event.target.value); updateItem(idx, vendor ? { partyName: vendor.nameAr, vendorId: vendor.id, vendorName: vendor.nameAr, vendorVatNumber: vendor.vatNumber } : { partyName: event.target.value, vendorId: undefined, vendorName: undefined }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                      <td className="p-2">
+                        <F9SearchInput
+                          value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
+                          onChange={() => undefined}
+                          items={costCenters}
+                          columns={[{ label: 'الكود', render: center => center.code }, { label: 'مركز التكلفة', render: center => center.nameAr }]}
+                          searchText={center => `${center.code} ${center.nameAr}`}
+                          browseTitle="اختيار مركز التكلفة"
+                          onSelect={center => updateItem(idx, { costCenterId: center.id })}
+                          inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة' }}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
+                        />
+                      </td>
+                      <td className="p-2"><input data-enter-nav-field={`settlement-description-${it.id}`} type="text" value={it.description} onChange={event => updateItem(idx, { description: event.target.value })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                      <td className="p-2"><AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={value => updateItem(idx, { amount: Number(value) })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                      <td className="p-2"><div className="relative"><AmountInput value={it.taxRate} onChange={value => updateItem(idx, { taxRate: Number(value) / 100 })} className="w-full h-9 px-2 pl-6 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /><Percent className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" /></div></td>
+                      <td className="p-2 text-center"><label className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={it.vatInclusive} onChange={event => updateItem(idx, { vatInclusive: event.target.checked })} className="accent-sky-500" /> نعم</label></td>
+                      <td className="p-2"><input type="text" value={it.referenceNumber || ''} onChange={event => updateItem(idx, { referenceNumber: event.target.value || undefined })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                      <td className="p-2 text-center"><button type="button" onClick={() => removeItem(idx)} title="حذف البند" className="p-1.5 text-red-600 hover:bg-red-100 rounded cursor-pointer"><X className="w-3.5 h-3.5" /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-sky-50 dark:bg-sky-500/10 text-xs">
+                  <td colSpan={6} className="p-2 font-bold text-slate-600 dark:text-slate-300">إجمالي هذه التصفية (شامل الضريبة)</td>
+                  <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">{fmtC(itemsTotal(items), currency)}</td>
+                  <td colSpan={4} className="p-2 text-slate-500">{items.some(item => item.taxAmount > 0) ? `ضريبة: ${fmtC(items.reduce((sum, item) => sum + item.taxAmount, 0), currency)}${showVat && !vatAccountId ? ' — حدد حساب الضريبة' : ''}` : '—'}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
         {showVat && (
