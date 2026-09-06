@@ -54,6 +54,7 @@ import ModalShell from '../ui/ModalShell';
 import { downloadVoucherPdf } from '../../utils/voucherPdf';
 import { buildXlsx, downloadBlob, type XlsxSheet } from '../../utils/xlsxWriter';
 import PrintableAccountStatement, { type PrintableStatementRow } from './reports/PrintableAccountStatement';
+import PrintableCustodyStatement, { type CustodyStatementRow } from './reports/PrintableCustodyStatement';
 import { loadBranchesLocal, DEFAULT_COMPANY_BRANCH } from '../../utils/companyStore';
 import { tafqeetAmount } from '../../utils/tafqeetHelper';
 import FinancialReportPrintLayout from '../reports/FinancialReportPrintLayout';
@@ -972,7 +973,7 @@ export default function FinancialReportsView({
     /** Opening balance split by original currency for independent print sections. */
     openingByCurrency?: Record<string, number>;
     showOpening: boolean;
-    rows: PrintableStatementRow[];
+    rows: Array<PrintableStatementRow & Partial<CustodyStatementRow>>;
     currencyCode?: string;
   }
 
@@ -1002,19 +1003,36 @@ export default function FinancialReportsView({
         ...trusts.filter(t => !custodies.some(c => c.id === t.id)).map(t => ({ ...t, currency: baseCode, exchangeRate: 1 })),
         ...custodies.map(c => ({ ...c, date: c.requestedDate, trustNumber: c.custodyNumber, returnedAmount: c.refundedAmount + c.apTransferredAmount })),
       ].filter(t => (all || (t.employeeId && empIds.has(t.employeeId))) && inDateRange(t.date, fromDate, toDate) && (!isOriginalCurrencyReport || t.currency === currency));
-      const rowsForTrusts = (items: typeof reportTrusts) => items.map(t => ({
-        date: t.date,
-        docType: 'عهدة مالية',
-        docNumber: t.trustNumber,
-        reference: t.referenceNumber || '—',
-        description: t.title,
-        // Custody amounts are persisted in their stated currency. The report is
-        // already split into one print section per currency, so never relabel a
-        // local-currency equivalent as foreign money.
-        debit: round2(t.amount || 0),
-        credit: round2((t.settledAmount || 0) + (t.returnedAmount || 0)),
-        currency: t.currency || baseCode,
-      }));
+      const rowsForTrusts = (items: typeof reportTrusts): CustodyStatementRow[] => items.map(t => {
+        // The legacy trust rows have no disbursement metadata. Resolve it only
+        // from the matching modern custody record, while preserving legacy rows.
+        const custody = custodies.find(candidate => candidate.id === t.id);
+        const cashBox = custody?.disbursementSource ? cashBoxes.find(box => box.id === custody.disbursementSource) : undefined;
+        const bank = custody?.disbursementSource ? bankAccounts.find(account => account.id === custody.disbursementSource) : undefined;
+        const costCenter = custody?.costCenterId ? costCenters.find(center => center.id === custody.costCenterId) : undefined;
+        const method = custody?.disbursementMethod === 'CASH' ? 'نقدي'
+          : custody?.disbursementMethod === 'BANK_TRANSFER' ? 'حساب بنكي / شيك'
+          : custody?.disbursementMethod === 'EXCHANGE' ? 'شركة صرافة' : '—';
+        const sourceName = cashBox ? `${cashBox.code} — ${cashBox.nameAr}`
+          : bank ? `${bank.code} — ${bank.bankNameAr}` : '—';
+        return {
+          id: t.id,
+          date: t.date,
+          docType: 'عهدة مالية',
+          docNumber: t.trustNumber,
+          reference: t.referenceNumber || '—',
+          description: t.title,
+          // Custody amounts are persisted in their stated currency. The report is
+          // already split into one print section per currency, so never relabel a
+          // local-currency equivalent as foreign money.
+          debit: round2(t.amount || 0),
+          credit: round2((t.settledAmount || 0) + (t.returnedAmount || 0)),
+          currency: t.currency || baseCode,
+          disbursementMethod: method,
+          sourceName,
+          costCenter: costCenter ? `${costCenter.code} — ${costCenter.nameAr}` : '—',
+        };
+      });
 
       // كل موظف يخرج في كشف مستقل، ثم تفصل مرحلة الطباعة كل عملة منه.
       const specs = scopedEntities.map(entity => {
@@ -1347,27 +1365,29 @@ export default function FinancialReportsView({
   };
 
   const renderStatements = () => (
-    printableStatementSpecs.map(spec => (
-      <PrintableAccountStatement
-        key={spec.key}
-        titleAr={spec.titleAr}
-        titleEn={spec.titleEn}
-        subjectCode={spec.subjectCode}
-        subjectName={spec.subjectName}
-        subjectExtra={spec.subjectExtra}
-        fromDate={fromDate}
-        toDate={toDate}
-        currencyCode={spec.currencyCode || currency}
-        currencyNameAr={currencyOptions.find(option => option.code === (spec.currencyCode || currency))?.label.split(' (')[0] || spec.currencyCode || currency}
-        currencySymbol={symbolOf(spec.currencyCode || currency)}
-        opening={spec.opening}
-        rows={spec.rows}
-        showOpening={spec.showOpening}
-        isSummary={isSummary}
-        currentUserName={currentUserName}
-        company={company}
-      />
-    ))
+    printableStatementSpecs.map(spec => {
+      const sharedProps = {
+        key: spec.key,
+        titleAr: spec.titleAr,
+        titleEn: spec.titleEn,
+        subjectCode: spec.subjectCode,
+        subjectName: spec.subjectName,
+        subjectExtra: spec.subjectExtra,
+        fromDate,
+        toDate,
+        currencyCode: spec.currencyCode || currency,
+        currencyNameAr: currencyOptions.find(option => option.code === (spec.currencyCode || currency))?.label.split(' (')[0] || spec.currencyCode || currency,
+        currencySymbol: symbolOf(spec.currencyCode || currency),
+        opening: spec.opening,
+        rows: spec.rows,
+        isSummary,
+        currentUserName,
+        company,
+      };
+      return reportType === 'TRUSTS_REPORT'
+        ? <PrintableCustodyStatement {...sharedProps} rows={spec.rows as CustodyStatementRow[]} />
+        : <PrintableAccountStatement {...sharedProps} showOpening={spec.showOpening} />;
+    })
   );
 
   const reportFooter = (

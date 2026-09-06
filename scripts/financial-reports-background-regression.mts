@@ -17,6 +17,10 @@ assert.match(source, /الحساب التحليلي — سلف الموظفين 
 assert.match(source, /الحساب التحليلي — عُهد الموظفين/);
 assert.match(source, /normalizeVoucherSourceJournalCurrencies/);
 assert.match(source, /Custody amounts are persisted in their stated currency/);
+assert.match(source, /PrintableCustodyStatement/);
+assert.match(source, /disbursementMethod: method/);
+assert.match(source, /sourceName/);
+assert.match(source, /costCenter:/);
 assert.match(source, /debit: round2\(t\.amount \|\| 0\)/);
 assert.match(source, /credit: round2\(\(t\.settledAmount \|\| 0\) \+ \(t\.returnedAmount \|\| 0\)\)/);
 assert.doesNotMatch(source, /t\.amount \|\| 0\) \* \(isOriginalCurrencyReport/);

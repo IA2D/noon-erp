@@ -633,6 +633,7 @@ export default function CustodyView({
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const printablePaperRef = useRef<HTMLDivElement>(null);
+  const custodyStatementPaperRef = useRef<HTMLDivElement>(null);
   const handlePrintPreview = () => openDesktopPrintPreview(printablePaperRef.current, `كشف عهدة ${printCustody?.custodyNumber || ''}`, 'portrait');
 
   /** The receipt voucher is evidence of the actual disbursement, never of a draft request. */
@@ -2363,6 +2364,11 @@ export default function CustodyView({
         const c = statementTarget;
         const sorted = [...c.transactions].sort((a, b) => (a.createdAt || a.date).localeCompare(b.createdAt || b.date));
         const opening = custodyPrincipal(c);
+        const statementSource = sourceEntities.find(source => source.id === c.disbursementSource);
+        const statementMethod = c.disbursementMethod === 'CASH' ? 'نقدي'
+          : c.disbursementMethod === 'BANK_TRANSFER' ? 'حساب بنكي / شيك'
+          : c.disbursementMethod === 'EXCHANGE' ? 'شركة صرافة' : '—';
+        const statementCostCenter = c.costCenterId ? costCenters.find(center => center.id === c.costCenterId) : undefined;
         let running = opening;
         const rows = sorted.map(t => {
           if (t.type === 'SETTLEMENT' || t.type === 'REFUND') running = Math.max(0, Math.round((running - t.amount) * 100) / 100);
@@ -2372,6 +2378,10 @@ export default function CustodyView({
         return (
           <ModalShell id="custody-statement" open={!!statementTarget} title={`كشف حساب ${c.custodyNumber}`} icon={ReceiptText} onClose={() => setStatementTarget(null)} footer={null} closeOnBackdrop={false}>
             <div className="space-y-4">
+              <div className="flex justify-between items-center gap-3">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">حركة العهدة</h3>
+                <button type="button" onClick={() => void openDesktopPrintPreview(custodyStatementPaperRef.current, `كشف حساب العهدة ${c.custodyNumber}`, 'landscape')} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white hover:bg-sky-500 cursor-pointer"><Printer className="w-3.5 h-3.5" /> طباعة كشف الحساب</button>
+              </div>
               <div className="rounded-xl p-4 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">الموظف:</span><span className="font-semibold text-slate-900 dark:text-white">{c.employeeName}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">قيمة العهدة:</span><span className="font-mono text-slate-900 dark:text-white">{fmtC(custodyPrincipal(c), c.currency || baseCurrency)}</span></div>
@@ -2410,6 +2420,52 @@ export default function CustodyView({
                 </table>
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400">الكشف النهائي = أصل العهدة − المصفى بالمستندات − النقدية المعادة − المحوَّل للدائنين (AP).</p>
+
+              <div hidden ref={custodyStatementPaperRef} className="paper print-area bg-white text-slate-900 p-8" dir="rtl">
+                <VoucherPrintTemplate
+                  voucherTitleAr="كشف حساب العهدة المالية"
+                  voucherTitleEn="Custody Account Statement"
+                  documentNumber={c.custodyNumber}
+                  documentDate={c.requestedDate}
+                  currency={c.currency || baseCurrency}
+                  currentUserName={currentUserName}
+                  metadata={[
+                    { label: 'الموظف المكلف', value: c.employeeName },
+                    { label: 'طريقة الصرف', value: statementMethod },
+                    { label: 'مصدر الصرف', value: statementSource?.label || '—' },
+                    { label: 'مركز التكلفة', value: statementCostCenter ? `${statementCostCenter.code} — ${statementCostCenter.nameAr}` : '—' },
+                    { label: 'رقم المرجع', value: c.referenceNumber || '—' },
+                    { label: 'البيان', value: c.title || '—' },
+                  ]}
+                  totalAmountText={fmtC(outstandingBalance(c), c.currency || baseCurrency)}
+                  signatures={[
+                    { roleLabelAr: 'أعده / المحاسب', name: c.createdBy },
+                    { roleLabelAr: 'استلم العهدة (الموظف)', name: c.employeeName },
+                    { roleLabelAr: 'المراجع المالي' },
+                    { roleLabelAr: 'المدير المالي / الاعتماد' },
+                  ]}
+                >
+                  <h3 className="mb-2 text-sm font-bold">حركة العهدة</h3>
+                  <table>
+                    <thead><tr><th>#</th><th>التاريخ</th><th>البيان</th><th>القيمة</th><th>الرصيد القائم</th></tr></thead>
+                    <tbody>
+                      <tr><td>1</td><td>—</td><td>رصيد افتتاحي (قيمة العهدة)</td><td>{fmtC(opening, c.currency || baseCurrency)}</td><td>{fmtC(opening, c.currency || baseCurrency)}</td></tr>
+                      {rows.map((transaction, index) => <tr key={transaction.id}><td>{index + 2}</td><td>{transaction.date}</td><td>{transaction.narration || TXN_LABEL[transaction.type]}</td><td>{fmtC(transaction.amount, c.currency || baseCurrency)}</td><td>{fmtC(transaction.balance, c.currency || baseCurrency)}</td></tr>)}
+                    </tbody>
+                  </table>
+                  <h3 className="mb-2 mt-5 text-sm font-bold">الأطراف المستفيدة من صرف العهدة</h3>
+                  {c.disbursementParties?.length ? (
+                    <table>
+                      <thead><tr><th>#</th><th>الطرف</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>المبلغ</th></tr></thead>
+                      <tbody>{c.disbursementParties.map((party, index) => {
+                        const account = party.accountId ? accounts.find(item => item.id === party.accountId) : undefined;
+                        const center = party.costCenterId ? costCenters.find(item => item.id === party.costCenterId) : undefined;
+                        return <tr key={party.id}><td>{index + 1}</td><td>{party.name}</td><td>{account ? `${account.code} — ${account.nameAr}` : party.accountNameAr || '—'}</td><td>{party.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{party.referenceNumber || '—'}</td><td>{party.narration || '—'}</td><td>{fmtC(party.amount, c.currency || baseCurrency)}</td></tr>;
+                      })}</tbody>
+                    </table>
+                  ) : <p className="py-3 text-center text-sm text-slate-500">لا توجد أطراف مستفيدة مسجلة لهذه العهدة.</p>}
+                </VoucherPrintTemplate>
+              </div>
             </div>
           </ModalShell>
         );
