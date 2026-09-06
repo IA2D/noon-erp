@@ -111,6 +111,8 @@ import { useExchangeRateGuard } from '../../hooks/useExchangeRateGuard';
 import { tafqeet } from '../../utils/tafqeet';
 import VoucherPrintTemplate from '../ui/VoucherPrintTemplate';
 import { handleCurrencyFieldChange } from '../../utils/currencyMath';
+import SubLedgerF9Cell from '../ui/SubLedgerF9Cell';
+import { SubLedgerDataset, subLedgerTypeOf } from '../../utils/subLedger';
 
 interface Props {
   custodies: Custody[];
@@ -1162,6 +1164,14 @@ export default function CustodyView({
       toast('error', 'أكمل بنود التصفية: حساب مصروف، وصف، وقيمة أكبر من صفر.');
       return;
     }
+    const missingAnalytical = settleItems.find(item => {
+      const account = accounts.find(candidate => candidate.id === item.accountId);
+      return account && subLedgerTypeOf(account, { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters }) !== 'NONE' && !item.subLedgerId;
+    });
+    if (missingAnalytical) {
+      toast('error', `حدد الحساب التحليلي للحساب «${missingAnalytical.accountNameAr}» قبل حفظ التصفية.`);
+      return;
+    }
     const vendorNoVat = settleItems.find(it => {
       if (!it.vendorId) return false;
       const v = vendors.find(x => x.id === it.vendorId);
@@ -1420,6 +1430,7 @@ export default function CustodyView({
     const vendorName = (id: string) => vendors.find(v => v.id === id)?.nameAr ?? '';
     const addItem = () => setItems([...items, newItem()]);
     const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
+    const subLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -1449,30 +1460,44 @@ export default function CustodyView({
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <label className={FORM_LABEL}>حساب المصروف / الأصل *</label>
                   <select value={it.accountId} onChange={e => {
                     const acc = accounts.find(a => a.id === e.target.value);
-                    updateItem(idx, acc ? { accountId: acc.id, accountCode: acc.code, accountNameAr: acc.nameAr } : { accountId: '' });
+                    updateItem(idx, acc ? { accountId: acc.id, accountCode: acc.code, accountNameAr: acc.nameAr, subLedgerType: subLedgerTypeOf(acc, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined } : { accountId: '' });
                   }} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30">
                     <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">— اختر —</option>
                     {postingAccounts.map(a => <option key={a.id} value={a.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">{a.code} - {a.nameAr}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={FORM_LABEL}>المورد</label>
-                  <input type="text" list="custody-vendor-options" value={vendorName(it.vendorId ?? '')} onChange={e => {
+                  <label className={FORM_LABEL}>الطرف المستفيد / المورد</label>
+                  <input type="text" list="custody-vendor-options" value={it.partyName ?? vendorName(it.vendorId ?? '')} onChange={e => {
                     const v = vendors.find(x => x.nameAr === e.target.value);
-                    updateItem(idx, v ? { vendorId: v.id, vendorName: v.nameAr, vendorVatNumber: v.vatNumber } : { vendorId: undefined, vendorName: undefined });
+                    updateItem(idx, v ? { partyName: v.nameAr, vendorId: v.id, vendorName: v.nameAr, vendorVatNumber: v.vatNumber } : { partyName: e.target.value, vendorId: undefined, vendorName: undefined });
                   }} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className={FORM_LABEL}>الحساب التحليلي</label>
+                  {!it.accountId ? <div className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">اختر الحساب المحاسبي أولاً</div>
+                    : it.subLedgerType === 'NONE' ? <div className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">هذا الحساب لا يتطلب حساباً تحليلياً</div>
+                    : <SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(a => a.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} />}
+                </div>
+                <div>
+                  <label className={FORM_LABEL}>مركز التكلفة</label>
+                  <select value={it.costCenterId || ''} onChange={e => updateItem(idx, { costCenterId: e.target.value || undefined })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30">
+                    <option value="">— بدون مركز —</option>{costCenters.map(center => <option key={center.id} value={center.id}>{center.code} - {center.nameAr}</option>)}
+                  </select>
                 </div>
               </div>
               <div>
                 <label className={FORM_LABEL}>الوصف *</label>
                 <input type="text" value={it.description} onChange={e => updateItem(idx, { description: e.target.value })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <div>
                   <label className={FORM_LABEL}>القيمة ({currency}) *</label>
                   <AmountInput value={it.amount} onChange={v => updateItem(idx, { amount: Number(v) })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30" />
@@ -1489,6 +1514,10 @@ export default function CustodyView({
                     <input type="checkbox" checked={it.vatInclusive} onChange={e => updateItem(idx, { vatInclusive: e.target.checked })} className="accent-sky-500" />
                     شامل الضريبة
                   </label>
+                </div>
+                <div>
+                  <label className={FORM_LABEL}>رقم المرجع</label>
+                  <input value={it.referenceNumber || ''} onChange={e => updateItem(idx, { referenceNumber: e.target.value || undefined })} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />
                 </div>
               </div>
               {it.taxAmount > 0 && (

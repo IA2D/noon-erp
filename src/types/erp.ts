@@ -324,10 +324,16 @@ export interface CustodySettlementItem {
   total: number;               // الإجمالي (المبلغ + الضريبة)
   vendorId?: string;
   vendorName?: string;
+  /** الطرف المستفيد من بند التصفية، مستقل عن المورد عند عدم وجود فاتورة مورد. */
+  partyName?: string;
   vendorVatNumber?: string;    // الرقم الضريبي للمورد — يُفحص عند الإدخال
   invoiceNumber?: string;
   invoiceDate?: string;
   costCenterId?: string;
+  subLedgerType?: SubLedgerType;
+  subLedgerId?: string;
+  subLedgerName?: string;
+  referenceNumber?: string;
 }
 
 /** جلسة تصفية واحدة (قد تكون جزئية) */

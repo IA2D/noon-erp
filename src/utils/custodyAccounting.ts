@@ -12,7 +12,7 @@ export interface JournalBuildContext {
   reference: string;
 }
 
-const line = (account: Pick<Account, 'id' | 'code' | 'nameAr'>, debit: number, credit: number, description: string, subLedger?: {subLedgerType: 'EMPLOYEE'; subLedgerId: string; subLedgerName: string}): JournalLine => ({
+const line = (account: Pick<Account, 'id' | 'code' | 'nameAr'>, debit: number, credit: number, description: string, subLedger?: {subLedgerType: NonNullable<JournalLine['subLedgerType']>; subLedgerId: string; subLedgerName: string}): JournalLine => ({
   id: `jl-${Math.random().toString(36).slice(2)}-${Date.now()}`,
   accountId: account.id,
   accountCode: account.code,
@@ -110,10 +110,14 @@ export function buildSettlementJournal(
         {id: it.accountId, code: it.accountCode, nameAr: it.accountNameAr},
         vatAccount ? it.amount : it.total,
         0,
-        `${it.description}${it.vendorName ? ` — ${it.vendorName}` : ''}${it.invoiceNumber ? ` (فاتورة ${it.invoiceNumber})` : ''}`
+        `${it.description}${it.partyName || it.vendorName ? ` — ${it.partyName || it.vendorName}` : ''}${it.invoiceNumber ? ` (فاتورة ${it.invoiceNumber})` : ''}`,
+        it.subLedgerType && it.subLedgerType !== 'NONE' && it.subLedgerId
+          ? { subLedgerType: it.subLedgerType, subLedgerId: it.subLedgerId, subLedgerName: it.subLedgerName || '' }
+          : undefined
       )
     );
     lines[lines.length - 1].costCenterId = it.costCenterId || custody.costCenterId;
+    lines[lines.length - 1].referenceNumber = it.referenceNumber;
     if (vatAccount && it.taxAmount > 0) {
       lines.push({...line(vatAccount, it.taxAmount, 0, `ضريبة القيمة المضافة — ${it.description}`), costCenterId: it.costCenterId || custody.costCenterId});
     }
