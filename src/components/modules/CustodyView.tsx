@@ -540,9 +540,6 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, accounts, employee
           </p>
         </div>
 
-        <div className="rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 p-3 text-xs text-slate-600 dark:text-slate-300">
-          تُحدد الحسابات والبنود المستفيدة عند <span className="font-bold text-sky-700 dark:text-sky-300">تصفية العهدة</span>، وليس عند صرفها؛ لذلك يمكن تسجيل تصفيات جزئية مستقلة دون إلزام بتوزيع كامل مبلغ العهدة.
-        </div>
       </section>
 
       <div>
