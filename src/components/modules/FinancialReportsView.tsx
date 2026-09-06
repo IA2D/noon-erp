@@ -113,7 +113,12 @@ const PrintTafqeet = ({ label, amount, currencyName, currencyCode }: { label: st
 );
 
 const configuredFiscalPeriod = (year: string) => {
-  return { start: `${year}-01-01`, end: `${year}-12-31` };
+  const start = `${year}-01-01`;
+  const end = `${year}-12-31`;
+  // A current fiscal year reports only through today; historical years retain
+  // their complete closing date.
+  const today = defaultReportToDate();
+  return { start, end: today >= start && today <= end ? today : end };
 };
 
 const REPORT_META: Record<ReportType, { ar: string; en: string }> = {
@@ -1229,23 +1234,48 @@ export default function FinancialReportsView({
           ['صافي دخل الفترة', equityChanges.netIncome], ['حقوق الملكية آخر الفترة', equityChanges.closingEquity],
           ['حقوق الملكية حسب الميزانية', equityChanges.balanceSheetEquity], ['فرق المطابقة', equityChanges.reconciliationDifference],
         ] };
-      case 'PAYMENT_VOUCHERS_REPORT':
+      case 'PAYMENT_VOUCHERS_REPORT': {
         if (isSummary) return { columns: ['البند', 'العدد', 'إجمالي المبلغ'], rows: [[
           'إجمالي سندات الصرف', filteredPaymentVouchers.length, roundTo(filteredPaymentVouchers.reduce((sum, voucher) => sum + voucher.totalAmount, 0), selectedDecimals)
         ]] };
-        return { columns: ['التاريخ', 'رقم السند', 'المستفيد', 'البيان', 'طريقة الدفع', 'المبلغ', 'الحالة'], rows: filteredPaymentVouchers.map(v => [v.date, v.voucherNumber, v.payeeName, v.narration, v.paymentMethod === 'CASH' ? 'نقداً' : v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', v.totalAmount, v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
-      case 'RECEIPT_VOUCHERS_REPORT':
+        const columns = ['التاريخ', 'رقم السند', 'المستفيد', 'البيان', 'العملة', 'مركز التكلفة', 'رقم المرجع', 'طريقة الدفع', 'المبلغ', 'الحالة'];
+        const rows = filteredPaymentVouchers.flatMap(v => (v.lines.length ? v.lines : [null]).map(line => {
+          const lineCurrency = line?.currency || v.currency || baseCode;
+          const amount = line ? line.amount : v.totalAmount;
+          const center = line?.costCenterId ? costCenters.find(c => c.id === line.costCenterId) : undefined;
+          return [v.date, v.voucherNumber, v.payeeName, line?.description || v.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line?.referenceNumber || v.referenceNumber || '—', v.paymentMethod === 'CASH' ? 'نقداً' : v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', roundTo(amount, currencyDecimals(lineCurrency, currencies)), v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'];
+        }));
+        return { columns, rows };
+      }
+      case 'RECEIPT_VOUCHERS_REPORT': {
         if (isSummary) return { columns: ['البند', 'العدد', 'إجمالي المبلغ'], rows: [[
           'إجمالي سندات القبض', filteredReceiptVouchers.length, roundTo(filteredReceiptVouchers.reduce((sum, voucher) => sum + voucher.totalAmount, 0), selectedDecimals)
         ]] };
-        return { columns: ['التاريخ', 'رقم السند', 'المدفوع منه', 'البيان', 'طريقة القبض', 'المبلغ', 'الحالة'], rows: filteredReceiptVouchers.map(v => [v.date, v.receiptNumber, v.payerName, v.narration, v.receiptMethod === 'CASH' ? 'نقداً' : v.receiptMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', v.totalAmount, v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
-      case 'JOURNAL_ENTRIES_REPORT':
+        const columns = ['التاريخ', 'رقم السند', 'المدفوع منه', 'البيان', 'العملة', 'مركز التكلفة', 'رقم المرجع', 'طريقة القبض', 'المبلغ', 'الحالة'];
+        const rows = filteredReceiptVouchers.flatMap(v => (v.lines.length ? v.lines : [null]).map(line => {
+          const lineCurrency = line?.currency || v.currency || baseCode;
+          const amount = line ? line.amount : v.totalAmount;
+          const center = line?.costCenterId ? costCenters.find(c => c.id === line.costCenterId) : undefined;
+          return [v.date, v.receiptNumber, v.payerName, line?.description || v.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line?.referenceNumber || v.referenceNumber || '—', v.receiptMethod === 'CASH' ? 'نقداً' : v.receiptMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', roundTo(amount, currencyDecimals(lineCurrency, currencies)), v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'];
+        }));
+        return { columns, rows };
+      }
+      case 'JOURNAL_ENTRIES_REPORT': {
         if (isSummary) return { columns: ['البند', 'العدد', 'إجمالي المدين', 'إجمالي الدائن'], rows: [[
           'إجمالي القيود اليومية', filteredJournalEntries.length,
           roundTo(filteredJournalEntries.reduce((sum, entry) => sum + entry.totalDebit, 0), selectedDecimals),
           roundTo(filteredJournalEntries.reduce((sum, entry) => sum + entry.totalCredit, 0), selectedDecimals)
         ]] };
-        return { columns: ['التاريخ', 'رقم المستند', 'النوع', 'البيان', 'العملة', 'مدين', 'دائن', 'الحالة'], rows: filteredJournalEntries.map(j => [j.date, j.entryNumber, j.type === 'PV' ? 'سند صرف' : j.type === 'RV' ? 'سند قبض' : 'قيد يدوي', j.narration, j.currency || baseCode, j.totalDebit, j.totalCredit, j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل']) };
+        const columns = ['التاريخ', 'رقم المستند', 'النوع', 'البيان', 'العملة', 'مركز التكلفة', 'رقم المرجع', 'مدين', 'دائن', 'الحالة'];
+        const rows = filteredJournalEntries.flatMap(j => j.lines.map(line => {
+          const lineCurrency = line.currency || j.currency || baseCode;
+          const center = line.costCenterId ? costCenters.find(c => c.id === line.costCenterId) : undefined;
+          const debit = line.debitForeign ?? line.debit;
+          const credit = line.creditForeign ?? line.credit;
+          return [j.date, j.entryNumber, j.type === 'PV' ? 'سند صرف' : j.type === 'RV' ? 'سند قبض' : 'قيد يدوي', line.description || j.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line.referenceNumber || j.reference || j.referenceCode || '—', roundTo(debit || 0, currencyDecimals(lineCurrency, currencies)), roundTo(credit || 0, currencyDecimals(lineCurrency, currencies)), j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'];
+        }));
+        return { columns, rows };
+      }
       default:
         return { columns: ['البند', 'البيان'], rows: [] };
     }
@@ -3314,9 +3344,11 @@ export default function FinancialReportsView({
                     {!rows.length && <tr><td colSpan={Math.max(1, columns.length)} style={{textAlign:"center",padding:16}}>لا توجد بيانات لعرضها في هذه الفترة.</td></tr>}
                     {rows.map((r: (string | number)[], i: number) => (
                       <tr key={i}>
-                        {columns.map((_: string, ci: number) => (
-                          <td key={ci}>{r[ci] ?? ''}</td>
-                        ))}
+                        {columns.map((column: string, ci: number) => {
+                          const value = r[ci] ?? '';
+                          const isAmount = /المبلغ|مدين|دائن|رصيد|القيمة/.test(column);
+                          return <td key={ci}>{typeof value === 'number' && isAmount ? fmt(value) : value}</td>;
+                        })}
                       </tr>
                     ))}
                   </tbody>

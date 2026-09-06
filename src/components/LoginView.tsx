@@ -100,7 +100,7 @@ export default function LoginView({ onLogin, fiscalYears, defaultFiscalYear }: P
                   {fiscalYears.map(year => <option key={year} value={year}>{year}</option>)}
                 </select>
               </div>
-              <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">تبدأ التقارير تلقائياً من 01/01 إلى 31/12 للعام المختار.</p>
+              <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">تبدأ التقارير تلقائياً من 01/01 للعام المختار إلى تاريخ اليوم عند اختيار العام الحالي.</p>
             </div>
 
             {/* Error Message */}
