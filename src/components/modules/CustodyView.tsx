@@ -26,7 +26,6 @@ import {
   Timer,
   Banknote,
   Boxes,
-  Percent,
   ScrollText,
   Printer,
   Download,
@@ -651,7 +650,6 @@ export default function CustodyView({
   const [settleMaximized, setSettleMaximized] = useState(false);
   const [settleItems, setSettleItems] = useState<CustodySettlementItem[]>([]);
   const [settlementAttachments, setSettlementAttachments] = useState<SupportingDocument[]>([]);
-  const [vatAccountId, setVatAccountId] = useState('');
   const [apAccountId, setApAccountId] = useState('');
   const [refundTarget, setRefundTarget] = useState<Custody | null>(null);
   const [refundAmount, setRefundAmount] = useState(0);
@@ -659,7 +657,6 @@ export default function CustodyView({
   const [replenishTarget, setReplenishTarget] = useState<Custody | null>(null);
   const [replenishItems, setReplenishItems] = useState<CustodySettlementItem[]>([]);
   const [replenishSource, setReplenishSource] = useState('');
-  const [replenishVatAccountId, setReplenishVatAccountId] = useState('');
   const [closeTarget, setCloseTarget] = useState<Custody | null>(null);
   const [voidTarget, setVoidTarget] = useState<Custody | null>(null);
   const [detailsTarget, setDetailsTarget] = useState<Custody | null>(null);
@@ -759,22 +756,12 @@ export default function CustodyView({
     accountNameAr: '',
     description: '',
     amount: 0,
-    taxRate: 0,
-    taxAmount: 0,
-    vatInclusive: false,
     total: 0,
   });
 
   const recomputeItem = (it: CustodySettlementItem): CustodySettlementItem => {
-    const gross = Number(it.amount) || 0;
-    const rate = Number(it.taxRate) || 0;
-    if (it.vatInclusive) {
-      const total = gross;
-      const tax = rate > 0 ? total - total / (1 + rate) : 0;
-      return { ...it, total: Math.round(total * 100) / 100, taxAmount: Math.round(tax * 100) / 100, amount: Math.round((total - tax) * 100) / 100 };
-    }
-    const tax = gross * rate;
-    return { ...it, amount: Math.round(gross * 100) / 100, taxAmount: Math.round(tax * 100) / 100, total: Math.round((gross + tax) * 100) / 100 };
+    const amount = Math.round((Number(it.amount) || 0) * 100) / 100;
+    return { ...it, amount, total: amount };
   };
 
   const itemsTotal = (items: CustodySettlementItem[]) => Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;
@@ -1150,7 +1137,6 @@ export default function CustodyView({
       setSettleMaximized(false);
       setSettleItems([]);
       setSettlementAttachments([]);
-      setVatAccountId('');
       setApAccountId('');
     });
   };
@@ -1175,15 +1161,6 @@ export default function CustodyView({
       toast('error', `حدد الحساب التحليلي للحساب «${missingAnalytical.accountNameAr}» قبل حفظ التصفية.`);
       return;
     }
-    const vendorNoVat = settleItems.find(it => {
-      if (!it.vendorId) return false;
-      const v = vendors.find(x => x.id === it.vendorId);
-      return v && !v.vatNumber.trim() && it.total > 0;
-    });
-    if (vendorNoVat) {
-      toast('error', `المورد «${vendorNoVat.vendorName}» لا يملك رقماً ضريبياً — الفاتورة غير صالحة للتصفية.`);
-      return;
-    }
     const expenseTotal = itemsTotal(settleItems);
     const remaining = outstandingBalance(settleTarget);
     const excess = Math.max(0, Math.round((expenseTotal - remaining) * 100) / 100);
@@ -1191,13 +1168,7 @@ export default function CustodyView({
       toast('error', `قيمة المستندات (${fmtC(expenseTotal, settleTarget.currency || baseCurrency)}) تتجاوز الرصيد القائم (${fmtC(remaining, settleTarget.currency || baseCurrency)}) — اختر حساب دائن (AP) للمستحق للموظف.`);
       return;
     }
-    const vatAcc = vatAccountId ? accounts.find(a => a.id === vatAccountId) : undefined;
     const apAcc = apAccountId ? accounts.find(a => a.id === apAccountId) : undefined;
-    if (settleItems.some(it => it.taxAmount > 0) && !vatAcc) {
-      toast('error', 'توجد بنود بضريبة قيمة مضافة دون تحديد حساب الضريبة.');
-      return;
-    }
-
     const advanceAcc = advanceAccountOf(settleTarget);
     const ctx: JournalBuildContext = {
       journalId: `je-${Date.now()}`,
@@ -1208,7 +1179,7 @@ export default function CustodyView({
       createdBy: currentUserName,
       reference: `CUSTODY-${settleTarget.custodyNumber}`,
     };
-    const journal = buildSettlementJournal(ctx, settleTarget, settleItems, advanceAcc, apAcc ?? null, vatAcc ?? null);
+    const journal = buildSettlementJournal(ctx, settleTarget, settleItems, advanceAcc, apAcc ?? null);
     if (!onAddJournal(journal)) {
       toast('error', 'تعذر ترحيل قيد تصفية العهدة؛ لم تُعدّل العهدة.');
       return;
@@ -1323,7 +1294,6 @@ export default function CustodyView({
       setReplenishTarget(c);
       setReplenishItems([]);
       setReplenishSource('');
-      setReplenishVatAccountId('');
     });
   };
 
@@ -1344,11 +1314,6 @@ export default function CustodyView({
       toast('error', 'أكمل بنود الاستعاضة: حساب مصروف، وصف، وقيمة أكبر من صفر.');
       return;
     }
-    const vatAcc = replenishVatAccountId ? accounts.find(a => a.id === replenishVatAccountId) : undefined;
-    if (replenishItems.some(it => it.taxAmount > 0) && !vatAcc) {
-      toast('error', 'توجد بنود بضريبة قيمة مضافة دون تحديد حساب الضريبة.');
-      return;
-    }
     const total = itemsTotal(replenishItems);
     const cap = (replenishTarget.maxBalance ?? replenishTarget.amount) - replenishTarget.disbursedAmount;
     if (cap > 0 && total > cap) {
@@ -1364,7 +1329,7 @@ export default function CustodyView({
       createdBy: currentUserName,
       reference: `CUSTODY-${replenishTarget.custodyNumber}`,
     };
-    const journal = buildReplenishmentJournal(ctx, replenishTarget, replenishItems, source.account, vatAcc ?? null);
+    const journal = buildReplenishmentJournal(ctx, replenishTarget, replenishItems, source.account);
     if (!onAddJournal(journal)) {
       toast('error', 'تعذر ترحيل قيد استعاضة العهدة؛ لم تُعدّل العهدة.');
       return;
@@ -1420,13 +1385,11 @@ export default function CustodyView({
     </div>
   );
 
-  const ItemEditor = ({ items, setItems, vatAccountId, setVatAccountId, showVat, currency }: {
+  const ItemEditor = ({ items, setItems, currency, exchangeRate }: {
     items: CustodySettlementItem[];
     setItems: (items: CustodySettlementItem[]) => void;
-    vatAccountId: string;
-    setVatAccountId: (v: string) => void;
-    showVat: boolean;
     currency: string;
+    exchangeRate: number;
   }) => {
     const updateItem = (idx: number, patch: Partial<CustodySettlementItem>) => {
       setItems(items.map((it, i) => (i === idx ? recomputeItem({ ...it, ...patch }) : it)));
@@ -1438,6 +1401,13 @@ export default function CustodyView({
     const addItem = () => setItems([...items, newItem()]);
     const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
     const subLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
+    const isBaseCurrency = currency === baseCurrency;
+    const rate = isBaseCurrency ? 1 : (Number(exchangeRate) || 1);
+    const localAmount = (item: CustodySettlementItem) => Math.round((Number(item.total) || 0) * rate * 100) / 100;
+    const totalForeign = items.reduce((sum, item) => sum + (isBaseCurrency ? 0 : Number(item.total) || 0), 0);
+    const totalLocal = items.reduce((sum, item) => sum + localAmount(item), 0);
+    const readonlyAmountClass = 'w-full h-9 px-2 flex items-center justify-end font-mono text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300';
+
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -1459,7 +1429,7 @@ export default function CustodyView({
         )}
         {items.length > 0 && (
           <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-700">
-            <table className="min-w-[1540px] w-full text-right text-xs border-collapse">
+            <table className="min-w-[1940px] w-full text-right text-xs border-collapse">
               <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
                 <tr>
                   <th className="p-2 w-10 text-center">#</th>
@@ -1468,86 +1438,80 @@ export default function CustodyView({
                   <th className="p-2 min-w-[185px]">الطرف المستفيد / المورد</th>
                   <th className="p-2 min-w-[175px]">مركز التكلفة</th>
                   <th className="p-2 min-w-[230px]">الوصف *</th>
-                  <th className="p-2 min-w-[115px]">القيمة ({currency}) *</th>
-                  <th className="p-2 min-w-[95px]">الضريبة %</th>
-                  <th className="p-2 min-w-[95px]">شامل الضريبة</th>
+                  <th className="p-2 min-w-[90px]">العملة</th>
+                  <th className="p-2 min-w-[125px]">مدين أجنبي</th>
+                  <th className="p-2 min-w-[125px]">دائن أجنبي</th>
+                  <th className="p-2 min-w-[125px]">مدين محلي ({baseCurrency})</th>
+                  <th className="p-2 min-w-[125px]">دائن محلي ({baseCurrency})</th>
                   <th className="p-2 min-w-[130px]">رقم المرجع</th>
                   <th className="p-2 w-10" aria-label="حذف" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                {items.map((it, idx) => {
-                  const vatAcc = vatAccountId ? accounts.find(account => account.id === vatAccountId) : undefined;
-                  return (
-                    <tr key={it.id} data-enter-row="" className="bg-white dark:bg-slate-900/40 align-middle">
-                      <td className="p-2 text-center font-mono text-slate-500">{idx + 1}</td>
-                      <td className="p-2">
-                        <F9SearchInput
-                          value={it.accountId ? `${it.accountCode} - ${it.accountNameAr}` : ''}
-                          onChange={() => undefined}
-                          items={postingAccounts}
-                          columns={[{ label: 'رقم الحساب', render: account => account.code }, { label: 'اسم الحساب', render: account => account.nameAr }]}
-                          searchText={account => `${account.code} ${account.nameAr} ${account.nameEn}`}
-                          browseTitle="اختيار الحساب المحاسبي"
-                          onSelect={account => updateItem(idx, { accountId: account.id, accountCode: account.code, accountNameAr: account.nameAr, subLedgerType: subLedgerTypeOf(account, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined })}
-                          onAfterSelect={account => {
-                            const needsAnalytical = subLedgerTypeOf(account, subLedgerDataset) !== 'NONE';
-                            focusSettlementField(needsAnalytical
-                              ? `[data-settlement-analytical=\"${it.id}\"] [tabindex=\"0\"]`
-                              : `[data-settlement-party=\"${it.id}\"]`);
-                          }}
-                          inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي', 'data-enter-nav-field': `settlement-account-${it.id}` }}
-                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
-                        />
-                      </td>
-                      <td className="p-2">
-                        {!it.accountId ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">اختر الحساب أولاً</div>
-                          : it.subLedgerType === 'NONE' ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">بدون حساب تحليلي</div>
-                          : <div data-settlement-analytical={it.id}><SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(account => account.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} onAfterSelect={() => focusSettlementField(`[data-settlement-party=\"${it.id}\"]`)} /></div>}
-                      </td>
-                      <td className="p-2"><input data-enter-nav-field={`settlement-party-${it.id}`} data-settlement-party={it.id} type="text" list="custody-vendor-options" defaultValue={it.partyName ?? vendorName(it.vendorId ?? '')} onBlur={event => { const partyName = event.currentTarget.value; const vendor = vendors.find(candidate => candidate.nameAr === partyName); updateItem(idx, vendor ? { partyName: vendor.nameAr, vendorId: vendor.id, vendorName: vendor.nameAr, vendorVatNumber: vendor.vatNumber } : { partyName, vendorId: undefined, vendorName: undefined }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
-                      <td className="p-2">
-                        <F9SearchInput
-                          value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
-                          onChange={() => undefined}
-                          items={costCenters}
-                          columns={[{ label: 'الكود', render: center => center.code }, { label: 'مركز التكلفة', render: center => center.nameAr }]}
-                          searchText={center => `${center.code} ${center.nameAr}`}
-                          browseTitle="اختيار مركز التكلفة"
-                          onSelect={center => updateItem(idx, { costCenterId: center.id })}
-                          onAfterSelect={() => focusSettlementField(`[data-settlement-description=\"${it.id}\"]`)}
-                          inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة', 'data-enter-nav-field': `settlement-cost-center-${it.id}` }}
-                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
-                        />
-                      </td>
-                      <td className="p-2"><input data-enter-nav-field={`settlement-description-${it.id}`} data-settlement-description={it.id} type="text" value={it.description} onChange={event => updateItem(idx, { description: event.target.value })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
-                      <td className="p-2"><AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={value => updateItem(idx, { amount: Number(value) })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
-                      <td className="p-2"><div className="relative"><AmountInput value={it.taxRate} onChange={value => updateItem(idx, { taxRate: Number(value) / 100 })} className="w-full h-9 px-2 pl-6 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /><Percent className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" /></div></td>
-                      <td className="p-2 text-center"><label className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={it.vatInclusive} onChange={event => updateItem(idx, { vatInclusive: event.target.checked })} className="accent-sky-500" /> نعم</label></td>
-                      <td className="p-2"><input type="text" value={it.referenceNumber || ''} onChange={event => updateItem(idx, { referenceNumber: event.target.value || undefined })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
-                      <td className="p-2 text-center"><button type="button" onClick={() => removeItem(idx)} title="حذف البند" className="p-1.5 text-red-600 hover:bg-red-100 rounded cursor-pointer"><X className="w-3.5 h-3.5" /></button></td>
-                    </tr>
-                  );
-                })}
+                {items.map((it, idx) => (
+                  <tr key={it.id} data-enter-row="" className="bg-white dark:bg-slate-900/40 align-middle">
+                    <td className="p-2 text-center font-mono text-slate-500">{idx + 1}</td>
+                    <td className="p-2">
+                      <F9SearchInput
+                        value={it.accountId ? `${it.accountCode} - ${it.accountNameAr}` : ''}
+                        onChange={() => undefined}
+                        items={postingAccounts}
+                        columns={[{ label: 'رقم الحساب', render: account => account.code }, { label: 'اسم الحساب', render: account => account.nameAr }]}
+                        searchText={account => `${account.code} ${account.nameAr} ${account.nameEn}`}
+                        browseTitle="اختيار الحساب المحاسبي"
+                        onSelect={account => updateItem(idx, { accountId: account.id, accountCode: account.code, accountNameAr: account.nameAr, subLedgerType: subLedgerTypeOf(account, subLedgerDataset), subLedgerId: undefined, subLedgerName: undefined })}
+                        onAfterSelect={account => {
+                          const needsAnalytical = subLedgerTypeOf(account, subLedgerDataset) !== 'NONE';
+                          focusSettlementField(needsAnalytical
+                            ? `[data-settlement-analytical="${it.id}"] [tabindex="0"]`
+                            : `[data-settlement-party="${it.id}"]`);
+                        }}
+                        inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي', 'data-enter-nav-field': `settlement-account-${it.id}` }}
+                        className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
+                      />
+                    </td>
+                    <td className="p-2">
+                      {!it.accountId ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">اختر الحساب أولاً</div>
+                        : it.subLedgerType === 'NONE' ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">بدون حساب تحليلي</div>
+                        : <div data-settlement-analytical={it.id}><SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(account => account.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} onAfterSelect={() => focusSettlementField(`[data-settlement-party="${it.id}"]`)} /></div>}
+                    </td>
+                    <td className="p-2"><input data-enter-nav-field={`settlement-party-${it.id}`} data-settlement-party={it.id} type="text" list="custody-vendor-options" defaultValue={it.partyName ?? vendorName(it.vendorId ?? '')} onBlur={event => { const partyName = event.currentTarget.value; const vendor = vendors.find(candidate => candidate.nameAr === partyName); updateItem(idx, vendor ? { partyName: vendor.nameAr, vendorId: vendor.id, vendorName: vendor.nameAr } : { partyName, vendorId: undefined, vendorName: undefined }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                    <td className="p-2">
+                      <F9SearchInput
+                        value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
+                        onChange={() => undefined}
+                        items={costCenters}
+                        columns={[{ label: 'الكود', render: center => center.code }, { label: 'مركز التكلفة', render: center => center.nameAr }]}
+                        searchText={center => `${center.code} ${center.nameAr}`}
+                        browseTitle="اختيار مركز التكلفة"
+                        onSelect={center => updateItem(idx, { costCenterId: center.id })}
+                        onAfterSelect={() => focusSettlementField(`[data-settlement-description="${it.id}"]`)}
+                        inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة', 'data-enter-nav-field': `settlement-cost-center-${it.id}` }}
+                        className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
+                      />
+                    </td>
+                    <td className="p-2"><input data-enter-nav-field={`settlement-description-${it.id}`} data-settlement-description={it.id} type="text" value={it.description} onChange={event => updateItem(idx, { description: event.target.value })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                    <td className="p-2"><div className={`${readonlyAmountClass} justify-center`}>{currency}</div></td>
+                    <td className="p-2">{isBaseCurrency ? <div className={readonlyAmountClass}>—</div> : <AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={value => updateItem(idx, { amount: Number(value) })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />}</td>
+                    <td className="p-2"><div className={readonlyAmountClass}>{fmtC(0, currency)}</div></td>
+                    <td className="p-2">{isBaseCurrency ? <AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={value => updateItem(idx, { amount: Number(value) })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /> : <div className={readonlyAmountClass}>{fmtC(localAmount(it), baseCurrency)}</div>}</td>
+                    <td className="p-2"><div className={readonlyAmountClass}>{fmtC(0, baseCurrency)}</div></td>
+                    <td className="p-2"><input type="text" value={it.referenceNumber || ''} onChange={event => updateItem(idx, { referenceNumber: event.target.value || undefined })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                    <td className="p-2 text-center"><button type="button" onClick={() => removeItem(idx)} title="حذف البند" className="p-1.5 text-red-600 hover:bg-red-100 rounded cursor-pointer"><X className="w-3.5 h-3.5" /></button></td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
                 <tr className="bg-sky-50 dark:bg-sky-500/10 text-xs">
-                  <td colSpan={6} className="p-2 font-bold text-slate-600 dark:text-slate-300">إجمالي هذه التصفية (شامل الضريبة)</td>
-                  <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">{fmtC(itemsTotal(items), currency)}</td>
-                  <td colSpan={4} className="p-2 text-slate-500">{items.some(item => item.taxAmount > 0) ? `ضريبة: ${fmtC(items.reduce((sum, item) => sum + item.taxAmount, 0), currency)}${showVat && !vatAccountId ? ' — حدد حساب الضريبة' : ''}` : '—'}</td>
+                  <td colSpan={7} className="p-2 font-bold text-slate-600 dark:text-slate-300">إجمالي هذه التصفية</td>
+                  <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">{isBaseCurrency ? '—' : fmtC(totalForeign, currency)}</td>
+                  <td className="p-2 font-mono text-slate-500">{fmtC(0, currency)}</td>
+                  <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">{fmtC(totalLocal, baseCurrency)}</td>
+                  <td className="p-2 font-mono text-slate-500">{fmtC(0, baseCurrency)}</td>
+                  <td colSpan={2} className="p-2 text-slate-500">—</td>
                 </tr>
               </tfoot>
             </table>
-          </div>
-        )}
-        {showVat && (
-          <div>
-            <label className={FORM_LABEL}>حساب ضريبة القيمة المضافة (VAT)</label>
-            <select value={vatAccountId} onChange={e => setVatAccountId(e.target.value)} className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30">
-              <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">— بدون تفكيك ضريبة —</option>
-              {postingAccounts.filter(a => /ضريبة|vat/i.test(a.nameAr + a.nameEn)).map(a => <option key={a.id} value={a.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">{a.code} - {a.nameAr}</option>)}
-            </select>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">عند اختياره تُفصل الضريبة في حساب مستقل (صافي + ضريبة).</p>
           </div>
         )}
         <datalist id="custody-vendor-options">
@@ -1898,7 +1862,7 @@ export default function CustodyView({
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-                {ItemEditor({ items: settleItems, setItems: setSettleItems, vatAccountId, setVatAccountId, showVat: true, currency: settleTarget.currency || baseCurrency })}
+                {ItemEditor({ items: settleItems, setItems: setSettleItems, currency: settleTarget.currency || baseCurrency, exchangeRate: settleTarget.exchangeRate || 1 })}
                 <AttachmentPicker documents={settlementAttachments} onChange={setSettlementAttachments} uploadedBy={currentUserName} documentType="CUSTODY_SETTLEMENT_SUPPORT" />
 
               {expenseTotal > 0 && (
@@ -1963,7 +1927,7 @@ export default function CustodyView({
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">المساحة المتاحة حتى السقف:</span><span className={`font-mono font-bold ${cap > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtC(Math.max(0, cap), replenishTarget.currency || baseCurrency)}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">استعاضات سابقة:</span><span className="font-mono text-sky-600">{fmtC(replenishTarget.replenishedAmount, replenishTarget.currency || baseCurrency)}</span></div>
               </div>
-              {ItemEditor({ items: replenishItems, setItems: setReplenishItems, vatAccountId: replenishVatAccountId, setVatAccountId: setReplenishVatAccountId, showVat: true, currency: replenishTarget.currency || baseCurrency })}
+              {ItemEditor({ items: replenishItems, setItems: setReplenishItems, currency: replenishTarget.currency || baseCurrency, exchangeRate: replenishTarget.exchangeRate || 1 })}
               <SourceSelect value={replenishSource} onChange={setReplenishSource} />
               {total > 0 && (
                 <div className="rounded-xl p-3 border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-between text-sm">

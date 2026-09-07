@@ -316,9 +316,9 @@ export default function Navbar({ user, onLogout, onNavigate, notificationCount, 
       <GlobalSearchModal
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
-        onToggleOpen={() => setSearchOpen(prev => !prev)}
+        onOpen={() => setSearchOpen(true)}
         onNavigate={onNavigate}
-        data={searchData || { accounts: [], journals: [], vouchers: [], receipts: [], customers: [], vendors: [], employees: [], trusts: [], cashBoxes: [], bankAccounts: [], currencies: [], costCenters: [] }}
+        data={searchData || { accounts: [], journals: [], vouchers: [], receipts: [], customers: [], vendors: [], employees: [], custodies: [], cashBoxes: [], bankAccounts: [], currencies: [], costCenters: [] }}
         allowedModules={allowedModules || []}
       />
     </header>

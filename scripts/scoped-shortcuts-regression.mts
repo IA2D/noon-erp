@@ -54,6 +54,9 @@ assert.doesNotMatch(f9Input, /if \(e\.key === 'F9'\)/);
 assert.doesNotMatch(journalSearch, /window\.addEventListener\('keydown'/);
 assert.match(globalSearch, /e\.code === 'KeyK'/);
 assert.match(globalSearch, /window\.addEventListener\('keydown', handleKeyDown, true\)/);
+assert.match(globalSearch, /openRef\.current\?\.\(\)/);
+assert.doesNotMatch(globalSearch, /module: 'TRUSTS'/);
+assert.match(globalSearch, /module: 'CUSTODY'/);
 
 // Other repeated row shortcuts stay on the focused row/grid rather than
 // receiving document/window listeners.

@@ -33,7 +33,7 @@ assert(approvalsComplete([{level:1,action:'APPROVED'}] as any,1));
 const ctx:any={journalId:'j',entryNumber:'JV-1',currency:'YER',exchangeRate:1,createdBy:'test',reference:'CST-1'};
 const disb=buildDisbursementJournal(ctx,custody,{id:'adv'} as any,{id:'cash'} as any);
 assert.equal(disb.lines[0].costCenterId,'cc');assert.equal(disb.lines[1].subLedgerId,'box1');assert.equal(disb.totalDebit,disb.totalCredit);
-const settle=buildSettlementJournal(ctx,custody,[{accountId:'expense',amount:100,total:100,taxAmount:0,costCenterId:'cc-special'}] as any,{id:'adv'} as any,null,null);
+const settle=buildSettlementJournal(ctx,custody,[{accountId:'expense',amount:100,total:100,costCenterId:'cc-special'}] as any,{id:'adv'} as any,null);
 assert.equal(settle.lines[0].costCenterId,'cc-special');assert.equal(settle.totalDebit,settle.totalCredit);
 assert.equal(voucherReportAmount({currency:'USD',exchangeRate:250,totalAmount:10},'YER','YER'),2500);
 assert.equal(voucherReportAmount({currency:'USD',exchangeRate:250,totalAmount:10},'USD','YER'),10);

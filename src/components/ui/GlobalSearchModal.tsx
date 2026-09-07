@@ -39,7 +39,7 @@ import {
   JournalEntry,
   PaymentVoucher,
   ReceiptVoucher,
-  Trust,
+  Custody,
   Vendor
 } from '../../types/erp';
 import { ERPModule } from '../../constants/permissions';
@@ -52,7 +52,7 @@ export interface GlobalSearchData {
   customers: Customer[];
   vendors: Vendor[];
   employees: Employee[];
-  trusts: Trust[];
+  custodies: Custody[];
   cashBoxes: CashBox[];
   bankAccounts: BankAccount[];
   currencies: Currency[];
@@ -62,8 +62,8 @@ export interface GlobalSearchData {
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** معالج تبديل حالة الفتح/الإغلاق — يُستدعى من اختصار Ctrl + K. */
-  onToggleOpen?: () => void;
+  /** يفتح البحث الشامل من اختصار Ctrl + K. */
+  onOpen?: () => void;
   onNavigate: (module: ERPModule) => void;
   data: GlobalSearchData;
   allowedModules: ERPModule[];
@@ -95,7 +95,7 @@ const NAV_PAGES: NavPageDef[] = [
   { module: 'VENDORS', titleAr: 'بيانات الموردين', titleEn: 'Vendors', keywords: 'مورد ذمم دائنة', icon: Truck, iconClass: 'bg-orange-500/20 text-orange-400' },
   { module: 'COST_CENTERS', titleAr: 'مراكز التكلفة', titleEn: 'Cost Centers', keywords: 'مركز تكلفة مشروع', icon: Boxes, iconClass: 'bg-teal-500/20 text-teal-400' },
   { module: 'CURRENCIES', titleAr: 'العملات', titleEn: 'Currencies', keywords: 'عملة سعر صرف تحويل', icon: Coins, iconClass: 'bg-emerald-500/20 text-emerald-400' },
-  { module: 'TRUSTS', titleAr: 'العهد', titleEn: 'Trusts', keywords: 'عهدة أمانة سلف ضمان', icon: Vault, iconClass: 'bg-amber-500/20 text-amber-400' },
+  { module: 'CUSTODY', titleAr: 'العُهد المالية والعينية', titleEn: 'Custody & Petty Cash', keywords: 'عهدة مالية عينية تصفية استعاضة صرف', icon: Vault, iconClass: 'bg-amber-500/20 text-amber-400' },
   { module: 'REPORTS', titleAr: 'التقارير المالية', titleEn: 'Reports', keywords: 'ميزان مراجعة قائمة دخل ميزانية عمومية كشف حساب', icon: FileBarChart2, iconClass: 'bg-sky-500/20 text-sky-400' },
   { module: 'CLOSING', titleAr: 'الإقفالات والترحيل', titleEn: 'Closing', keywords: 'إقفال سنة ترحيل أرباح مبقاة', icon: Lock, iconClass: 'bg-sky-500/20 text-sky-400' },
   { module: 'AUDIT_SECURITY', titleAr: 'التدقيق والصلاحيات', titleEn: 'Audit & Security', keywords: 'سجل تدقيق صلاحيات مستخدمون', icon: ShieldCheck, iconClass: 'bg-rose-500/20 text-rose-400' },
@@ -230,17 +230,17 @@ function buildEntityEntries(data: GlobalSearchData, allowedModules: ERPModule[])
     });
   }
 
-  if (has('TRUSTS')) {
-    data.trusts.forEach(t => {
+  if (has('CUSTODY')) {
+    data.custodies.forEach(custody => {
       entries.push({
-        id: `tr-${t.id}`,
+        id: `custody-${custody.id}`,
         group: 'entity',
-        title: `${t.trustNumber} - ${t.title}`,
-        subtitle: `عهدة · ${t.employeeName} · ${t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} YER`,
+        title: `${custody.custodyNumber} - ${custody.title}`,
+        subtitle: `عهدة مالية أو عينية · ${custody.employeeName} · ${custody.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${custody.currency}`,
         icon: Vault,
         iconClass: 'bg-amber-500/20 text-amber-400',
-        module: 'TRUSTS',
-        searchText: `${t.trustNumber} ${t.title} ${t.employeeName} عهدة`
+        module: 'CUSTODY',
+        searchText: `${custody.custodyNumber} ${custody.title} ${custody.employeeName} عهدة مالية عينية تصفية استعاضة`
       });
     });
   }
@@ -308,18 +308,18 @@ function buildEntityEntries(data: GlobalSearchData, allowedModules: ERPModule[])
   return entries;
 }
 
-export default function GlobalSearchModal({ open, onClose, onToggleOpen, onNavigate, data, allowedModules }: Props) {
+export default function GlobalSearchModal({ open, onClose, onOpen, onNavigate, data, allowedModules }: Props) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const toggleOpenRef = useRef(onToggleOpen);
+  const openRef = useRef(onOpen);
   useEffect(() => {
-    toggleOpenRef.current = onToggleOpen;
-  }, [onToggleOpen]);
+    openRef.current = onOpen;
+  }, [onOpen]);
 
-  // اختصار عالمي Ctrl/Cmd + K لفتح/إغلاق نافذة البحث — يعمل حتى أثناء إخفائها.
+  // اختصار عالمي Ctrl/Cmd + K لفتح البحث الشامل — يعمل حتى أثناء إخفائه.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // `key` يتغير مع لغة لوحة المفاتيح (مثل ك عند الكتابة بالعربية)،
@@ -328,7 +328,7 @@ export default function GlobalSearchModal({ open, onClose, onToggleOpen, onNavig
       if (isSearchShortcut) {
         e.preventDefault();
         e.stopPropagation();
-        toggleOpenRef.current?.();
+        openRef.current?.();
       }
     };
     // الالتقاط يسبق معالجات الحقول والنوافذ المنبثقة التي قد توقف انتشار الحدث.

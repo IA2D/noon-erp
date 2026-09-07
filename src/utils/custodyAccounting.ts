@@ -93,8 +93,7 @@ export function buildSettlementJournal(
   custody: Custody,
   items: CustodySettlementItem[],
   advanceAccount: Account,
-  apAccount: Account | null,
-  vatAccount: Account | null
+  apAccount: Account | null
 ): JournalEntry {
   const remaining = Math.max(0, Math.round((custody.disbursedAmount - custody.settledAmount - custody.refundedAmount - custody.apTransferredAmount) * 100) / 100);
   const expenseTotal = Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;
@@ -108,7 +107,7 @@ export function buildSettlementJournal(
     lines.push(
       line(
         {id: it.accountId, code: it.accountCode, nameAr: it.accountNameAr},
-        vatAccount ? it.amount : it.total,
+        it.total,
         0,
         `${it.description}${it.partyName || it.vendorName ? ` — ${it.partyName || it.vendorName}` : ''}${it.invoiceNumber ? ` (فاتورة ${it.invoiceNumber})` : ''}`,
         it.subLedgerType && it.subLedgerType !== 'NONE' && it.subLedgerId
@@ -118,9 +117,6 @@ export function buildSettlementJournal(
     );
     lines[lines.length - 1].costCenterId = it.costCenterId || custody.costCenterId;
     lines[lines.length - 1].referenceNumber = it.referenceNumber;
-    if (vatAccount && it.taxAmount > 0) {
-      lines.push({...line(vatAccount, it.taxAmount, 0, `ضريبة القيمة المضافة — ${it.description}`), costCenterId: it.costCenterId || custody.costCenterId});
-    }
   }
   lines.push(line(advanceAccount, 0, advanceCredit, `تصفية عهدة ${custody.custodyNumber} بالمستندات`, subLedgerOf(custody)));
   if (excess > 0) {
@@ -161,23 +157,19 @@ export function buildReplenishmentJournal(
   ctx: JournalBuildContext,
   custody: Custody,
   items: CustodySettlementItem[],
-  sourceAccount: Account,
-  vatAccount: Account | null
+  sourceAccount: Account
 ): JournalEntry {
   const lines: JournalLine[] = [];
   for (const it of items) {
     lines.push(
       line(
         {id: it.accountId, code: it.accountCode, nameAr: it.accountNameAr},
-        vatAccount ? it.amount : it.total,
+        it.total,
         0,
         `استعاضة عهدة ${custody.custodyNumber} — ${it.description}${it.vendorName ? ` (${it.vendorName})` : ''}`
       )
     );
     lines[lines.length - 1].costCenterId = it.costCenterId || custody.costCenterId;
-    if (vatAccount && it.taxAmount > 0) {
-      lines.push({...line(vatAccount, it.taxAmount, 0, `ضريبة القيمة المضافة — ${it.description}`), costCenterId: it.costCenterId || custody.costCenterId});
-    }
   }
   const total = Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;
   lines.push(line(sourceAccount, 0, total, `استعاضة عهدة ${custody.custodyNumber} — ${custody.employeeName}`));

@@ -2097,7 +2097,7 @@ function AppInner() {
             customers,
             vendors,
             employees,
-            trusts,
+            custodies,
             cashBoxes,
             bankAccounts,
             currencies,

@@ -310,23 +310,19 @@ export interface CustodyApproval {
   actionAt?: string;
 }
 
-/** بند تصفية (مصروف / أصل) مع دعم ضريبة القيمة المضافة والفواتير */
+/** بند تصفية (مصروف / أصل) للعهدة. */
 export interface CustodySettlementItem {
   id: string;
   accountId: string;
   accountCode: string;
   accountNameAr: string;
   description: string;
-  amount: number;              // صافي المبلغ قبل الضريبة
-  taxRate: number;             // نسبة الضريبة (0..1 أو 0..100)
-  taxAmount: number;           // قيمة الضريبة
-  vatInclusive: boolean;       // السعر شامل الضريبة؟
-  total: number;               // الإجمالي (المبلغ + الضريبة)
+  amount: number;              // قيمة المدين بعملة العهدة
+  total: number;               // إجمالي البند (يساوي القيمة)
   vendorId?: string;
   vendorName?: string;
   /** الطرف المستفيد من بند التصفية، مستقل عن المورد عند عدم وجود فاتورة مورد. */
   partyName?: string;
-  vendorVatNumber?: string;    // الرقم الضريبي للمورد — يُفحص عند الإدخال
   invoiceNumber?: string;
   invoiceDate?: string;
   costCenterId?: string;
@@ -342,7 +338,7 @@ export interface CustodySettlement {
   settlementNumber: string;    // e.g. STL-1
   date: string;
   items: CustodySettlementItem[];
-  totalExpense: number;        // إجمالي المصاريف (شامل الضريبة)
+  totalExpense: number;        // إجمالي المصاريف
   cashRefunded: number;        // النقدية المعادة (فائض)
   shortageAmount: number;      // العجز أو المبلغ المستحق للموظف
   apTransferred: number;       // المحوَّل لحساب الدائنين (مستحق للموظف)
