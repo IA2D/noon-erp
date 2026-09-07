@@ -865,8 +865,7 @@ export default function CustodyView({
     }
     if (!disbursed && form.type === 'TEMPORARY') {
       const violation = findOverdueViolation(form.employeeId, custodies.filter(x => x.id !== c.id));
-      if (violation) {
-        setEditError(`لا يمكن تعديل العهدة لموظف لديه عهدة متأخرة (${violation.custodyNumber}) — صفّها أو حدّث تاريخ انقضائها أولاً.`);
+      if (violation && !window.confirm(`لدى ${violation.employeeName} عهدة متأخرة (${violation.custodyNumber}) تجاوزت تاريخ التصفية بـ ${overdueDays(violation)} يوم. هل تريد المتابعة وتعديل العهدة؟`)) {
         return;
       }
     }
@@ -943,8 +942,7 @@ export default function CustodyView({
     }
     if (createForm.type === 'TEMPORARY') {
       const violation = findOverdueViolation(createForm.employeeId, custodies);
-      if (violation) {
-        setCreateError(`لا يمكن إصدار عهدة مؤقتة جديدة — لدى ${violation.employeeName} عهدة متأخرة (${violation.custodyNumber}) تجاوزت تاريخ التصفية بـ ${overdueDays(violation)} يوم.`);
+      if (violation && !window.confirm(`تنبيه: لدى ${violation.employeeName} عهدة متأخرة (${violation.custodyNumber}) تجاوزت تاريخ التصفية بـ ${overdueDays(violation)} يوم. هل تريد إصدار العهدة الجديدة رغم ذلك؟`)) {
         return;
       }
     }
@@ -2221,7 +2219,7 @@ export default function CustodyView({
                           <tr key={line.id}>
                             <td className="text-center font-mono">{idx + 1}</td>
                             <td className="font-mono">{line.accountCode}</td>
-                            <td className="font-semibold">{line.accountNameAr}</td>
+                            <td className="font-semibold">{line.subLedgerName || line.accountNameAr}</td>
                             <td className="text-slate-600">{line.description}</td>
                             <td className="font-mono">{line.referenceNumber || c.referenceNumber || '—'}</td>
                             <td className="font-bold text-left font-mono whitespace-nowrap">{lineAmount(line, 'debit') > 0 ? lineAmount(line, 'debit').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
@@ -2365,6 +2363,7 @@ export default function CustodyView({
             costCenterId: party.costCenterId,
             referenceNumber: party.referenceNumber,
             narration: party.narration,
+            date: c.transactions.find(transaction => transaction.type === 'DISBURSE')?.date || c.requestedDate,
             amount: party.amount,
             currency: statementCurrency,
             exchangeRate: statementExchangeRate,
@@ -2380,6 +2379,7 @@ export default function CustodyView({
             costCenterId: item.costCenterId,
             referenceNumber: item.referenceNumber,
             narration: item.description,
+            date: settlement.date,
             amount: item.amount,
             currency: item.currency || statementCurrency,
             exchangeRate: item.currency === baseCurrency ? 1 : (Number(item.exchangeRate) || statementExchangeRate),
@@ -2467,12 +2467,13 @@ export default function CustodyView({
                   <h3 className="mb-2 mt-5 text-sm font-bold">البنود المحاسبية لصرف وتصفية العهدة</h3>
                   {printLines.length ? (
                     <table>
-                      <thead><tr><th>#</th><th>المرحلة</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>العملة</th><th>سعر الصرف</th><th>المبلغ الأجنبي</th><th>المبلغ المحلي</th></tr></thead>
+                      <thead><tr><th>#</th><th>التاريخ</th><th>اسم الحساب</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>العملة</th><th>سعر الصرف</th><th>المبلغ الأجنبي</th><th>المبلغ المحلي</th><th>المرحلة</th></tr></thead>
                       <tbody>{printLines.map((beneficiary, index) => {
                         const account = beneficiary.accountId ? accounts.find(item => item.id === beneficiary.accountId) : undefined;
                         const center = beneficiary.costCenterId ? costCenters.find(item => item.id === beneficiary.costCenterId) : undefined;
+                        const accountName = beneficiary.subLedgerName || (account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—');
                         const foreignAmount = beneficiary.currency === baseCurrency ? '—' : fmtC(beneficiary.amount, beneficiary.currency);
-                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.stage}</td><td>{account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—'}</td><td>{beneficiary.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{beneficiary.currency}</td><td>{beneficiary.currency === baseCurrency ? '—' : fmt(beneficiary.exchangeRate)}</td><td>{foreignAmount}</td><td>{fmtC(beneficiary.localAmount, baseCurrency)}</td></tr>;
+                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.date || '—'}</td><td>{accountName}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{beneficiary.currency}</td><td>{beneficiary.currency === baseCurrency ? '—' : fmt(beneficiary.exchangeRate)}</td><td>{foreignAmount}</td><td>{fmtC(beneficiary.localAmount, baseCurrency)}</td><td>{beneficiary.stage}</td></tr>;
                       })}</tbody>
                     </table>
                   ) : <p className="py-3 text-center text-sm text-slate-500">لا توجد بنود صرف أو تصفية مسجلة لهذه العهدة.</p>}
