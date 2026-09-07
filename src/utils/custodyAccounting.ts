@@ -109,7 +109,7 @@ export function buildSettlementJournal(
         {id: it.accountId, code: it.accountCode, nameAr: it.accountNameAr},
         it.total,
         0,
-        `${it.description}${it.partyName || it.vendorName ? ` — ${it.partyName || it.vendorName}` : ''}${it.invoiceNumber ? ` (فاتورة ${it.invoiceNumber})` : ''}`,
+        `${it.description}${it.invoiceNumber ? ` (فاتورة ${it.invoiceNumber})` : ''}`,
         it.subLedgerType && it.subLedgerType !== 'NONE' && it.subLedgerId
           ? { subLedgerType: it.subLedgerType, subLedgerId: it.subLedgerId, subLedgerName: it.subLedgerName || '' }
           : undefined
@@ -166,7 +166,7 @@ export function buildReplenishmentJournal(
         {id: it.accountId, code: it.accountCode, nameAr: it.accountNameAr},
         it.total,
         0,
-        `استعاضة عهدة ${custody.custodyNumber} — ${it.description}${it.vendorName ? ` (${it.vendorName})` : ''}`
+        `استعاضة عهدة ${custody.custodyNumber} — ${it.description}`
       )
     );
     lines[lines.length - 1].costCenterId = it.costCenterId || custody.costCenterId;

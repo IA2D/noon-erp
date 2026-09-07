@@ -1394,7 +1394,6 @@ export default function CustodyView({
     const updateItem = (idx: number, patch: Partial<CustodySettlementItem>) => {
       setItems(items.map((it, i) => (i === idx ? recomputeItem({ ...it, ...patch }) : it)));
     };
-    const vendorName = (id: string) => vendors.find(v => v.id === id)?.nameAr ?? '';
     const focusSettlementField = (selector: string) => {
       window.setTimeout(() => document.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true }), 90);
     };
@@ -1429,13 +1428,12 @@ export default function CustodyView({
         )}
         {items.length > 0 && (
           <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-700">
-            <table className="min-w-[1940px] w-full text-right text-xs border-collapse">
+            <table className="min-w-[1755px] w-full text-right text-xs border-collapse">
               <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
                 <tr>
                   <th className="p-2 w-10 text-center">#</th>
                   <th className="p-2 min-w-[245px]">الحساب المحاسبي *</th>
                   <th className="p-2 min-w-[180px]">الحساب التحليلي</th>
-                  <th className="p-2 min-w-[185px]">الطرف المستفيد / المورد</th>
                   <th className="p-2 min-w-[175px]">مركز التكلفة</th>
                   <th className="p-2 min-w-[230px]">الوصف *</th>
                   <th className="p-2 min-w-[90px]">العملة</th>
@@ -1464,7 +1462,7 @@ export default function CustodyView({
                           const needsAnalytical = subLedgerTypeOf(account, subLedgerDataset) !== 'NONE';
                           focusSettlementField(needsAnalytical
                             ? `[data-settlement-analytical="${it.id}"] [tabindex="0"]`
-                            : `[data-settlement-party="${it.id}"]`);
+                            : `[data-settlement-cost-center="${it.id}"] input`);
                         }}
                         inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار الحساب المحاسبي', 'data-enter-nav-field': `settlement-account-${it.id}` }}
                         className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
@@ -1473,10 +1471,9 @@ export default function CustodyView({
                     <td className="p-2">
                       {!it.accountId ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">اختر الحساب أولاً</div>
                         : it.subLedgerType === 'NONE' ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">بدون حساب تحليلي</div>
-                        : <div data-settlement-analytical={it.id}><SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(account => account.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} onAfterSelect={() => focusSettlementField(`[data-settlement-party="${it.id}"]`)} /></div>}
+                        : <div data-settlement-analytical={it.id}><SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(account => account.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} onAfterSelect={() => focusSettlementField(`[data-settlement-cost-center="${it.id}"] input`)} /></div>}
                     </td>
-                    <td className="p-2"><input data-enter-nav-field={`settlement-party-${it.id}`} data-settlement-party={it.id} type="text" list="custody-vendor-options" defaultValue={it.partyName ?? vendorName(it.vendorId ?? '')} onBlur={event => { const partyName = event.currentTarget.value; const vendor = vendors.find(candidate => candidate.nameAr === partyName); updateItem(idx, vendor ? { partyName: vendor.nameAr, vendorId: vendor.id, vendorName: vendor.nameAr } : { partyName, vendorId: undefined, vendorName: undefined }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
-                    <td className="p-2">
+                    <td className="p-2" data-settlement-cost-center={it.id}>
                       <F9SearchInput
                         value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
                         onChange={() => undefined}
@@ -1503,7 +1500,7 @@ export default function CustodyView({
               </tbody>
               <tfoot>
                 <tr className="bg-sky-50 dark:bg-sky-500/10 text-xs">
-                  <td colSpan={7} className="p-2 font-bold text-slate-600 dark:text-slate-300">إجمالي هذه التصفية</td>
+                  <td colSpan={6} className="p-2 font-bold text-slate-600 dark:text-slate-300">إجمالي هذه التصفية</td>
                   <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">{isBaseCurrency ? '—' : fmtC(totalForeign, currency)}</td>
                   <td className="p-2 font-mono text-slate-500">{fmtC(0, currency)}</td>
                   <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">{fmtC(totalLocal, baseCurrency)}</td>
@@ -1514,9 +1511,6 @@ export default function CustodyView({
             </table>
           </div>
         )}
-        <datalist id="custody-vendor-options">
-          {vendors.map(v => <option key={v.id} value={v.nameAr} />)}
-        </datalist>
       </div>
     );
   };
@@ -2339,17 +2333,15 @@ export default function CustodyView({
           if (t.type === 'CANCEL') running = 0;
           return { ...t, balance: running };
         });
-        // Beneficiaries can be entered when the custody is disbursed or later
-        // on each settlement item. The printable statement must include both.
+        // The statement combines accounting allocation lines from disbursement and settlement.
         const statementCurrency = c.currency || baseCurrency;
         const statementIsBaseCurrency = statementCurrency === baseCurrency;
         const statementExchangeRate = statementIsBaseCurrency ? 1 : (Number(c.exchangeRate) || 1);
         const toLocalAmount = (amount: number) => Math.round((Number(amount) || 0) * statementExchangeRate * 100) / 100;
-        const printBeneficiaries = [
+        const printLines = [
           ...(c.disbursementParties || []).map(party => ({
             id: `disbursement-${party.id}`,
             stage: 'صرف العهدة',
-            name: party.name,
             accountId: party.accountId,
             accountCode: party.accountCode,
             accountNameAr: party.accountNameAr,
@@ -2362,7 +2354,6 @@ export default function CustodyView({
           ...c.settlements.flatMap(settlement => settlement.items.map(item => ({
             id: `settlement-${settlement.id}-${item.id}`,
             stage: `تصفية ${settlement.settlementNumber}`,
-            name: item.partyName || item.vendorName || '—',
             accountId: item.accountId,
             accountCode: item.accountCode,
             accountNameAr: item.accountNameAr,
@@ -2451,19 +2442,19 @@ export default function CustodyView({
                       {rows.map((transaction, index) => <tr key={transaction.id}><td>{index + 2}</td><td>{transaction.date}</td><td>{transaction.narration || TXN_LABEL[transaction.type]}</td><td>{fmtC(transaction.amount, c.currency || baseCurrency)}</td><td>{fmtC(transaction.balance, c.currency || baseCurrency)}</td></tr>)}
                     </tbody>
                   </table>
-                  <h3 className="mb-2 mt-5 text-sm font-bold">الأطراف والبنود المستفيدة من صرف وتصفية العهدة</h3>
-                  {printBeneficiaries.length ? (
+                  <h3 className="mb-2 mt-5 text-sm font-bold">البنود المحاسبية لصرف وتصفية العهدة</h3>
+                  {printLines.length ? (
                     <table>
-                      <thead><tr><th>#</th><th>المرحلة</th><th>الطرف</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>العملة</th><th>مدين أجنبي</th><th>دائن أجنبي</th><th>مدين محلي</th><th>دائن محلي</th></tr></thead>
-                      <tbody>{printBeneficiaries.map((beneficiary, index) => {
+                      <thead><tr><th>#</th><th>المرحلة</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>العملة</th><th>مدين أجنبي</th><th>دائن أجنبي</th><th>مدين محلي</th><th>دائن محلي</th></tr></thead>
+                      <tbody>{printLines.map((beneficiary, index) => {
                         const account = beneficiary.accountId ? accounts.find(item => item.id === beneficiary.accountId) : undefined;
                         const center = beneficiary.costCenterId ? costCenters.find(item => item.id === beneficiary.costCenterId) : undefined;
                         const foreignDebit = statementIsBaseCurrency ? '—' : fmtC(beneficiary.amount, statementCurrency);
                         const localDebit = fmtC(toLocalAmount(beneficiary.amount), baseCurrency);
-                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.stage}</td><td>{beneficiary.name}</td><td>{account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—'}</td><td>{beneficiary.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{statementCurrency}</td><td>{foreignDebit}</td><td>{fmtC(0, statementCurrency)}</td><td>{localDebit}</td><td>{fmtC(0, baseCurrency)}</td></tr>;
+                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.stage}</td><td>{account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—'}</td><td>{beneficiary.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{statementCurrency}</td><td>{foreignDebit}</td><td>{fmtC(0, statementCurrency)}</td><td>{localDebit}</td><td>{fmtC(0, baseCurrency)}</td></tr>;
                       })}</tbody>
                     </table>
-                  ) : <p className="py-3 text-center text-sm text-slate-500">لا توجد أطراف أو بنود تصفية مسجلة لهذه العهدة.</p>}
+                  ) : <p className="py-3 text-center text-sm text-slate-500">لا توجد بنود صرف أو تصفية مسجلة لهذه العهدة.</p>}
                 </VoucherPrintTemplate>
               </div>
             </div>

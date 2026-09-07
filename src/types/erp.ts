@@ -319,10 +319,6 @@ export interface CustodySettlementItem {
   description: string;
   amount: number;              // قيمة المدين بعملة العهدة
   total: number;               // إجمالي البند (يساوي القيمة)
-  vendorId?: string;
-  vendorName?: string;
-  /** الطرف المستفيد من بند التصفية، مستقل عن المورد عند عدم وجود فاتورة مورد. */
-  partyName?: string;
   invoiceNumber?: string;
   invoiceDate?: string;
   costCenterId?: string;

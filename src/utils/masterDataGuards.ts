@@ -59,7 +59,6 @@ export function entityRemovalDecision(
   const subType = kind === 'VENDOR' ? 'SUPPLIER' : kind;
   if (ctx.journals.some(entry => entry.lines.some(line => line.subLedgerType === subType && line.subLedgerId === id))) reasons.push('مستخدم كحساب تحليلي في قيد');
   if (kind === 'EMPLOYEE' && (ctx.trusts.some(item => item.employeeId === id) || ctx.custodies.some(item => item.employeeId === id))) reasons.push('مرتبط بعهدة');
-  if (kind === 'VENDOR' && ctx.custodies.some(c => c.settlements.some(s => s.items.some(item => item.vendorId === id)))) reasons.push('مرتبط بتصفية عهدة');
   if ((kind === 'CASH_BOX' || kind === 'BANK') && ctx.custodies.some(c => c.disbursementSource === id)) reasons.push('مستخدم كمصدر صرف عهدة');
   if ((kind === 'CASH_BOX' || kind === 'BANK') && [...ctx.vouchers, ...ctx.receipts].some(v => v.sourceEntityId === id)) reasons.push('مستخدم كمصدر سند مالي');
   if (ctx.vouchers.some(v => v.lines.some(line => line.subLedgerType === subType && line.subLedgerId === id)) || ctx.receipts.some(v => v.lines.some(line => line.subLedgerType === subType && line.subLedgerId === id))) reasons.push('مستخدم في تفاصيل سند مالي');
