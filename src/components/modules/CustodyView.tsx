@@ -2341,6 +2341,10 @@ export default function CustodyView({
         });
         // Beneficiaries can be entered when the custody is disbursed or later
         // on each settlement item. The printable statement must include both.
+        const statementCurrency = c.currency || baseCurrency;
+        const statementIsBaseCurrency = statementCurrency === baseCurrency;
+        const statementExchangeRate = statementIsBaseCurrency ? 1 : (Number(c.exchangeRate) || 1);
+        const toLocalAmount = (amount: number) => Math.round((Number(amount) || 0) * statementExchangeRate * 100) / 100;
         const printBeneficiaries = [
           ...(c.disbursementParties || []).map(party => ({
             id: `disbursement-${party.id}`,
@@ -2450,11 +2454,13 @@ export default function CustodyView({
                   <h3 className="mb-2 mt-5 text-sm font-bold">الأطراف والبنود المستفيدة من صرف وتصفية العهدة</h3>
                   {printBeneficiaries.length ? (
                     <table>
-                      <thead><tr><th>#</th><th>المرحلة</th><th>الطرف</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>المبلغ</th></tr></thead>
+                      <thead><tr><th>#</th><th>المرحلة</th><th>الطرف</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>العملة</th><th>مدين أجنبي</th><th>دائن أجنبي</th><th>مدين محلي</th><th>دائن محلي</th></tr></thead>
                       <tbody>{printBeneficiaries.map((beneficiary, index) => {
                         const account = beneficiary.accountId ? accounts.find(item => item.id === beneficiary.accountId) : undefined;
                         const center = beneficiary.costCenterId ? costCenters.find(item => item.id === beneficiary.costCenterId) : undefined;
-                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.stage}</td><td>{beneficiary.name}</td><td>{account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—'}</td><td>{beneficiary.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{fmtC(beneficiary.amount, c.currency || baseCurrency)}</td></tr>;
+                        const foreignDebit = statementIsBaseCurrency ? '—' : fmtC(beneficiary.amount, statementCurrency);
+                        const localDebit = fmtC(toLocalAmount(beneficiary.amount), baseCurrency);
+                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.stage}</td><td>{beneficiary.name}</td><td>{account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—'}</td><td>{beneficiary.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{statementCurrency}</td><td>{foreignDebit}</td><td>{fmtC(0, statementCurrency)}</td><td>{localDebit}</td><td>{fmtC(0, baseCurrency)}</td></tr>;
                       })}</tbody>
                     </table>
                   ) : <p className="py-3 text-center text-sm text-slate-500">لا توجد أطراف أو بنود تصفية مسجلة لهذه العهدة.</p>}
