@@ -339,7 +339,9 @@ export function createRelationalStore(db) {
     if (name === 'journals') db.exec('DELETE FROM erp_journal_entries');
     if (name === 'paymentVouchers') db.exec('DELETE FROM erp_payment_vouchers');
     if (name === 'receiptVouchers') db.exec('DELETE FROM erp_receipt_vouchers');
-    if (name === 'costCenters') db.exec('DELETE FROM erp_cost_centers');
+    // مراكز التكلفة هرمية (الأب محمي بـ ON DELETE RESTRICT). افصل روابط
+    // الآباء أولاً كي تعمل إعادة البناء/ضبط المصنع حتى مع مراكز فرعية.
+    if (name === 'costCenters') db.exec('UPDATE erp_cost_centers SET parent_id = NULL; DELETE FROM erp_cost_centers');
     if (name === 'currencies') db.exec('DELETE FROM erp_currencies');
     if (['cashBoxes','bankAccounts','employees','customers','vendors'].includes(name)) db.prepare('DELETE FROM erp_master_entities WHERE entity_type=?').run(name);
     if (name === 'auditLogs') return true;

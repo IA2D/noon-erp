@@ -29,7 +29,10 @@ const receiptVouchers = [{
   id: 'RV-1', receiptNumber: 'RV-1', date: '2026-08-27', receiptMethod: 'CASH', sourceType: 'CASH_BOX', sourceAccountId: 'A-2', sourceAccountNameAr: 'الصندوق', payerName: 'عميل', narration: 'قبض', currency: 'YER', exchangeRate: 1, subtotalAmount: 75, totalAmount: 75, amountInWordsAr: '', status: 'POSTED', createdBy: 'admin', createdAt: '2026-08-27T00:00:00.000Z', lines: [{ id: 'RVL-1', accountId: 'A-1', accountCode: '1101', accountNameAr: 'النقدية', description: 'قبض', amount: 75, totalAmount: 75, localAmount: 75 }] },
 ];
 const currencies = [{ id: 'CUR-YER', code: 'YER', nameAr: 'ريال يمني', decimals: 0, isBase: true, isActive: true }];
-const costCenters = [{ id: 'CC-1', code: 'CC-1', nameAr: 'المركز الرئيسي' }];
+const costCenters = [
+  { id: 'CC-1', code: 'CC-1', nameAr: 'المركز الرئيسي' },
+  { id: 'CC-2', code: 'CC-2', nameAr: 'مركز فرعي', parentId: 'CC-1' },
+];
 const cashBoxes = [{ id: 'BOX-1', code: 'BOX-1', nameAr: 'الصندوق الرئيسي', linkedAccountId: 'A-2', isActive: true }];
 
 const snapshot = new Map([
@@ -88,7 +91,7 @@ fs.rmSync(file, { force: true });
 const valid =
   initial.accounts === 2 && initial.accountCurrencies === 1 && initial.journals === 1 && initial.journalLines === 2 &&
   initial.paymentVouchers === 1 && initial.paymentVoucherLines === 1 && initial.receiptVouchers === 1 && initial.receiptVoucherLines === 1 &&
-  initial.currencies === 1 && initial.costCenters === 1 && initial.masterEntities === 1 &&
+  initial.currencies === 1 && initial.costCenters === 2 && initial.masterEntities === 1 &&
   authoritativeDebit === 321 &&
   updatedDebit === 125 && updatedLines === 1 && afterDelete.paymentVouchers === 0 && afterDelete.paymentVoucherLines === 0 &&
   restored.journalLines === 2 && restored.paymentVouchers === 1 && diagnostics.ok && missingAccountBlocked && referencedAccountDeleteBlocked && duplicateEntityBlocked && integrity === 'ok';
