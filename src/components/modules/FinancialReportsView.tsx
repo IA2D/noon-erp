@@ -1,6 +1,6 @@
 import {openDesktopPrintPreview} from '../../utils/desktopPrintPreview';
 import { dateToIso, dateToDisplay, inDateRange } from '../../utils/dateInput';
-import { reportDocuments, lineCostCenterId, entityOpening, entityOpeningsByCurrency, lineBelongsToEntity, isBeforeReport, voucherReportAmount } from '../../utils/reportData';
+import { reportDocuments, sortReportRecordsChronologically, lineCostCenterId, entityOpening, entityOpeningsByCurrency, lineBelongsToEntity, isBeforeReport, voucherReportAmount } from '../../utils/reportData';
 import React, { useState, useMemo, useRef, Fragment, useEffect } from 'react';
 import { Account, JournalEntry, CostCenter, Currency, Employee, Customer, Vendor, CashBox, BankAccount, Trust, Custody, SubLedgerType, PaymentVoucher, ReceiptVoucher } from '../../types/erp';
 import {
@@ -196,7 +196,7 @@ function buildLedger(account: Account, journalsList: JournalEntry[]): {
       }
     });
   });
-  movements.sort((a, b) => a.date.localeCompare(b.date) || a.entryNumber.localeCompare(b.entryNumber));
+  movements.sort((a, b) => dateToIso(a.date).localeCompare(dateToIso(b.date)) || a.entryNumber.localeCompare(b.entryNumber, 'en', { numeric: true }));
 
   const opening = account.openingBalance || 0;
   let running = opening;
@@ -767,7 +767,7 @@ export default function FinancialReportsView({
         });
       })
     );
-    lines.sort((a, b) => a.date.localeCompare(b.date) || a.docNumber.localeCompare(b.docNumber));
+    lines.sort((a, b) => dateToIso(a.date).localeCompare(dateToIso(b.date)) || a.docNumber.localeCompare(b.docNumber, 'en', { numeric: true }));
     return lines;
   };
 
@@ -994,7 +994,7 @@ export default function FinancialReportsView({
     });
     };
     const sortRows = (a: PrintableStatementRow, b: PrintableStatementRow) =>
-      a.date.localeCompare(b.date) || a.docNumber.localeCompare(b.docNumber);
+      dateToIso(a.date).localeCompare(dateToIso(b.date)) || a.docNumber.localeCompare(b.docNumber, 'en', { numeric: true });
 
     if (reportType === 'TRUSTS_REPORT') {
       const empIds = new Set(scopedEntities.map(e => e.id));
@@ -1003,7 +1003,7 @@ export default function FinancialReportsView({
         ...trusts.filter(t => !custodies.some(c => c.id === t.id)).map(t => ({ ...t, currency: baseCode, exchangeRate: 1 })),
         ...custodies.map(c => ({ ...c, date: c.requestedDate, trustNumber: c.custodyNumber, returnedAmount: c.refundedAmount + c.apTransferredAmount })),
       ].filter(t => (all || (t.employeeId && empIds.has(t.employeeId))) && inDateRange(t.date, fromDate, toDate) && (!isOriginalCurrencyReport || t.currency === currency));
-      const rowsForTrusts = (items: typeof reportTrusts): CustodyStatementRow[] => items.map(t => {
+      const rowsForTrusts = (items: typeof reportTrusts): CustodyStatementRow[] => sortReportRecordsChronologically(items, item => item.trustNumber).map(t => {
         // The legacy trust rows have no disbursement metadata. Resolve it only
         // from the matching modern custody record, while preserving legacy rows.
         const custody = custodies.find(candidate => candidate.id === t.id);
@@ -1236,15 +1236,21 @@ export default function FinancialReportsView({
   }, [statementSpecs, baseCode, currency, isSummary, reportType]);
 
   const filteredPaymentVouchers = useMemo(() =>
-    reportDocuments(vouchers || [], fromDate, toDate, true).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
+    sortReportRecordsChronologically(
+      reportDocuments(vouchers || [], fromDate, toDate, true).filter(v => !isOriginalCurrencyReport || v.currency === currency),
+      voucher => voucher.voucherNumber,
+    ).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
     [vouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
   );
   const filteredReceiptVouchers = useMemo(() =>
-    reportDocuments(receiptVouchers || [], fromDate, toDate, true).filter(v => !isOriginalCurrencyReport || v.currency === currency).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
+    sortReportRecordsChronologically(
+      reportDocuments(receiptVouchers || [], fromDate, toDate, true).filter(v => !isOriginalCurrencyReport || v.currency === currency),
+      voucher => voucher.receiptNumber,
+    ).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
     [receiptVouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
   );
   const filteredJournalEntries = useMemo(() =>
-    documentJournals,
+    sortReportRecordsChronologically(documentJournals, entry => entry.entryNumber),
     [documentJournals]
   );
 

@@ -4,6 +4,13 @@ import { dateToIso, inDateRange } from './dateInput';
 export function reportDocuments<T extends { date: string; status: string }>(records: T[], from: string, to: string, includeVoided = false): T[] {
   return records.filter(record => (includeVoided || record.status !== 'VOIDED') && inDateRange(record.date, from, to));
 }
+
+/** Chronological display order for every report: oldest document first. */
+export function sortReportRecordsChronologically<T extends { date: string }>(records: T[], documentNumber: (record: T) => string = () => ''): T[] {
+  return [...records].sort((a, b) =>
+    dateToIso(a.date).localeCompare(dateToIso(b.date)) || documentNumber(a).localeCompare(documentNumber(b), 'en', { numeric: true })
+  );
+}
 export function lineCostCenterId(line: JournalLine): string | undefined {
   return line.costCenterId || (line.subLedgerType === 'COST_CENTER' ? line.subLedgerId : undefined);
 }

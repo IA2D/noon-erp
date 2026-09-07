@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {dateToIso,dateToDisplay,inDateRange} from '../src/utils/dateInput.ts';
-import {reportDocuments,lineCostCenterId,entityOpening,lineBelongsToEntity,voucherReportAmount} from '../src/utils/reportData.ts';
+import {reportDocuments,sortReportRecordsChronologically,lineCostCenterId,entityOpening,lineBelongsToEntity,voucherReportAmount} from '../src/utils/reportData.ts';
 import {projectJournalsToCurrency,projectPostedJournalsToCurrency} from '../src/utils/currencyReporting.ts';
 import {requiredApprovalLevel,canApprove,approvalsComplete} from '../src/utils/custodyEngine.ts';
 import {buildDisbursementJournal,buildSettlementJournal,buildRefundJournal} from '../src/utils/custodyAccounting.ts';
@@ -13,6 +13,7 @@ assert(inDateRange('30/08/2026','2026-08-01','2026-08-30'));
 const j:any={id:'j1',entryNumber:'JV-1',date:'2026-08-30',currency:'YER',exchangeRate:1,status:'PENDING_POSTING',lines:[{accountId:'cash',debit:100,credit:0},{accountId:'income',debit:0,credit:100}],totalDebit:100,totalCredit:100};
 const records=[j,{...j,id:'j2',status:'POSTED',date:'30/08/2026'},{...j,id:'void',status:'VOIDED'},{...j,id:'old',date:'2025-01-01'}];
 assert.equal(reportDocuments(records,'2026-08-01','2026-08-30').length,2);
+assert.deepEqual(sortReportRecordsChronologically([{date:'2026-08-30',number:'3'},{date:'2026-08-01',number:'2'},{date:'2026-08-01',number:'1'}], row => row.number).map(row => row.number),['1','2','3']);
 assert.equal(projectJournalsToCurrency([j], 'YER','YER',2,true)[0].status,'PENDING_POSTING');
 assert.equal(projectPostedJournalsToCurrency([j],'YER','YER',2).length,0);
 assert.equal(lineCostCenterId({costCenterId:'cc1'} as any),'cc1');
