@@ -317,8 +317,16 @@ export interface CustodySettlementItem {
   accountCode: string;
   accountNameAr: string;
   description: string;
-  amount: number;              // قيمة المدين بعملة العهدة
-  total: number;               // إجمالي البند (يساوي القيمة)
+  /** المبلغ بعملة البند الأصلية (المبلغ المحلي إذا كانت العملة الأساسية). */
+  amount: number;
+  /** عملة البند، مستقلة عن عملة العهدة. */
+  currency: string;
+  /** سعر تحويل عملة البند إلى العملة المحلية. */
+  exchangeRate: number;
+  /** المعادل بالعملة المحلية. */
+  localAmount: number;
+  /** المعادل بعملة العهدة ويُستخدم في احتساب الرصيد القائم. */
+  total: number;
   invoiceNumber?: string;
   invoiceDate?: string;
   costCenterId?: string;

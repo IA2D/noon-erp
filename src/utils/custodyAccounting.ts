@@ -8,6 +8,8 @@ export interface JournalBuildContext {
   exchangeRate: number;
   /** True when amounts supplied by the custody workflow are in a non-base currency. */
   isForeignCurrency: boolean;
+  /** رمز العملة المحلية للنظام. */
+  baseCurrency?: string;
   createdBy: string;
   reference: string;
 }
@@ -32,6 +34,9 @@ function journal(ctx: JournalBuildContext, narration: string, lines: JournalLine
   // journals fail posting validation before the custody itself is updated.
   const rate = Number(ctx.exchangeRate) || 1;
   const normalizedLines = lines.map(item => {
+    // Settlement lines can use a currency different from the custody itself.
+    // Those lines already carry their local amount and currency evidence.
+    if (item.currency) return item;
     const debitForeign = Number(item.debit) || 0;
     const creditForeign = Number(item.credit) || 0;
     if (!ctx.isForeignCurrency) {
@@ -95,32 +100,52 @@ export function buildSettlementJournal(
   advanceAccount: Account,
   apAccount: Account | null
 ): JournalEntry {
+  const baseCurrency = ctx.baseCurrency || 'YER';
+  const custodyRate = Number(ctx.exchangeRate) || 1;
   const remaining = Math.max(0, Math.round((custody.disbursedAmount - custody.settledAmount - custody.refundedAmount - custody.apTransferredAmount) * 100) / 100);
-  const expenseTotal = Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;
+  const expenseTotal = Math.round(items.reduce((sum, item) => sum + item.total, 0) * 100) / 100;
+  const localOf = (item: CustodySettlementItem) => {
+    const itemCurrency = item.currency || custody.currency || baseCurrency;
+    const itemRate = itemCurrency === baseCurrency ? 1 : (Number(item.exchangeRate) || custodyRate);
+    return Number(item.localAmount) || Math.round((Number(item.amount) || 0) * itemRate * 100) / 100;
+  };
+  const localExpenseTotal = Math.round(items.reduce((sum, item) => sum + localOf(item), 0) * 100) / 100;
   const advanceCredit = Math.min(remaining, expenseTotal);
+  const advanceCreditLocal = Math.min(localExpenseTotal, Math.round(advanceCredit * custodyRate * 100) / 100);
   const excess = Math.round((expenseTotal - advanceCredit) * 100) / 100;
-  // Settlement is deliberately partial-capable. Any unallocated balance remains
-  // on the employee advance account until a later settlement or explicit refund.
+  const excessLocal = Math.max(0, Math.round((localExpenseTotal - advanceCreditLocal) * 100) / 100);
+
+  const localizedLine = (account: Pick<Account, 'id' | 'code' | 'nameAr'>, debit: number, credit: number, description: string, currency: string, exchangeRate: number, foreignDebit?: number, foreignCredit?: number, subLedger?: {subLedgerType: NonNullable<JournalLine['subLedgerType']>; subLedgerId: string; subLedgerName: string}) => ({
+    ...line(account, debit, credit, description, subLedger),
+    currency,
+    exchangeRate,
+    ...(currency !== baseCurrency ? { debitForeign: foreignDebit || 0, creditForeign: foreignCredit || 0 } : {}),
+  });
 
   const lines: JournalLine[] = [];
-  for (const it of items) {
-    lines.push(
-      line(
-        {id: it.accountId, code: it.accountCode, nameAr: it.accountNameAr},
-        it.total,
-        0,
-        `${it.description}${it.invoiceNumber ? ` (فاتورة ${it.invoiceNumber})` : ''}`,
-        it.subLedgerType && it.subLedgerType !== 'NONE' && it.subLedgerId
-          ? { subLedgerType: it.subLedgerType, subLedgerId: it.subLedgerId, subLedgerName: it.subLedgerName || '' }
-          : undefined
-      )
-    );
-    lines[lines.length - 1].costCenterId = it.costCenterId || custody.costCenterId;
-    lines[lines.length - 1].referenceNumber = it.referenceNumber;
+  for (const item of items) {
+    const itemCurrency = item.currency || custody.currency || baseCurrency;
+    const itemRate = itemCurrency === baseCurrency ? 1 : (Number(item.exchangeRate) || 1);
+    const itemLocal = localOf(item);
+    lines.push(localizedLine(
+      {id: item.accountId, code: item.accountCode, nameAr: item.accountNameAr},
+      itemLocal,
+      0,
+      `${item.description}${item.invoiceNumber ? ` (فاتورة ${item.invoiceNumber})` : ''}`,
+      itemCurrency,
+      itemRate,
+      Number(item.amount) || 0,
+      0,
+      item.subLedgerType && item.subLedgerType !== 'NONE' && item.subLedgerId
+        ? { subLedgerType: item.subLedgerType, subLedgerId: item.subLedgerId, subLedgerName: item.subLedgerName || '' }
+        : undefined
+    ));
+    lines[lines.length - 1].costCenterId = item.costCenterId || custody.costCenterId;
+    lines[lines.length - 1].referenceNumber = item.referenceNumber;
   }
-  lines.push(line(advanceAccount, 0, advanceCredit, `تصفية عهدة ${custody.custodyNumber} بالمستندات`, subLedgerOf(custody)));
-  if (excess > 0) {
-    lines.push(line(apAccount ?? advanceAccount, 0, excess, `تجاوز مستندات التصفية الرصيد القائم${apAccount ? ` — مستحق للموظف ${custody.employeeName}` : ''}`));
+  lines.push(localizedLine(advanceAccount, 0, advanceCreditLocal, `تصفية عهدة ${custody.custodyNumber} بالمستندات`, custody.currency || baseCurrency, custodyRate, 0, advanceCredit, subLedgerOf(custody)));
+  if (excessLocal > 0) {
+    lines.push(localizedLine(apAccount ?? advanceAccount, 0, excessLocal, `تجاوز مستندات التصفية الرصيد القائم${apAccount ? ` — مستحق للموظف ${custody.employeeName}` : ''}`, baseCurrency, 1));
   }
   return journal(ctx, `تصفية عهدة ${custody.custodyNumber} — ${custody.title} (${custody.employeeName})`, lines);
 }
@@ -159,19 +184,26 @@ export function buildReplenishmentJournal(
   items: CustodySettlementItem[],
   sourceAccount: Account
 ): JournalEntry {
+  const baseCurrency = ctx.baseCurrency || 'YER';
   const lines: JournalLine[] = [];
-  for (const it of items) {
-    lines.push(
-      line(
-        {id: it.accountId, code: it.accountCode, nameAr: it.accountNameAr},
-        it.total,
-        0,
-        `استعاضة عهدة ${custody.custodyNumber} — ${it.description}`
-      )
-    );
-    lines[lines.length - 1].costCenterId = it.costCenterId || custody.costCenterId;
+  for (const item of items) {
+    const itemCurrency = item.currency || custody.currency || baseCurrency;
+    const itemRate = itemCurrency === baseCurrency ? 1 : (Number(item.exchangeRate) || 1);
+    const itemLocal = Number(item.localAmount) || Math.round((Number(item.amount) || 0) * itemRate * 100) / 100;
+    lines.push({
+      ...line({id: item.accountId, code: item.accountCode, nameAr: item.accountNameAr}, itemLocal, 0, `استعاضة عهدة ${custody.custodyNumber} — ${item.description}`),
+      currency: itemCurrency,
+      exchangeRate: itemRate,
+      ...(itemCurrency !== baseCurrency ? { debitForeign: Number(item.amount) || 0, creditForeign: 0 } : {}),
+      costCenterId: item.costCenterId || custody.costCenterId,
+      referenceNumber: item.referenceNumber,
+    });
   }
-  const total = Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;
-  lines.push(line(sourceAccount, 0, total, `استعاضة عهدة ${custody.custodyNumber} — ${custody.employeeName}`));
+  const totalLocal = Math.round(items.reduce((sum, item) => {
+    const itemCurrency = item.currency || custody.currency || baseCurrency;
+    const itemRate = itemCurrency === baseCurrency ? 1 : (Number(item.exchangeRate) || Number(ctx.exchangeRate) || 1);
+    return sum + (Number(item.localAmount) || Math.round((Number(item.amount) || 0) * itemRate * 100) / 100);
+  }, 0) * 100) / 100;
+  lines.push({...line(sourceAccount, 0, totalLocal, `استعاضة عهدة ${custody.custodyNumber} — ${custody.employeeName}`), currency: baseCurrency, exchangeRate: 1});
   return journal(ctx, `استعاضة عهدة مستديمة ${custody.custodyNumber} — ${custody.title}`, lines);
 }

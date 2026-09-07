@@ -749,19 +749,27 @@ export default function CustodyView({
     fn();
   };
 
-  const newItem = (): CustodySettlementItem => ({
+  const newItem = (currency = baseCurrency, exchangeRate = 1): CustodySettlementItem => ({
     id: `si-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     accountId: '',
     accountCode: '',
     accountNameAr: '',
     description: '',
+    currency,
+    exchangeRate: currency === baseCurrency ? 1 : exchangeRate,
     amount: 0,
+    localAmount: 0,
     total: 0,
   });
 
-  const recomputeItem = (it: CustodySettlementItem): CustodySettlementItem => {
+  const recomputeItem = (it: CustodySettlementItem, custodyCurrency: string, custodyExchangeRate: number): CustodySettlementItem => {
+    const currency = it.currency || custodyCurrency || baseCurrency;
+    const exchangeRate = currency === baseCurrency ? 1 : (Number(it.exchangeRate) || rateOf(currency) || 1);
     const amount = Math.round((Number(it.amount) || 0) * 100) / 100;
-    return { ...it, amount, total: amount };
+    const localAmount = Math.round((Number(it.localAmount) || (amount * exchangeRate)) * 100) / 100;
+    const custodyRate = custodyCurrency === baseCurrency ? 1 : (Number(custodyExchangeRate) || rateOf(custodyCurrency) || 1);
+    const total = Math.round((localAmount / custodyRate) * 100) / 100;
+    return { ...it, currency, exchangeRate, amount, localAmount, total };
   };
 
   const itemsTotal = (items: CustodySettlementItem[]) => Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;
@@ -1098,6 +1106,7 @@ export default function CustodyView({
       currency: disburseTarget.currency || 'YER',
       exchangeRate: disburseTarget.exchangeRate || 1,
       isForeignCurrency: (disburseTarget.currency || baseCurrency) !== baseCurrency,
+      baseCurrency,
       createdBy: currentUserName,
       reference: `CUSTODY-${disburseTarget.custodyNumber}`,
     };
@@ -1176,6 +1185,7 @@ export default function CustodyView({
       currency: settleTarget.currency || 'YER',
       exchangeRate: settleTarget.exchangeRate || 1,
       isForeignCurrency: (settleTarget.currency || baseCurrency) !== baseCurrency,
+      baseCurrency,
       createdBy: currentUserName,
       reference: `CUSTODY-${settleTarget.custodyNumber}`,
     };
@@ -1257,6 +1267,7 @@ export default function CustodyView({
       currency: refundTarget.currency || 'YER',
       exchangeRate: refundTarget.exchangeRate || 1,
       isForeignCurrency: (refundTarget.currency || baseCurrency) !== baseCurrency,
+      baseCurrency,
       createdBy: currentUserName,
       reference: `CUSTODY-${refundTarget.custodyNumber}`,
     };
@@ -1326,6 +1337,7 @@ export default function CustodyView({
       currency: replenishTarget.currency || 'YER',
       exchangeRate: replenishTarget.exchangeRate || 1,
       isForeignCurrency: (replenishTarget.currency || baseCurrency) !== baseCurrency,
+      baseCurrency,
       createdBy: currentUserName,
       reference: `CUSTODY-${replenishTarget.custodyNumber}`,
     };
@@ -1388,23 +1400,25 @@ export default function CustodyView({
   const ItemEditor = ({ items, setItems, currency, exchangeRate }: {
     items: CustodySettlementItem[];
     setItems: (items: CustodySettlementItem[]) => void;
+    /** Currency and exchange rate of the custody itself. */
     currency: string;
     exchangeRate: number;
   }) => {
     const updateItem = (idx: number, patch: Partial<CustodySettlementItem>) => {
-      setItems(items.map((it, i) => (i === idx ? recomputeItem({ ...it, ...patch }) : it)));
+      setItems(items.map((it, i) => (i === idx ? recomputeItem({ ...it, ...patch }, currency, exchangeRate) : it)));
     };
     const focusSettlementField = (selector: string) => {
       window.setTimeout(() => document.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true }), 90);
     };
-    const addItem = () => setItems([...items, newItem()]);
+    const addItem = () => setItems([...items, newItem(currency, exchangeRate)]);
     const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
     const subLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
-    const isBaseCurrency = currency === baseCurrency;
-    const rate = isBaseCurrency ? 1 : (Number(exchangeRate) || 1);
-    const localAmount = (item: CustodySettlementItem) => Math.round((Number(item.total) || 0) * rate * 100) / 100;
-    const totalForeign = items.reduce((sum, item) => sum + (isBaseCurrency ? 0 : Number(item.total) || 0), 0);
-    const totalLocal = items.reduce((sum, item) => sum + localAmount(item), 0);
+    const currencyOptions = activeCurrencies.length > 0 ? activeCurrencies : currencies;
+    const itemCurrencyOf = (item: CustodySettlementItem) => item.currency || currency || baseCurrency;
+    const itemRateOf = (item: CustodySettlementItem) => itemCurrencyOf(item) === baseCurrency ? 1 : (Number(item.exchangeRate) || rateOf(itemCurrencyOf(item)) || 1);
+    const itemLocalAmount = (item: CustodySettlementItem) => Math.round((Number(item.localAmount) || ((Number(item.amount) || 0) * itemRateOf(item))) * 100) / 100;
+    const totalLocal = items.reduce((sum, item) => sum + itemLocalAmount(item), 0);
+    const usedCurrencies = [...new Set(items.map(itemCurrencyOf))];
     const readonlyAmountClass = 'w-full h-9 px-2 flex items-center justify-end font-mono text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300';
 
     return (
@@ -1428,7 +1442,7 @@ export default function CustodyView({
         )}
         {items.length > 0 && (
           <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-700">
-            <table className="min-w-[1755px] w-full text-right text-xs border-collapse">
+            <table className="min-w-[1710px] w-full text-right text-xs border-collapse">
               <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
                 <tr>
                   <th className="p-2 w-10 text-center">#</th>
@@ -1437,10 +1451,9 @@ export default function CustodyView({
                   <th className="p-2 min-w-[175px]">مركز التكلفة</th>
                   <th className="p-2 min-w-[230px]">الوصف *</th>
                   <th className="p-2 min-w-[90px]">العملة</th>
-                  <th className="p-2 min-w-[125px]">مدين أجنبي</th>
-                  <th className="p-2 min-w-[125px]">دائن أجنبي</th>
-                  <th className="p-2 min-w-[125px]">مدين محلي ({baseCurrency})</th>
-                  <th className="p-2 min-w-[125px]">دائن محلي ({baseCurrency})</th>
+                  <th className="p-2 min-w-[105px]">سعر الصرف</th>
+                  <th className="p-2 min-w-[135px]">المبلغ الأجنبي</th>
+                  <th className="p-2 min-w-[135px]">المبلغ المحلي ({baseCurrency})</th>
                   <th className="p-2 min-w-[130px]">رقم المرجع</th>
                   <th className="p-2 w-10" aria-label="حذف" />
                 </tr>
@@ -1488,11 +1501,10 @@ export default function CustodyView({
                       />
                     </td>
                     <td className="p-2"><input data-enter-nav-field={`settlement-description-${it.id}`} data-settlement-description={it.id} type="text" value={it.description} onChange={event => updateItem(idx, { description: event.target.value })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
-                    <td className="p-2"><div className={`${readonlyAmountClass} justify-center`}>{currency}</div></td>
-                    <td className="p-2">{isBaseCurrency ? <div className={readonlyAmountClass}>—</div> : <AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={value => updateItem(idx, { amount: Number(value) })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />}</td>
-                    <td className="p-2"><div className={readonlyAmountClass}>{fmtC(0, currency)}</div></td>
-                    <td className="p-2">{isBaseCurrency ? <AmountInput data-enter-field={`settlement-amount-${it.id}`} value={it.amount} onChange={value => updateItem(idx, { amount: Number(value) })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /> : <div className={readonlyAmountClass}>{fmtC(localAmount(it), baseCurrency)}</div>}</td>
-                    <td className="p-2"><div className={readonlyAmountClass}>{fmtC(0, baseCurrency)}</div></td>
+                    <td className="p-2"><select value={itemCurrencyOf(it)} disabled={!it.accountId} onChange={event => { const nextCurrency = event.target.value; const nextRate = nextCurrency === baseCurrency ? 1 : (rateOf(nextCurrency) || 1); const local = itemLocalAmount(it); updateItem(idx, { currency: nextCurrency, exchangeRate: nextRate, amount: nextCurrency === baseCurrency ? local : Math.round((local / nextRate) * 100) / 100, localAmount: local }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 disabled:opacity-60 disabled:cursor-not-allowed">{currencyOptions.map(option => <option key={option.code} value={option.code}>{option.code}</option>)}</select></td>
+                    <td className="p-2"><AmountInput value={itemRateOf(it)} disabled={!it.accountId || itemCurrencyOf(it) === baseCurrency} onChange={value => { const nextRate = Number(value) || 1; const foreign = Number(it.amount) || 0; updateItem(idx, { exchangeRate: nextRate, localAmount: Math.round(foreign * nextRate * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 disabled:opacity-60" /></td>
+                    <td className="p-2">{itemCurrencyOf(it) === baseCurrency ? <div className={readonlyAmountClass}>—</div> : <AmountInput data-enter-field={`settlement-foreign-${it.id}`} value={it.amount} onChange={value => { const foreign = Number(value) || 0; updateItem(idx, { amount: foreign, localAmount: Math.round(foreign * itemRateOf(it) * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />}</td>
+                    <td className="p-2"><AmountInput data-enter-field={`settlement-local-${it.id}`} value={itemLocalAmount(it)} onChange={value => { const local = Number(value) || 0; const rate = itemRateOf(it); updateItem(idx, { localAmount: local, amount: itemCurrencyOf(it) === baseCurrency ? local : Math.round((local / rate) * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                     <td className="p-2"><input type="text" value={it.referenceNumber || ''} onChange={event => updateItem(idx, { referenceNumber: event.target.value || undefined })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                     <td className="p-2 text-center"><button type="button" onClick={() => removeItem(idx)} title="حذف البند" className="p-1.5 text-red-600 hover:bg-red-100 rounded cursor-pointer"><X className="w-3.5 h-3.5" /></button></td>
                   </tr>
@@ -1500,11 +1512,9 @@ export default function CustodyView({
               </tbody>
               <tfoot>
                 <tr className="bg-sky-50 dark:bg-sky-500/10 text-xs">
-                  <td colSpan={6} className="p-2 font-bold text-slate-600 dark:text-slate-300">إجمالي هذه التصفية</td>
-                  <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">{isBaseCurrency ? '—' : fmtC(totalForeign, currency)}</td>
-                  <td className="p-2 font-mono text-slate-500">{fmtC(0, currency)}</td>
+                  <td colSpan={7} className="p-2 font-bold text-slate-600 dark:text-slate-300">إجمالي هذه التصفية</td>
+                  <td className="p-2 font-mono text-slate-500">{usedCurrencies.length === 1 && usedCurrencies[0] !== baseCurrency ? fmtC(items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0), usedCurrencies[0]) : '— متعدد العملات'}</td>
                   <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">{fmtC(totalLocal, baseCurrency)}</td>
-                  <td className="p-2 font-mono text-slate-500">{fmtC(0, baseCurrency)}</td>
                   <td colSpan={2} className="p-2 text-slate-500">—</td>
                 </tr>
               </tfoot>
@@ -2335,9 +2345,7 @@ export default function CustodyView({
         });
         // The statement combines accounting allocation lines from disbursement and settlement.
         const statementCurrency = c.currency || baseCurrency;
-        const statementIsBaseCurrency = statementCurrency === baseCurrency;
-        const statementExchangeRate = statementIsBaseCurrency ? 1 : (Number(c.exchangeRate) || 1);
-        const toLocalAmount = (amount: number) => Math.round((Number(amount) || 0) * statementExchangeRate * 100) / 100;
+        const statementExchangeRate = statementCurrency === baseCurrency ? 1 : (Number(c.exchangeRate) || 1);
         const printLines = [
           ...(c.disbursementParties || []).map(party => ({
             id: `disbursement-${party.id}`,
@@ -2350,6 +2358,9 @@ export default function CustodyView({
             referenceNumber: party.referenceNumber,
             narration: party.narration,
             amount: party.amount,
+            currency: statementCurrency,
+            exchangeRate: statementExchangeRate,
+            localAmount: Math.round(party.amount * statementExchangeRate * 100) / 100,
           })),
           ...c.settlements.flatMap(settlement => settlement.items.map(item => ({
             id: `settlement-${settlement.id}-${item.id}`,
@@ -2361,7 +2372,10 @@ export default function CustodyView({
             costCenterId: item.costCenterId,
             referenceNumber: item.referenceNumber,
             narration: item.description,
-            amount: item.total,
+            amount: item.amount,
+            currency: item.currency || statementCurrency,
+            exchangeRate: item.currency === baseCurrency ? 1 : (Number(item.exchangeRate) || statementExchangeRate),
+            localAmount: Number(item.localAmount) || Math.round((Number(item.amount) || 0) * (item.currency === baseCurrency ? 1 : (Number(item.exchangeRate) || statementExchangeRate)) * 100) / 100,
           }))),
         ];
         return (
@@ -2445,13 +2459,12 @@ export default function CustodyView({
                   <h3 className="mb-2 mt-5 text-sm font-bold">البنود المحاسبية لصرف وتصفية العهدة</h3>
                   {printLines.length ? (
                     <table>
-                      <thead><tr><th>#</th><th>المرحلة</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>العملة</th><th>مدين أجنبي</th><th>دائن أجنبي</th><th>مدين محلي</th><th>دائن محلي</th></tr></thead>
+                      <thead><tr><th>#</th><th>المرحلة</th><th>الحساب المحاسبي</th><th>الحساب التحليلي</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>البيان</th><th>العملة</th><th>سعر الصرف</th><th>المبلغ الأجنبي</th><th>المبلغ المحلي</th></tr></thead>
                       <tbody>{printLines.map((beneficiary, index) => {
                         const account = beneficiary.accountId ? accounts.find(item => item.id === beneficiary.accountId) : undefined;
                         const center = beneficiary.costCenterId ? costCenters.find(item => item.id === beneficiary.costCenterId) : undefined;
-                        const foreignDebit = statementIsBaseCurrency ? '—' : fmtC(beneficiary.amount, statementCurrency);
-                        const localDebit = fmtC(toLocalAmount(beneficiary.amount), baseCurrency);
-                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.stage}</td><td>{account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—'}</td><td>{beneficiary.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{statementCurrency}</td><td>{foreignDebit}</td><td>{fmtC(0, statementCurrency)}</td><td>{localDebit}</td><td>{fmtC(0, baseCurrency)}</td></tr>;
+                        const foreignAmount = beneficiary.currency === baseCurrency ? '—' : fmtC(beneficiary.amount, beneficiary.currency);
+                        return <tr key={beneficiary.id}><td>{index + 1}</td><td>{beneficiary.stage}</td><td>{account ? `${account.code} — ${account.nameAr}` : beneficiary.accountCode ? `${beneficiary.accountCode} — ${beneficiary.accountNameAr || ''}` : '—'}</td><td>{beneficiary.subLedgerName || '—'}</td><td>{center ? `${center.code} — ${center.nameAr}` : '—'}</td><td>{beneficiary.referenceNumber || '—'}</td><td>{beneficiary.narration || '—'}</td><td>{beneficiary.currency}</td><td>{beneficiary.currency === baseCurrency ? '—' : fmt(beneficiary.exchangeRate)}</td><td>{foreignAmount}</td><td>{fmtC(beneficiary.localAmount, baseCurrency)}</td></tr>;
                       })}</tbody>
                     </table>
                   ) : <p className="py-3 text-center text-sm text-slate-500">لا توجد بنود صرف أو تصفية مسجلة لهذه العهدة.</p>}

@@ -35,6 +35,12 @@ const disb=buildDisbursementJournal(ctx,custody,{id:'adv'} as any,{id:'cash'} as
 assert.equal(disb.lines[0].costCenterId,'cc');assert.equal(disb.lines[1].subLedgerId,'box1');assert.equal(disb.totalDebit,disb.totalCredit);
 const settle=buildSettlementJournal(ctx,custody,[{accountId:'expense',amount:100,total:100,costCenterId:'cc-special'}] as any,{id:'adv'} as any,null);
 assert.equal(settle.lines[0].costCenterId,'cc-special');assert.equal(settle.totalDebit,settle.totalCredit);
+const multiCurrencySettlement=buildSettlementJournal({...ctx,baseCurrency:'YER'},custody,[
+  {accountId:'usd-expense',accountCode:'5101',accountNameAr:'مصروف دولار',description:'USD expense',currency:'USD',exchangeRate:250,amount:2,localAmount:500,total:500},
+  {accountId:'yer-expense',accountCode:'5102',accountNameAr:'مصروف محلي',description:'YER expense',currency:'YER',exchangeRate:1,amount:100,localAmount:100,total:100},
+] as any,{id:'adv',code:'1102',nameAr:'عهد الموظفين'} as any,null);
+assert.equal(multiCurrencySettlement.totalDebit,600);assert.equal(multiCurrencySettlement.totalCredit,600);
+assert.equal(multiCurrencySettlement.lines[0].currency,'USD');assert.equal(multiCurrencySettlement.lines[0].debitForeign,2);assert.equal(multiCurrencySettlement.lines[0].debit,500);
 assert.equal(voucherReportAmount({currency:'USD',exchangeRate:250,totalAmount:10},'YER','YER'),2500);
 assert.equal(voucherReportAmount({currency:'USD',exchangeRate:250,totalAmount:10},'USD','YER'),10);
 assert.equal(projectJournalsToCurrency([{...j,currency:'USD',exchangeRate:250,lines:[{accountId:'cash',debit:2500,credit:0}]}],'USD','YER',2,true)[0].lines[0].debit,10);
