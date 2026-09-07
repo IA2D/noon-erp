@@ -111,7 +111,7 @@ import { tafqeet } from '../../utils/tafqeet';
 import VoucherPrintTemplate from '../ui/VoucherPrintTemplate';
 import { handleCurrencyFieldChange } from '../../utils/currencyMath';
 import SubLedgerF9Cell from '../ui/SubLedgerF9Cell';
-import { SubLedgerDataset, subLedgerTypeOf } from '../../utils/subLedger';
+import { SubLedgerDataset, resolveSubLedgerName, subLedgerTypeOf } from '../../utils/subLedger';
 
 interface Props {
   custodies: Custody[];
@@ -2142,6 +2142,20 @@ export default function CustodyView({
         const lineAmount = (line: JournalLine, side: 'debit' | 'credit') => Number(foreignReceipt ? (side === 'debit' ? line.debitForeign ?? line.debit : line.creditForeign ?? line.credit) : line[side]) || 0;
         const receiptDebit = j ? j.lines.reduce((sum, line) => sum + lineAmount(line, 'debit'), 0) : 0;
         const receiptCredit = j ? j.lines.reduce((sum, line) => sum + lineAmount(line, 'credit'), 0) : 0;
+        const receiptSubLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
+        const receiptAccountName = (line: JournalLine): string => {
+          if (line.subLedgerName) return line.subLedgerName;
+          const account = accounts.find(item => item.id === line.accountId);
+          const type = line.subLedgerType || subLedgerTypeOf(account, receiptSubLedgerDataset);
+          const resolved = line.subLedgerId && type !== 'NONE'
+            ? resolveSubLedgerName(receiptSubLedgerDataset, type, line.subLedgerId)
+            : '';
+          // القيود التاريخية للعهد قد تفتقد معرّف/اسم الحساب التحليلي؛ الموظف
+          // المكلف بالعهدة هو الحساب التحليلي الصحيح لسطر عُهد الموظفين.
+          if (resolved) return resolved;
+          if (line.accountCode === '1102050001') return c.employeeName;
+          return line.accountNameAr;
+        };
         return (
           <ModalShell
             id="custody-print"
@@ -2219,7 +2233,7 @@ export default function CustodyView({
                           <tr key={line.id}>
                             <td className="text-center font-mono">{idx + 1}</td>
                             <td className="font-mono">{line.accountCode}</td>
-                            <td className="font-semibold">{line.subLedgerName || line.accountNameAr}</td>
+                            <td className="font-semibold">{receiptAccountName(line)}</td>
                             <td className="text-slate-600">{line.description}</td>
                             <td className="font-mono">{line.referenceNumber || c.referenceNumber || '—'}</td>
                             <td className="font-bold text-left font-mono whitespace-nowrap">{lineAmount(line, 'debit') > 0 ? lineAmount(line, 'debit').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
