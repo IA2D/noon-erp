@@ -34,7 +34,6 @@ import ModalShell from '../ui/ModalShell';
 import { COMPANY_BRANCHES_KEY, DEFAULT_COMPANY_BRANCH, loadBranchesLocal, saveBranchesLocal } from '../../utils/companyStore';
 import { dateToIso } from '../../utils/dateInput';
 import {
-  ERP_STORAGE_PREFIX,
   clearLegacyPersistentEntries,
   getPersistentEntries,
   getPersistentItem,
@@ -452,19 +451,24 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
         });
       const result = replacePersistentEntries(entries);
       if (!result.ok) throw new Error(result.error || 'Factory reset failed');
-      const legacyKeys = Object.keys(window.localStorage).filter(key => key.startsWith(ERP_STORAGE_PREFIX));
+      // لا تسمح لنسخة localStorage القديمة بإعادة تعبئة SQLite بعد إعادة التحميل.
+      // قد تكون localStorage غير متاحة في بعض نسخ Electron المثبّتة، لذا لا يجب
+      // أن يمنع تنظيفها إتمام ضبط قاعدة البيانات أو إعادة تحميل التطبيق.
+      const removeLocalKeys = (keys: string[]) => {
+        try { keys.forEach(key => window.localStorage.removeItem(key)); } catch { /* لا يوجد مخزن متصفح في هذا التشغيل */ }
+      };
       if (pendingFactoryReset === 'FULL_SYSTEM') {
-        legacyKeys.forEach(key => window.localStorage.removeItem(key));
-        window.localStorage.removeItem(COMPANY_BRANCHES_KEY);
-        window.localStorage.removeItem('theme');
+        clearLegacyPersistentEntries();
+        removeLocalKeys([COMPANY_BRANCHES_KEY, 'theme']);
       } else {
-        [...Object.keys(fiscalDateKey), ...fiscalStateKeys].forEach(key => window.localStorage.removeItem(key));
+        removeLocalKeys([...Object.keys(fiscalDateKey), ...fiscalStateKeys]);
       }
       setPendingFactoryReset(null);
       toast('success', pendingFactoryReset === 'FULL_SYSTEM' ? 'تمت استعادة ضبط المصنع للنظام بالكامل. سيُعاد تحميل التطبيق الآن.' : `تمت استعادة ضبط المصنع لبيانات السنة المالية ${fiscalYear}. سيُعاد تحميل التطبيق الآن.`);
       window.setTimeout(() => window.location.reload(), 900);
-    } catch {
-      toast('error', 'تعذر تنفيذ استعادة ضبط المصنع. لم تُغيّر البيانات.');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'خطأ غير معروف';
+      toast('error', `تعذر تنفيذ استعادة ضبط المصنع. لم تُغيّر البيانات. (${reason})`);
       setPendingFactoryReset(null);
     }
   };
