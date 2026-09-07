@@ -1271,7 +1271,15 @@ export default function CustodyView({
       createdBy: currentUserName,
       reference: `CUSTODY-${refundTarget.custodyNumber}`,
     };
-    const journal = buildRefundJournal(ctx, refundTarget, amount, advanceAcc, source.account);
+    const refundBank = bankAccounts.find(item => item.id === source.id);
+    const refundSourceSubLedger = {
+      subLedgerType: cashBoxes.some(item => item.id === source.id)
+        ? 'CASH_BOX' as const
+        : refundBank?.entityType === 'EXCHANGE' ? 'EXCHANGER' as const : 'BANK' as const,
+      subLedgerId: source.id,
+      subLedgerName: source.label,
+    };
+    const journal = buildRefundJournal(ctx, refundTarget, amount, advanceAcc, source.account, refundSourceSubLedger);
     if (!onAddJournal(journal)) {
       toast('error', 'تعذر ترحيل قيد رد العهدة؛ لم تُعدّل العهدة.');
       return;

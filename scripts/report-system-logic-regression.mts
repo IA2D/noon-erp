@@ -3,7 +3,7 @@ import {dateToIso,dateToDisplay,inDateRange} from '../src/utils/dateInput.ts';
 import {reportDocuments,lineCostCenterId,entityOpening,lineBelongsToEntity,voucherReportAmount} from '../src/utils/reportData.ts';
 import {projectJournalsToCurrency,projectPostedJournalsToCurrency} from '../src/utils/currencyReporting.ts';
 import {requiredApprovalLevel,canApprove,approvalsComplete} from '../src/utils/custodyEngine.ts';
-import {buildDisbursementJournal,buildSettlementJournal} from '../src/utils/custodyAccounting.ts';
+import {buildDisbursementJournal,buildSettlementJournal,buildRefundJournal} from '../src/utils/custodyAccounting.ts';
 
 assert.equal(dateToIso('٣٠/٠٨/٢٠٢٦'),'2026-08-30');
 assert.equal(dateToIso('30082026'),'2026-08-30');
@@ -33,6 +33,8 @@ assert(approvalsComplete([{level:1,action:'APPROVED'}] as any,1));
 const ctx:any={journalId:'j',entryNumber:'JV-1',currency:'YER',exchangeRate:1,createdBy:'test',reference:'CST-1'};
 const disb=buildDisbursementJournal(ctx,custody,{id:'adv'} as any,{id:'cash'} as any);
 assert.equal(disb.lines[0].costCenterId,'cc');assert.equal(disb.lines[1].subLedgerId,'box1');assert.equal(disb.totalDebit,disb.totalCredit);
+const refund=buildRefundJournal(ctx,custody,25,{id:'adv'} as any,{id:'cash'} as any,{subLedgerType:'CASH_BOX',subLedgerId:'box1',subLedgerName:'الصندوق'});
+assert.equal(refund.lines[0].subLedgerType,'CASH_BOX');assert.equal(refund.lines[0].subLedgerId,'box1');assert.equal(refund.totalDebit,refund.totalCredit);
 const settle=buildSettlementJournal(ctx,custody,[{accountId:'expense',amount:100,total:100,costCenterId:'cc-special'}] as any,{id:'adv'} as any,null);
 assert.equal(settle.lines[0].costCenterId,'cc-special');assert.equal(settle.totalDebit,settle.totalCredit);
 const multiCurrencySettlement=buildSettlementJournal({...ctx,baseCurrency:'YER'},custody,[

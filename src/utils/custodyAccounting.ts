@@ -73,6 +73,8 @@ function journal(ctx: JournalBuildContext, narration: string, lines: JournalLine
   };
 }
 
+type SourceSubLedger = { subLedgerType: 'CASH_BOX' | 'BANK' | 'EXCHANGER'; subLedgerId: string; subLedgerName: string };
+
 const subLedgerOf = (c: Custody): {subLedgerType: 'EMPLOYEE'; subLedgerId: string; subLedgerName: string} => ({
   subLedgerType: 'EMPLOYEE',
   subLedgerId: c.employeeId,
@@ -155,11 +157,12 @@ export function buildRefundJournal(
   custody: Custody,
   amount: number,
   advanceAccount: Account,
-  sourceAccount: Account
+  sourceAccount: Account,
+  sourceSubLedger?: SourceSubLedger
 ): JournalEntry {
   const narration = `رد نقدية فائض عهدة ${custody.custodyNumber} (${custody.employeeName})`;
   return journal(ctx, narration, [
-    line(sourceAccount, amount, 0, `استلام رد فائض عهدة ${custody.custodyNumber}`),
+    line(sourceAccount, amount, 0, `استلام رد فائض عهدة ${custody.custodyNumber}`, sourceSubLedger),
     line(advanceAccount, 0, amount, `مقابل رد فائض عهدة ${custody.custodyNumber}`, subLedgerOf(custody)),
   ]);
 }
