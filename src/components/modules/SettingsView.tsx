@@ -31,8 +31,10 @@ import { useI18n } from '../../i18n';
 import { useTheme } from '../../utils/useTheme';
 import { Currency, CompanyBranch } from '../../types/erp';
 import ModalShell from '../ui/ModalShell';
-import { DEFAULT_COMPANY_BRANCH, loadBranchesLocal, saveBranchesLocal } from '../../utils/companyStore';
+import { COMPANY_BRANCHES_KEY, DEFAULT_COMPANY_BRANCH, loadBranchesLocal, saveBranchesLocal } from '../../utils/companyStore';
+import { dateToIso } from '../../utils/dateInput';
 import {
+  ERP_STORAGE_PREFIX,
   clearLegacyPersistentEntries,
   getPersistentEntries,
   getPersistentItem,
@@ -214,6 +216,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   const [activeModal, setActiveModal] = useState<SettingsTab | null>(null);
   const [pendingRestore, setPendingRestore] = useState<Record<string, unknown> | null>(null);
   const [pendingDatabaseRestore, setPendingDatabaseRestore] = useState(false);
+  const [pendingFactoryReset, setPendingFactoryReset] = useState<'FISCAL_YEAR' | 'FULL_SYSTEM' | null>(null);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [storageReport, setStorageReport] = useState(getPersistentStorageReport);
   const [lastRestore, setLastRestore] = useState<PersistentRestoreResult | null>(null);
@@ -405,6 +408,64 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
     } catch {
       toast('error', 'تعذر استعادة النسخة الاحتياطية — الملف غير صالح.');
       setPendingRestore(null);
+    }
+  };
+
+  const applyFactoryReset = () => {
+    if (!pendingFactoryReset) return;
+    try {
+      const safety = window.desktopStore?.createBackup();
+      if (safety && !safety.ok) throw new Error(safety.error || 'Safety backup failed');
+      const fiscalYear = loadBranchesLocal()[0]?.fiscalYear || String(new Date().getFullYear());
+      const current = getPersistentEntries();
+      const fiscalDateKey: Record<string, string> = {
+        'elite-erp-journals-v6': 'date',
+        'elite-erp-vouchers-v1': 'date',
+        'elite-erp-receiptvouchers-v1': 'date',
+        'elite-erp-trusts-v1': 'date',
+        'elite-erp-custodies-v1': 'requestedDate',
+      };
+      const fiscalStateKeys = new Set([
+        'elite-erp-closed-years-v1',
+        'elite-erp-closed-months-v1',
+        'elite-erp-period-states-v1',
+      ]);
+      const entries = pendingFactoryReset === 'FULL_SYSTEM'
+        ? [] as Array<[string, string]>
+        : current.map(([key, raw]) => {
+          const dateField = fiscalDateKey[key];
+          try {
+            const parsed = JSON.parse(raw);
+            if (fiscalStateKeys.has(key) && Array.isArray(parsed)) {
+              const kept = parsed.filter((record: unknown) => {
+                if (key === 'elite-erp-closed-years-v1') return String(record) !== fiscalYear;
+                if (key === 'elite-erp-closed-months-v1') return !String(record).startsWith(`${fiscalYear}-`);
+                return !(record && typeof record === 'object' && String((record as { key?: unknown }).key || '').startsWith(fiscalYear));
+              });
+              return [key, JSON.stringify(kept)] as [string, string];
+            }
+            if (!dateField) return [key, raw] as [string, string];
+            if (!Array.isArray(parsed)) return [key, raw] as [string, string];
+            const kept = parsed.filter((record: Record<string, unknown>) => !dateToIso(String(record[dateField] || '')).startsWith(`${fiscalYear}-`));
+            return [key, JSON.stringify(kept)] as [string, string];
+          } catch { return [key, raw] as [string, string]; }
+        });
+      const result = replacePersistentEntries(entries);
+      if (!result.ok) throw new Error(result.error || 'Factory reset failed');
+      const legacyKeys = Object.keys(window.localStorage).filter(key => key.startsWith(ERP_STORAGE_PREFIX));
+      if (pendingFactoryReset === 'FULL_SYSTEM') {
+        legacyKeys.forEach(key => window.localStorage.removeItem(key));
+        window.localStorage.removeItem(COMPANY_BRANCHES_KEY);
+        window.localStorage.removeItem('theme');
+      } else {
+        [...Object.keys(fiscalDateKey), ...fiscalStateKeys].forEach(key => window.localStorage.removeItem(key));
+      }
+      setPendingFactoryReset(null);
+      toast('success', pendingFactoryReset === 'FULL_SYSTEM' ? 'تمت استعادة ضبط المصنع للنظام بالكامل. سيُعاد تحميل التطبيق الآن.' : `تمت استعادة ضبط المصنع لبيانات السنة المالية ${fiscalYear}. سيُعاد تحميل التطبيق الآن.`);
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch {
+      toast('error', 'تعذر تنفيذ استعادة ضبط المصنع. لم تُغيّر البيانات.');
+      setPendingFactoryReset(null);
     }
   };
 
@@ -750,6 +811,15 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                     نسخة SQLite تشمل كامل قاعدة البيانات، بما فيها المستخدمون والإعدادات. يُنشئ النظام تلقائيًا نسخة أمان قبل كل استعادة.
                   </p>
 
+                  <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+                    <p className="text-sm font-bold text-red-300">استعادة ضبط المصنع</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-400">ينشئ النظام نسخة أمان تلقائية قبل التنفيذ. ضبط السنة يحذف حركات السنة المالية فقط ويُبقي الدليل والكيانات والإعدادات، أما الضبط الكامل فيعيد النظام إلى بياناته الافتراضية.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => setPendingFactoryReset('FISCAL_YEAR')} className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20 cursor-pointer"><RotateCw className="w-4 h-4" /> ضبط مصنع للسنة المالية</button>
+                      <button type="button" onClick={() => setPendingFactoryReset('FULL_SYSTEM')} className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/20 cursor-pointer"><Trash2 className="w-4 h-4" /> ضبط مصنع كامل النظام</button>
+                    </div>
+                  </div>
+
                   <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div>
@@ -981,6 +1051,16 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                 نعم، استعادة النسخة
               </button>
             </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {pendingFactoryReset && (
+        <ModalShell id="settings-factory-reset" open={!!pendingFactoryReset} onClose={() => setPendingFactoryReset(null)} title={pendingFactoryReset === 'FULL_SYSTEM' ? 'تأكيد ضبط مصنع كامل النظام' : 'تأكيد ضبط مصنع للسنة المالية'} icon={Trash2} size="sm" footer={null} closeOnBackdrop={false} bodyClassName="p-0">
+          <div className="space-y-4 p-6">
+            <p className="text-sm leading-relaxed text-slate-300">{pendingFactoryReset === 'FULL_SYSTEM' ? 'سيُحذف كامل بيانات المنشأة المخزنة داخل NOON ERP ويُعاد النظام إلى بياناته الافتراضية، بما فيها الحسابات والكيانات والقيود والسندات والإعدادات.' : `سيُحذف فقط ما يخص السنة المالية ${loadBranchesLocal()[0]?.fiscalYear || new Date().getFullYear()} من القيود والسندات والعهد وحالات الإقفال، مع الإبقاء على دليل الحسابات والكيانات والإعدادات والأرصدة الافتتاحية.`}</p>
+            <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">هذه العملية لا يمكن التراجع عنها من داخل النظام. ستنشأ نسخة أمان تلقائية قبل التنفيذ.</p>
+            <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={() => setPendingFactoryReset(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-400 hover:bg-slate-900 cursor-pointer">إلغاء</button><button type="button" onClick={applyFactoryReset} className="rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-lg hover:bg-red-500 cursor-pointer">نعم، تنفيذ ضبط المصنع</button></div>
           </div>
         </ModalShell>
       )}

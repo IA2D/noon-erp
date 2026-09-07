@@ -1127,8 +1127,15 @@ export default function FinancialReportsView({
             });
           }
         }
+        const monthlyEmployeeAccountId = reportType === 'EMPLOYEES_REPORT'
+          ? accounts.find(account => account.code === '1102060001')?.id
+          : undefined;
         reportJournals.forEach(j => j.lines.forEach(l => {
-          if (!lineBelongsToEntity(l, j, entity, entities, types, [...vouchers, ...receiptVouchers])) return;
+          // كشف الموظف مخصص لسلف الموظفين الشهرية فقط؛ عهد الموظف لها كشف مستقل.
+          const belongsToEmployeeAdvance = reportType === 'EMPLOYEES_REPORT'
+            ? l.accountId === monthlyEmployeeAccountId && l.subLedgerType === 'EMPLOYEE' && l.subLedgerId === entity.id
+            : lineBelongsToEntity(l, j, entity, entities, types, [...vouchers, ...receiptVouchers]);
+          if (!belongsToEmployeeAdvance) return;
           if (includeOpening && isBeforeReport(j.date, fromDate)) {
             const lineCurrency = l.currency || j.currency || baseCode;
             const useOriginalAmount = !isOriginalCurrencyReport && lineCurrency !== baseCode;
