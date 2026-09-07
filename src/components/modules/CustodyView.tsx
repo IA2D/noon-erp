@@ -626,6 +626,7 @@ export default function CustodyView({
     custodyCode: '',
   });
   const [editError, setEditError] = useState('');
+  const [overdueConfirmation, setOverdueConfirmation] = useState<{ action: 'CREATE' | 'EDIT'; violation: Custody; printAfter?: boolean } | null>(null);
 
   const [printCustody, setPrintCustody] = useState<Custody | null>(null);
   const [printJournal, setPrintJournal] = useState<JournalEntry | null>(null);
@@ -839,7 +840,7 @@ export default function CustodyView({
     });
   };
 
-  const handleEdit = (e: React.FormEvent) => {
+  const handleEdit = (e: React.FormEvent, overdueConfirmed = false) => {
     e.preventDefault();
     if (!editTarget) return;
     const c = editTarget;
@@ -865,7 +866,8 @@ export default function CustodyView({
     }
     if (!disbursed && form.type === 'TEMPORARY') {
       const violation = findOverdueViolation(form.employeeId, custodies.filter(x => x.id !== c.id));
-      if (violation && !window.confirm(`لدى ${violation.employeeName} عهدة متأخرة (${violation.custodyNumber}) تجاوزت تاريخ التصفية بـ ${overdueDays(violation)} يوم. هل تريد المتابعة وتعديل العهدة؟`)) {
+      if (violation && !overdueConfirmed) {
+        setOverdueConfirmation({ action: 'EDIT', violation });
         return;
       }
     }
@@ -922,7 +924,7 @@ export default function CustodyView({
     setEditTarget(null);
   };
 
-  const persistCustody = (printAfter: boolean) => {
+  const persistCustody = (printAfter: boolean, overdueConfirmed = false) => {
     setCreateError('');
     const amount = Number(createForm.amount) || 0;
     const employee = employees.find(x => x.id === createForm.employeeId);
@@ -942,7 +944,8 @@ export default function CustodyView({
     }
     if (createForm.type === 'TEMPORARY') {
       const violation = findOverdueViolation(createForm.employeeId, custodies);
-      if (violation && !window.confirm(`تنبيه: لدى ${violation.employeeName} عهدة متأخرة (${violation.custodyNumber}) تجاوزت تاريخ التصفية بـ ${overdueDays(violation)} يوم. هل تريد إصدار العهدة الجديدة رغم ذلك؟`)) {
+      if (violation && !overdueConfirmed) {
+        setOverdueConfirmation({ action: 'CREATE', violation, printAfter });
         return;
       }
     }
@@ -1701,6 +1704,44 @@ export default function CustodyView({
           </table>
         </div>
       </div>
+
+      {overdueConfirmation && (() => {
+        const { action, violation } = overdueConfirmation;
+        const continueDespiteOverdue = () => {
+          const pending = overdueConfirmation;
+          setOverdueConfirmation(null);
+          if (!pending) return;
+          if (pending.action === 'CREATE') {
+            persistCustody(Boolean(pending.printAfter), true);
+            return;
+          }
+          handleEdit({ preventDefault: () => undefined } as React.FormEvent, true);
+        };
+        return (
+          <ModalShell
+            id="custody-overdue-confirmation"
+            open={!!overdueConfirmation}
+            onClose={() => setOverdueConfirmation(null)}
+            title="تنبيه: عهدة متأخرة"
+            icon={AlertCircle}
+            size="sm"
+            footer={null}
+            closeOnBackdrop={false}
+          >
+            <div dir="rtl" className="space-y-4 text-right">
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-7 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                <p>لدى الموظف <span className="font-bold">{violation.employeeName}</span> عهدة متأخرة رقم <bdi className="font-mono font-bold">{violation.custodyNumber}</bdi>.</p>
+                <p>تجاوزت تاريخ التصفية بمقدار <span className="font-bold">{overdueDays(violation)} يوم</span>.</p>
+              </div>
+              <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{action === 'CREATE' ? 'هل تريد إصدار العهدة الجديدة رغم وجود العهدة المتأخرة؟' : 'هل تريد حفظ تعديل العهدة رغم وجود العهدة المتأخرة؟'}</p>
+              <div className="flex flex-row-reverse justify-end gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
+                <button type="button" onClick={continueDespiteOverdue} className="rounded-xl bg-amber-600 px-5 py-2 text-sm font-bold text-white shadow-lg transition hover:bg-amber-500 cursor-pointer">متابعة رغم التنبيه</button>
+                <button type="button" onClick={() => setOverdueConfirmation(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer">إلغاء</button>
+              </div>
+            </div>
+          </ModalShell>
+        );
+      })()}
 
       {isCreateOpen && (() => {
         const selectedSource = [...cashSourceEntities, ...bankSourceEntities, ...exchangeSourceEntities].find(s => s.id === createForm.disbursementSource);
