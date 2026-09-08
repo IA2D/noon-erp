@@ -285,6 +285,19 @@ export default function PaymentVouchersView({
       || line.accountNameAr;
   };
 
+  /** مصدر سند الصرف ككيان تحليلي (صندوق/بنك/صرافة) بدل الحساب الرئيسي. */
+  const reportSourceName = (voucher: PaymentVoucher): string => {
+    if (voucher.sourceType === 'CASH_BOX') {
+      const cashBox = cashBoxes.find(item => item.id === voucher.sourceEntityId);
+      if (cashBox) return cashBox.nameAr;
+    }
+    if (voucher.sourceType === 'BANK_ACCOUNT') {
+      const bank = bankAccounts.find(item => item.id === voucher.sourceEntityId);
+      if (bank) return bank.bankNameAr;
+    }
+    return voucher.sourceAccountNameAr;
+  };
+
   /** العملة الافتراضية لكيان الحساب التحليلي المختار — تُنزّل تلقائياً في السطر عند التفعيل */
   const defaultCurrencyOfSubLedger = (type: SubLedgerType | undefined, entityId: string): string | undefined => {
     if (!type || !entityId) return undefined;
@@ -1873,7 +1886,7 @@ export default function PaymentVouchersView({
                 metadata={[
                   { label: 'المستفيد', value: selectedVoucher.payeeName },
                   { label: 'طريقة الصرف', value: selectedVoucher.paymentMethod === 'CASH' ? 'نقداً من الصندوق' : selectedVoucher.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك بنكي' },
-                  { label: 'المصدر منه', value: selectedVoucher.sourceAccountNameAr },
+                  { label: 'المصدر منه', value: reportSourceName(selectedVoucher) },
                   {
                     label: selectedVoucher.paymentMethod === 'CHEQUE'
                       ? 'رقم الشيك'
