@@ -95,10 +95,14 @@ function cashBoxTypeLabel(t?: CashBox['boxType']): string {
  * مجموعات (محلي/حكومي) أو (محلي/خارجي) عند فتح F9.
  */
 export function listSubLedgers(ds: SubLedgerDataset, type: SubLedgerType, accountId?: string): SubLedgerEntity[] {
-  const onlyLinkedAccount = (items: SubLedgerEntity[]) =>
-    accountId && (type === 'CUSTOMER' || type === 'SUPPLIER')
-      ? items.filter(item => item.accountId === accountId)
-      : items;
+  const onlyLinkedAccount = (items: SubLedgerEntity[]) => {
+    // العميل والمورد لا يصبحان قابلين للاختيار إلا بعد تعيين حساب المستوى
+    // الخامس. لا نعرض قائمة النوع كاملة عند غياب الحساب لأن ذلك يخلط المحلي
+    // بالحكومي، والمورد المحلي بالخارجي.
+    if (type !== 'CUSTOMER' && type !== 'SUPPLIER') return items;
+    if (!accountId) return [];
+    return items.filter(item => item.accountId === accountId);
+  };
   switch (type) {
     case 'EMPLOYEE':
       return ds.employees.map(e => toEntity(e, e.jobTitle));

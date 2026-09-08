@@ -23,6 +23,8 @@ assert.deepEqual(listSubLedgers(dataset, 'CUSTOMER', 'local-customers').map(item
 assert.deepEqual(searchSubLedgers(dataset, 'CUSTOMER', '', 'government-customers').map(item => item.id), ['customer-government']);
 assert.deepEqual(listSubLedgers(dataset, 'SUPPLIER', 'local-vendors').map(item => item.id), ['vendor-local']);
 assert.deepEqual(listSubLedgers(dataset, 'SUPPLIER', 'foreign-vendors').map(item => item.id), ['vendor-foreign']);
+assert.deepEqual(listSubLedgers(dataset, 'CUSTOMER').map(item => item.id), []);
+assert.deepEqual(listSubLedgers(dataset, 'SUPPLIER').map(item => item.id), []);
 assert.equal(validateSubLedger(dataset.accounts[0], 'customer-government', dataset).valid, false);
 assert.equal(validateSubLedger(dataset.accounts[0], 'customer-local', dataset).valid, true);
 console.log('SUB_LEDGER_ACCOUNT_SCOPE_OK customerAndSupplierLookupBoundToSelectedAccount=true');

@@ -149,11 +149,17 @@ export default function SubLedgerLookup({ open, type, dataset, accountId, initia
           {results.length === 0 ? (
             <div className="p-10 text-center">
               <Search className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400 font-semibold text-sm">لا توجد نتائج مطابقة</p>
+              <p className="text-slate-400 font-semibold text-sm">
+                {(type === 'CUSTOMER' || type === 'SUPPLIER') && !accountId
+                  ? 'اختر الحساب المحاسبي التفصيلي أولاً'
+                  : 'لا توجد نتائج مطابقة'}
+              </p>
               <p className="text-xs text-slate-500 mt-1">
-                {type === 'ITEM'
-                  ? 'وحدة المخزون غير مفعّلة — أضف وحدة المخزون أولاً.'
-                  : `لم يتم العثور على ${meta.label} مطابق.`}
+                {(type === 'CUSTOMER' || type === 'SUPPLIER') && !accountId
+                  ? 'حدد حساب العملاء أو الموردين من المستوى الخامس، ثم افتح الحساب التحليلي.'
+                  : type === 'ITEM'
+                    ? 'وحدة المخزون غير مفعّلة — أضف وحدة المخزون أولاً.'
+                    : `لم يتم العثور على ${meta.label} مطابق.`}
               </p>
             </div>
           ) : (
