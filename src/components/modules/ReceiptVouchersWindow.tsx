@@ -578,9 +578,12 @@ export default function ReceiptVouchersWindow({
     const rate = Number(line.exchangeRate) || 1;
     const lineBase = !line.currency || line.currency === baseCurrencyCode;
     // المعادل المحلي للسطر: عملة أساسية = المبلغ المحلي مباشرة، عملة أجنبية = المبلغ الأجنبي × سعر الصرف (فوري)
+    const storedLocal = Number(line.localAmount) || 0;
+    // يحتفظ الإدخال المحلي الذي كتبه المستخدم بقيمته الظاهرة حتى لو كان
+    // المقابل الأجنبي قد اشتق للتو ويحتوي فرق تقريب.
     const localAmount = lineBase
       ? Math.round((Number(line.localAmount ?? line.amount) || 0) * 100) / 100
-      : Math.round(amount * rate * 100) / 100;
+      : Math.round((storedLocal > 0 ? storedLocal : amount * rate) * 100) / 100;
     const slType = subLedgerTypeOf(account, subLedgerDataset);
 
     return {
@@ -1735,7 +1738,7 @@ export default function ReceiptVouchersWindow({
                                   />
                                 ) : (
                                   <AmountInput
-                                    value={computed.localAmount || ''}
+                                    value={line.localAmount && line.localAmount > 0 ? line.localAmount : computed.localAmount || ''}
                                     onChange={v => {
                                       const val = parseFloat(v) || 0;
                                       const next = handleCurrencyFieldChange('local', val, {

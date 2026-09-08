@@ -1127,15 +1127,23 @@ export default function FinancialReportsView({
             });
           }
         }
-        const monthlyEmployeeAccountId = reportType === 'EMPLOYEES_REPORT'
-          ? accounts.find(account => account.code === '1102060001')?.id
-          : undefined;
+        const isMonthlyEmployeeAdvanceAccount = (accountId?: string, accountCode?: string) => {
+          const account = accounts.find(item => item.id === accountId);
+          const code = accountCode || account?.code || '';
+          // الحساب التشغيلي الافتراضي 1102060001 وأي حساب خامس تابع لمجموعة
+          // سلف الموظفين الشهرية المستوى الرابع 110206 يدعم بيانات العميل القديمة والجديدة.
+          return code === '1102060001' || code.startsWith('110206') || account?.parentId === '110206';
+        };
+        const voucherLineBelongsToEmployee = (line: PaymentVoucher['lines'][number], voucher: PaymentVoucher) =>
+          isMonthlyEmployeeAdvanceAccount(line.accountId, line.accountCode) && (
+            line.subLedgerId === entity.id ||
+            (!line.subLedgerId && [voucher.payeeName, line.subLedgerName].some(name => name?.trim() === en.name))
+          );
         reportJournals.forEach(j => j.lines.forEach(l => {
           // كشف الموظف مخصص لسلف الموظفين الشهرية فقط؛ عهد الموظف لها كشف مستقل.
-          // لا تعتمد على subLedgerType في السجلات القديمة: رقم حساب السلف ومعرّف
-          // الموظف يكفيان لتحديد الحركة، ويمنعان إخفاء سندات صرف صحيحة.
+          // يدعم الحساب التشغيلي ومجموعة السلف وأرشيف السندات الذي يفتقد معرف الكيان.
           const belongsToEmployeeAdvance = reportType === 'EMPLOYEES_REPORT'
-            ? (l.accountId === monthlyEmployeeAccountId || l.accountCode === '1102060001') && l.subLedgerId === entity.id
+            ? isMonthlyEmployeeAdvanceAccount(l.accountId, l.accountCode) && l.subLedgerId === entity.id
             : lineBelongsToEntity(l, j, entity, entities, types, [...vouchers, ...receiptVouchers]);
           if (!belongsToEmployeeAdvance) return;
           if (includeOpening && isBeforeReport(j.date, fromDate)) {
@@ -1152,16 +1160,12 @@ export default function FinancialReportsView({
           // سندات الصرف المنتظرة لا يكون لها قيد يومية حتى تُرحّل. تظهر هنا مباشرة
           // حتى يظل كشف الموظف التحليلي شاملاً كل سند، من دون مضاعفة السند المرحّل.
           vouchers.forEach(voucher => {
-            const journalExists = reportJournals.some(journal =>
-              journal.id === voucher.journalEntryId ||
-              (journal.type === 'PV' && journal.referenceCode === voucher.voucherNumber)
-            );
-            if (journalExists) return;
             voucher.lines.forEach(line => {
-              const belongsToEmployeeAdvance =
-                (line.accountId === monthlyEmployeeAccountId || line.accountCode === '1102060001') &&
-                line.subLedgerId === entity.id;
+              const belongsToEmployeeAdvance = voucherLineBelongsToEmployee(line, voucher);
               if (!belongsToEmployeeAdvance) return;
+              // لا نكرر سطر السند الذي ظهر بالفعل عبر قيده المرحّل. إذا كان
+              // القيد موجوداً لكن بلا بيانات تحليلية صحيحة، نضيف السند نفسه.
+              if (rows.some(row => row.docNumber === voucher.voucherNumber)) return;
               const lineCurrency = line.currency || voucher.currency || baseCode;
               if (isOriginalCurrencyReport && lineCurrency !== currency) return;
               const localAmount = typeof line.localAmount === 'number' && line.localAmount > 0

@@ -26,6 +26,10 @@ const locallyAdjusted = handleCurrencyFieldChange('local', 250_000, { foreignAmo
 assert.equal(locallyAdjusted.foreignAmount, 1785.71);
 assert.equal(locallyAdjusted.exchangeRate, 140.000336);
 assert.equal(multiplyMoney(locallyAdjusted.foreignAmount, locallyAdjusted.exchangeRate, 2), 250_000);
+const localFirst = handleCurrencyFieldChange('local', 250_000, { foreignAmount: 0, exchangeRate: 140, localAmount: 0 });
+assert.equal(localFirst.foreignAmount, 1785.71);
+assert.equal(localFirst.exchangeRate, 140);
+assert.equal(localFirst.localAmount, 250_000);
 const reconciled = reconcileSingleForeignLineToLocalTotal([
   { currency: 'SAR', amount: 1785.71, exchangeRate: 140, localAmount: 249_999.4 },
 ], 250_000, 'YER');

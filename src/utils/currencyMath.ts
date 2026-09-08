@@ -29,11 +29,19 @@ export const handleCurrencyFieldChange = (
 
   if (field === 'local') {
     const localAmount = val;
-    let exchangeRate = current.exchangeRate;
-    if (current.foreignAmount && current.foreignAmount > 0) {
-      exchangeRate = roundTo(localAmount / current.foreignAmount, ratePrecision);
+    const existingForeign = Number(current.foreignAmount) || 0;
+    const currentRate = Number(current.exchangeRate) || 1;
+    // عند إدخال المحلي أولاً لا نعيده إلى صفر في الحقل الخاضع للتحكم:
+    // نشتق المقابل الأجنبي من السعر الحالي. أما عند وجود مبلغ أجنبي سابق
+    // فنحافظ عليه ونعاير السعر كي يظل الطرفان متوافقين.
+    if (existingForeign > 0) {
+      const exchangeRate = roundTo(localAmount / existingForeign, ratePrecision);
+      return { ...current, localAmount, exchangeRate };
     }
-    return { ...current, localAmount, exchangeRate };
+    const foreignAmount = currentRate > 0
+      ? roundTo(localAmount / currentRate, amountPrecision)
+      : 0;
+    return { ...current, foreignAmount, localAmount, exchangeRate: currentRate };
   }
 
   return current;
