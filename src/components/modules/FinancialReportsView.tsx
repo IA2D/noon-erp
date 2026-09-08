@@ -1132,8 +1132,10 @@ export default function FinancialReportsView({
           : undefined;
         reportJournals.forEach(j => j.lines.forEach(l => {
           // كشف الموظف مخصص لسلف الموظفين الشهرية فقط؛ عهد الموظف لها كشف مستقل.
+          // لا تعتمد على subLedgerType في السجلات القديمة: رقم حساب السلف ومعرّف
+          // الموظف يكفيان لتحديد الحركة، ويمنعان إخفاء سندات صرف صحيحة.
           const belongsToEmployeeAdvance = reportType === 'EMPLOYEES_REPORT'
-            ? l.accountId === monthlyEmployeeAccountId && l.subLedgerType === 'EMPLOYEE' && l.subLedgerId === entity.id
+            ? (l.accountId === monthlyEmployeeAccountId || l.accountCode === '1102060001') && l.subLedgerId === entity.id
             : lineBelongsToEntity(l, j, entity, entities, types, [...vouchers, ...receiptVouchers]);
           if (!belongsToEmployeeAdvance) return;
           if (includeOpening && isBeforeReport(j.date, fromDate)) {
@@ -1145,6 +1147,49 @@ export default function FinancialReportsView({
           }
           else if (inDateRange(j.date, fromDate, toDate)) rows.push(toRow(j, l));
         }));
+
+        if (reportType === 'EMPLOYEES_REPORT') {
+          // سندات الصرف المنتظرة لا يكون لها قيد يومية حتى تُرحّل. تظهر هنا مباشرة
+          // حتى يظل كشف الموظف التحليلي شاملاً كل سند، من دون مضاعفة السند المرحّل.
+          vouchers.forEach(voucher => {
+            const journalExists = reportJournals.some(journal =>
+              journal.id === voucher.journalEntryId ||
+              (journal.type === 'PV' && journal.referenceCode === voucher.voucherNumber)
+            );
+            if (journalExists) return;
+            voucher.lines.forEach(line => {
+              const belongsToEmployeeAdvance =
+                (line.accountId === monthlyEmployeeAccountId || line.accountCode === '1102060001') &&
+                line.subLedgerId === entity.id;
+              if (!belongsToEmployeeAdvance) return;
+              const lineCurrency = line.currency || voucher.currency || baseCode;
+              if (isOriginalCurrencyReport && lineCurrency !== currency) return;
+              const localAmount = typeof line.localAmount === 'number' && line.localAmount > 0
+                ? line.localAmount
+                : lineCurrency === baseCode
+                  ? line.amount
+                  : line.amount * (line.exchangeRate || voucher.exchangeRate || 1);
+              const displayedAmount = !isOriginalCurrencyReport && lineCurrency !== baseCode
+                ? line.amount
+                : localAmount;
+              if (includeOpening && isBeforeReport(voucher.date, fromDate)) {
+                openingBalance += displayedAmount;
+                openingByCurrency[lineCurrency] = round2((openingByCurrency[lineCurrency] || 0) + displayedAmount);
+              } else if (inDateRange(voucher.date, fromDate, toDate)) {
+                rows.push({
+                  date: dateToIso(voucher.date),
+                  docType: `سند صرف نقدي${voucher.status === 'VOIDED' ? ' (ملغي)' : ' (بانتظار الترحيل)'}`,
+                  docNumber: voucher.voucherNumber,
+                  reference: line.referenceNumber || voucher.referenceNumber || '—',
+                  description: line.description || voucher.narration || `سند صرف إلى ${voucher.payeeName}`,
+                  debit: displayedAmount,
+                  credit: 0,
+                  currency: lineCurrency,
+                });
+              }
+            });
+          });
+        }
         rows.sort(sortRows);
         return [{
         key: `${reportType}-${en.id}`,
