@@ -54,7 +54,7 @@ import ExchangeRateField from '../ui/ExchangeRateField';
 import { useToast } from '../ui/Toast';
 import { useTabDirty } from '../../tabs/TabsContext';
 import VoucherPrintTemplate from '../ui/VoucherPrintTemplate';
-import { handleCurrencyFieldChange } from '../../utils/currencyMath';
+import { handleCurrencyFieldChange, reconcileSingleForeignLineToLocalTotal } from '../../utils/currencyMath';
 import SmartDateInput, { smartDateToIso, todayIso } from '../common/SmartDateInput';
 import AttachmentPicker from '../ui/AttachmentPicker';
 import type { SupportingDocument } from '../../types/supportingDocuments';
@@ -639,6 +639,14 @@ export default function PaymentVouchersView({
     const val = parseFloat(v) || 0;
     if (isBaseCurrency) {
       setCreditLocalAmount(val);
+      setLines(prev => reconcileSingleForeignLineToLocalTotal(
+        prev,
+        val,
+        baseCurrencyCode,
+        2,
+        undefined,
+        (rate, code) => !rateGuard.violationOf(rate, code),
+      ).lines);
       return;
     }
     const foreign = Number(foreignTotalAmount) || 0;
@@ -1599,9 +1607,17 @@ export default function PaymentVouchersView({
                                     value={computed.localAmount || ''}
                                     onChange={v => {
                                       const val = parseFloat(v) || 0;
-                                      const rate = Number(line.exchangeRate) || 1;
-                                       const foreign = rate > 0 ? Math.round((val / rate) * 100) / 100 : 0;
-                                      setLines(prev => prev.map(l => l.id === line.id ? { ...l, localAmount: val, amount: foreign } : l));
+                                      const next = handleCurrencyFieldChange('local', val, {
+                                        foreignAmount: Number(line.amount) || 0,
+                                        exchangeRate: Number(line.exchangeRate) || 1,
+                                        localAmount: Number(line.localAmount) || 0,
+                                      });
+                                      setLines(prev => prev.map(l => l.id === line.id ? {
+                                        ...l,
+                                        amount: next.foreignAmount,
+                                        exchangeRate: next.exchangeRate,
+                                        localAmount: next.localAmount,
+                                      } : l));
                                     }}
                                     disabled={!currencyActive}
 
@@ -1621,7 +1637,12 @@ export default function PaymentVouchersView({
                                         exchangeRate: Number(line.exchangeRate) || 1,
                                         localAmount: Number(computed.localAmount) || 0,
                                       });
-                                      setLines(prev => prev.map(l => l.id === line.id ? { ...l, amount: next.foreignAmount, localAmount: next.localAmount } : l));
+                                      setLines(prev => {
+                                        const nextLines = prev.map(l => l.id === line.id ? { ...l, amount: next.foreignAmount, localAmount: next.localAmount } : l);
+                                        return isBaseCurrency
+                                          ? reconcileSingleForeignLineToLocalTotal(nextLines, creditLocalAmount, baseCurrencyCode, 2, undefined, (rate, code) => !rateGuard.violationOf(rate, code)).lines
+                                          : nextLines;
+                                      });
                                     }}
                                     disabled={!currencyActive}
 

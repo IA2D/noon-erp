@@ -439,7 +439,7 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, accounts, employee
             <input
               type="number"
               min={0.0001}
-              step={0.0001}
+              step={0.00000001}
               value={form.exchangeRate}
               disabled={isBaseCur || locked}
               onChange={e => update({ exchangeRate: Number(e.target.value) })}
@@ -1513,7 +1513,25 @@ export default function CustodyView({
                     <td className="p-2"><select value={itemCurrencyOf(it)} disabled={!it.accountId} onChange={event => { const nextCurrency = event.target.value; const nextRate = nextCurrency === baseCurrency ? 1 : (rateOf(nextCurrency) || 1); const local = itemLocalAmount(it); updateItem(idx, { currency: nextCurrency, exchangeRate: nextRate, amount: nextCurrency === baseCurrency ? local : Math.round((local / nextRate) * 100) / 100, localAmount: local }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 disabled:opacity-60 disabled:cursor-not-allowed">{currencyOptions.map(option => <option key={option.code} value={option.code}>{option.code}</option>)}</select></td>
                     <td className="p-2"><AmountInput value={itemRateOf(it)} disabled={!it.accountId || itemCurrencyOf(it) === baseCurrency} onChange={value => { const nextRate = Number(value) || 1; const foreign = Number(it.amount) || 0; updateItem(idx, { exchangeRate: nextRate, localAmount: Math.round(foreign * nextRate * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 disabled:opacity-60" /></td>
                     <td className="p-2">{itemCurrencyOf(it) === baseCurrency ? <div className={readonlyAmountClass}>—</div> : <AmountInput data-enter-field={`settlement-foreign-${it.id}`} value={it.amount} onChange={value => { const foreign = Number(value) || 0; updateItem(idx, { amount: foreign, localAmount: Math.round(foreign * itemRateOf(it) * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />}</td>
-                    <td className="p-2"><AmountInput data-enter-field={`settlement-local-${it.id}`} value={itemLocalAmount(it)} onChange={value => { const local = Number(value) || 0; const rate = itemRateOf(it); updateItem(idx, { localAmount: local, amount: itemCurrencyOf(it) === baseCurrency ? local : Math.round((local / rate) * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                    <td className="p-2"><AmountInput data-enter-field={`settlement-local-${it.id}`} value={itemLocalAmount(it)} onChange={value => {
+                      const local = Number(value) || 0;
+                      const itemCurrency = itemCurrencyOf(it);
+                      if (itemCurrency === baseCurrency) {
+                        updateItem(idx, { localAmount: local, amount: local });
+                        return;
+                      }
+                      const next = handleCurrencyFieldChange('local', local, {
+                        foreignAmount: Number(it.amount) || 0,
+                        exchangeRate: itemRateOf(it),
+                        localAmount: itemLocalAmount(it),
+                      });
+                      if (!rateGuard.violationOf(next.exchangeRate, itemCurrency)) {
+                        updateItem(idx, { localAmount: next.localAmount, amount: next.foreignAmount, exchangeRate: next.exchangeRate });
+                      } else {
+                        // تبقى الحدود المعتمدة للعملة نافذة؛ لا نُنشئ سعراً تلقائياً خارجها.
+                        updateItem(idx, { localAmount: local, amount: Math.round((local / itemRateOf(it)) * 100) / 100 });
+                      }
+                    }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                     <td className="p-2"><input type="text" value={it.referenceNumber || ''} onChange={event => updateItem(idx, { referenceNumber: event.target.value || undefined })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                     <td className="p-2 text-center"><button type="button" onClick={() => removeItem(idx)} title="حذف البند" className="p-1.5 text-red-600 hover:bg-red-100 rounded cursor-pointer"><X className="w-3.5 h-3.5" /></button></td>
                   </tr>

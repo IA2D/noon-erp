@@ -85,7 +85,7 @@ export default function ExchangeRateField({
     <div className={className} data-enter-field={enterField}>
       <input
         type="number"
-        step="0.0001"
+        step="0.00000001"
         value={value}
         disabled={disabled}
         readOnly={isBase}

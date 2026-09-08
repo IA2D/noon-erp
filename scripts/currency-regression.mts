@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import type { Account } from '../src/types/erp';
 import { amountsEqual, currencyDecimals, fromMinorUnits, multiplyMoney, roundTo, toMinorUnits } from '../src/utils/money';
+import { handleCurrencyFieldChange, reconcileSingleForeignLineToLocalTotal } from '../src/utils/currencyMath';
 import { buildRealizedExchangeDifferenceJournal, buildUnrealizedRevaluationJournal, calculateRealizedExchangeDifference, deriveForeignBalancePositions, revalueForeignPosition } from '../src/utils/currencyRevaluation';
 import { accountsWithCurrencyOpenings, normalizeVoucherSourceJournalCurrencies, projectPostedJournalsToCurrency } from '../src/utils/currencyReporting';
 import { validateJournalForPosting } from '../src/utils/postingValidation';
@@ -21,6 +22,20 @@ assert.equal(amountsEqual(1.004, 1, 2), true);
 const usdTafqeet = tafqeetAmount(20_000, 'دولار أمريكي', 'USD');
 assert.match(usdTafqeet, /دولار أمريكي/);
 assert.doesNotMatch(usdTafqeet, /ريال يمني/);
+const locallyAdjusted = handleCurrencyFieldChange('local', 250_000, { foreignAmount: 1785.71, exchangeRate: 140, localAmount: 249_999.4 });
+assert.equal(locallyAdjusted.foreignAmount, 1785.71);
+assert.equal(locallyAdjusted.exchangeRate, 140.000336);
+assert.equal(multiplyMoney(locallyAdjusted.foreignAmount, locallyAdjusted.exchangeRate, 2), 250_000);
+const reconciled = reconcileSingleForeignLineToLocalTotal([
+  { currency: 'SAR', amount: 1785.71, exchangeRate: 140, localAmount: 249_999.4 },
+], 250_000, 'YER');
+assert.equal(reconciled.adjusted, true);
+assert.equal(reconciled.lines[0].exchangeRate, 140.000336);
+assert.equal(multiplyMoney(reconciled.lines[0].amount || 0, reconciled.lines[0].exchangeRate || 0, 2), 250_000);
+assert.equal(reconcileSingleForeignLineToLocalTotal([
+  { currency: 'SAR', amount: 100, exchangeRate: 140 },
+  { currency: 'USD', amount: 100, exchangeRate: 500 },
+], 64_000, 'YER').adjusted, false);
 
 const position = revalueForeignPosition({ accountId: 'cash-usd', accountCode: '1101', accountNameAr: 'نقدية دولار', currency: 'USD', foreignBalance: 100, carryingLocalBalance: 50_000, historicalRate: 500 }, 530, 0);
 assert.equal(position.revaluedLocalBalance, 53_000);

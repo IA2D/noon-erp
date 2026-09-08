@@ -212,7 +212,20 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
         });
         updated[side] = round2(next.localAmount);
       } else {
-       updated[side] = round2(val);
+        // يبقى المبلغ الأجنبي ثابتاً عند تحرير المحلي، ويُعاير سعر الصرف
+        // تلقائياً حتى لا تنتج فروقات تقريب بين جانبي القيد.
+        if (l.currency !== baseCode && val > 0) {
+          const foreignAmount = Number(l[side]) > 0 && rate > 0 ? Number(l[side]) / rate : 0;
+          const next = handleCurrencyFieldChange('local', val, {
+            foreignAmount,
+            exchangeRate: rate,
+            localAmount: Number(l[side]) || 0,
+          });
+          if (!rateGuard.violationOf(next.exchangeRate, l.currency)) {
+            updated.exchangeRate = next.exchangeRate;
+          }
+        }
+        updated[side] = round2(val);
       }
       if (val > 0) {
         updated[side === 'debit' ? 'credit' : 'debit'] = 0;
