@@ -21,6 +21,8 @@ export function createAccountingCommandStore(db, relationalStore) {
     );
   `);
   const readReceipt = db.prepare('SELECT result_json FROM accounting_command_receipts WHERE idempotency_key=?');
+  const readDocument = db.prepare('SELECT idempotency_key,result_json FROM accounting_command_receipts WHERE command_type=? AND document_type=? AND document_number=?');
+  const deleteReceipt = db.prepare('DELETE FROM accounting_command_receipts WHERE idempotency_key=?');
   const insertReceipt = db.prepare('INSERT INTO accounting_command_receipts(idempotency_key,command_type,document_type,document_number,result_json) VALUES(?,?,?,?,?)');
   const setKv = db.prepare(`INSERT INTO kv_store(key,value,entity_type,updated_at) VALUES(?,?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,entity_type=excluded.entity_type,updated_at=datetime('now')`);
   const readVersion = db.prepare('SELECT version FROM kv_versions WHERE key=?');
@@ -46,6 +48,27 @@ export function createAccountingCommandStore(db, relationalStore) {
       if (replay) {
         db.exec('COMMIT');
         return { ...JSON.parse(replay.result_json), replay: true };
+      }
+      // A previous version could commit the receipt before its journal projection
+      // was restored. Remove only that orphan receipt; a real existing document
+      // remains protected by the unique command identity.
+      const existingDocument = readDocument.get(commandType, documentType, documentNumber);
+      if (existingDocument) {
+        let documentExists = false;
+        if (documentType === 'JOURNAL') {
+          try {
+            const raw = db.prepare('SELECT value FROM kv_store WHERE key=?').get(JOURNAL_COLLECTION_KEY)?.value;
+            const rows = raw ? JSON.parse(raw) : [];
+            documentExists = Array.isArray(rows) && rows.some(row => String(row?.entryNumber || '') === documentNumber);
+          } catch { documentExists = true; }
+        } else {
+          documentExists = true;
+        }
+        if (documentExists) {
+          db.exec('ROLLBACK');
+          return { ok: false, duplicate: true, error: 'DUPLICATE_DOCUMENT' };
+        }
+        deleteReceipt.run(existingDocument.idempotency_key);
       }
       const expected = payload.expectedVersions && typeof payload.expectedVersions === 'object' ? payload.expectedVersions : {};
       for (const change of changes) {
