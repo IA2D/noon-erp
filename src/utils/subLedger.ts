@@ -89,14 +89,23 @@ function cashBoxTypeLabel(t?: CashBox['boxType']): string {
  * موزّع يجلب قائمة كيانات الحساب التحليلي من الجدول المناسب حسب type.
  * (يقابل GET /api/v1/analytical-accounts/search?type={type}&query={q} في بيئة Backend)
  */
-export function listSubLedgers(ds: SubLedgerDataset, type: SubLedgerType): SubLedgerEntity[] {
+/**
+ * قائمة الحسابات التحليلية المرتبطة بنوع الحساب المختار.
+ * ذمم العملاء والموردين تُقيد أيضاً بالحساب التشغيلي المحدد حتى لا تختلط
+ * مجموعات (محلي/حكومي) أو (محلي/خارجي) عند فتح F9.
+ */
+export function listSubLedgers(ds: SubLedgerDataset, type: SubLedgerType, accountId?: string): SubLedgerEntity[] {
+  const onlyLinkedAccount = (items: SubLedgerEntity[]) =>
+    accountId && (type === 'CUSTOMER' || type === 'SUPPLIER')
+      ? items.filter(item => item.accountId === accountId)
+      : items;
   switch (type) {
     case 'EMPLOYEE':
       return ds.employees.map(e => toEntity(e, e.jobTitle));
     case 'CUSTOMER':
-      return ds.customers.map(c => toEntity(c, c.city));
+      return onlyLinkedAccount(ds.customers.map(c => toEntity(c, c.city)));
     case 'SUPPLIER':
-      return ds.vendors.map(v => toEntity(v, v.city));
+      return onlyLinkedAccount(ds.vendors.map(v => toEntity(v, v.city)));
     case 'CASH_BOX':
       return ds.cashBoxes.map(b => toEntity({ ...b, nameAr: b.nameAr, nameEn: b.nameEn }, cashBoxTypeLabel(b.boxType)));
     case 'BANK':
@@ -127,9 +136,9 @@ export function listSubLedgers(ds: SubLedgerDataset, type: SubLedgerType): SubLe
   }
 }
 
-export function searchSubLedgers(ds: SubLedgerDataset, type: SubLedgerType, query: string): SubLedgerEntity[] {
+export function searchSubLedgers(ds: SubLedgerDataset, type: SubLedgerType, query: string, accountId?: string): SubLedgerEntity[] {
   const q = (query || '').trim().toLowerCase();
-  const list = listSubLedgers(ds, type);
+  const list = listSubLedgers(ds, type, accountId);
   if (!q) return list;
   return list.filter(e =>
     e.code.toLowerCase().includes(q) ||
@@ -159,13 +168,13 @@ export function subLedgerTypeOf(account: Account | undefined, ds: SubLedgerDatas
   return 'NONE';
 }
 
-export function subLedgerEntityById(ds: SubLedgerDataset, type: SubLedgerType, id?: string): SubLedgerEntity | undefined {
+export function subLedgerEntityById(ds: SubLedgerDataset, type: SubLedgerType, id?: string, accountId?: string): SubLedgerEntity | undefined {
   if (!id) return undefined;
-  return listSubLedgers(ds, type).find(e => e.id === id);
+  return listSubLedgers(ds, type, accountId).find(e => e.id === id);
 }
 
-export function resolveSubLedgerName(ds: SubLedgerDataset, type: SubLedgerType, id?: string): string {
-  const entity = subLedgerEntityById(ds, type, id);
+export function resolveSubLedgerName(ds: SubLedgerDataset, type: SubLedgerType, id?: string, accountId?: string): string {
+  const entity = subLedgerEntityById(ds, type, id, accountId);
   return entity ? entity.nameAr : '';
 }
 
@@ -193,7 +202,7 @@ export function validateSubLedger(
     };
   }
 
-  if (!subLedgerEntityById(ds, type, subLedgerId)) {
+  if (!subLedgerEntityById(ds, type, subLedgerId, account?.id)) {
     return { valid: false, message: 'الكيان التحليلي المحدد لم يعد موجوداً — أعد اختياره من البحث.' };
   }
 

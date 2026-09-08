@@ -62,11 +62,10 @@ export default function SubLedgerF9Cell({
   // (حماية إضافية حتى لو لم يقم الأب بمسح القيمة — Cascading Reset)
   useEffect(() => {
     if (!subLedgerId) return;
-    if (type === 'NONE' || !subLedgerEntityById(dataset, type, subLedgerId)) {
+    if (type === 'NONE' || !subLedgerEntityById(dataset, type, subLedgerId, account?.id)) {
       onChange('', '');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, subLedgerId]);
+  }, [type, subLedgerId, account?.id]);
 
   if (type === 'NONE') {
     return (
@@ -78,7 +77,7 @@ export default function SubLedgerF9Cell({
 
   const badge = subLedgerBadge(type);
   const selected = subLedgerId
-    ? subLedgerName || resolveSubLedgerName(dataset, type, subLedgerId)
+    ? subLedgerName || resolveSubLedgerName(dataset, type, subLedgerId, account?.id)
     : '';
 
   if (compact) {
@@ -118,7 +117,7 @@ export default function SubLedgerF9Cell({
           )}
         </div>
         {open && (
-          <SubLedgerLookup open={open} type={type} dataset={dataset} onSelect={handleSelect} onClose={() => setOpen(false)} />
+          <SubLedgerLookup open={open} type={type} dataset={dataset} accountId={account?.id} onSelect={handleSelect} onClose={() => setOpen(false)} />
         )}
       </>
     );
@@ -161,7 +160,7 @@ export default function SubLedgerF9Cell({
         </span>
       </div>
       {open && (
-        <SubLedgerLookup open={open} type={type} dataset={dataset} onSelect={handleSelect} onClose={() => setOpen(false)} />
+        <SubLedgerLookup open={open} type={type} dataset={dataset} accountId={account?.id} onSelect={handleSelect} onClose={() => setOpen(false)} />
       )}
     </>
   );

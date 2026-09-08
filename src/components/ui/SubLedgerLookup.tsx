@@ -13,6 +13,8 @@ interface Props {
   open: boolean;
   type: SubLedgerType;
   dataset: SubLedgerDataset;
+  /** الحساب المحاسبي التشغيلي الذي يحدد فئة العميل/المورد. */
+  accountId?: string;
   initialQuery?: string;
   onSelect: (entity: SubLedgerEntity) => void;
   onClose: () => void;
@@ -36,7 +38,7 @@ const TYPE_ICONS: Record<SubLedgerType, React.ElementType> = {
  * تُستدعى عند الضغط على F9 داخل خلية «الحساب التحليلي» في أي جدول إدخال،
  * وتستقبل subLedgerType لتُظهر بيانات الكيان المحدد فقط عبر الخدمة الموحّدة.
  */
-export default function SubLedgerLookup({ open, type, dataset, initialQuery = '', onSelect, onClose }: Props) {
+export default function SubLedgerLookup({ open, type, dataset, accountId, initialQuery = '', onSelect, onClose }: Props) {
   const [query, setQuery] = useState(initialQuery);
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +81,7 @@ export default function SubLedgerLookup({ open, type, dataset, initialQuery = ''
     window.setTimeout(() => previousFocusRef.current?.focus(), 0);
   }, [onClose]);
 
-  const results = useMemo(() => searchSubLedgers(dataset, type, query), [dataset, type, query]);
+  const results = useMemo(() => searchSubLedgers(dataset, type, query, accountId), [dataset, type, query, accountId]);
   const meta = SUB_LEDGER_META[type];
 
   return (
