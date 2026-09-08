@@ -353,6 +353,56 @@ export function createRelationalStore(db) {
     ['journals','paymentVouchers','receiptVouchers','cashBoxes','bankAccounts','employees','customers','vendors','costCenters','currencies','accounts'].forEach(name => clearCollection(RELATIONAL_COLLECTION_KEYS[name]));
   }
 
+  function upsertAccount(account) {
+    insertAccount.run(
+      text(account.id), text(account.code), text(account.nameAr) ?? '', text(account.nameEn) ?? '', number(account.level),
+      text(account.accountType) ?? '', text(account.reportType) ?? '', text(account.parentId), text(account.nature) ?? '',
+      text(account.category) ?? '', text(account.subLedgerType) ?? 'NONE', text(account.defaultCurrency) ?? '',
+      number(account.openingBalance), bool(account.isActive), json(account),
+    );
+    db.prepare('DELETE FROM erp_account_currencies WHERE account_id=?').run(text(account.id));
+    (Array.isArray(account.currencies) ? account.currencies : []).forEach(currency => {
+      insertAccountCurrency.run(text(account.id), text(currency.id), text(currency.code) ?? '', bool(currency.isDefault), bool(currency.isActive));
+    });
+  }
+
+  function accountHierarchy(rows) {
+    return rows.slice().sort((left, right) => number(left.level) - number(right.level) || String(left.code || '').localeCompare(String(right.code || '')));
+  }
+
+  function syncAccounts(rows, { removeMissing = false, projectionKey } = {}) {
+    const sorted = accountHierarchy(rows);
+    sorted.forEach(upsertAccount);
+    if (removeMissing) {
+      const incomingIds = sorted.map(account => text(account.id));
+      if (incomingIds.length) db.prepare(`DELETE FROM erp_accounts WHERE id NOT IN (${incomingIds.map(() => '?').join(',')})`).run(...incomingIds);
+      else db.exec('DELETE FROM erp_accounts');
+    }
+    if (projectionKey) projectionStatus.run(projectionKey, rows.length);
+  }
+
+  // Repairs a stale relational account projection without deleting accounts that
+  // existing historical journals still reference. Used inside accounting commands.
+  function ensureAccounts(accountValue, requestedAccountIds = []) {
+    const rows = parseRows(accountValue, RELATIONAL_COLLECTION_KEYS.accounts);
+    const byId = new Map(rows.map(account => [String(account.id), account]));
+    const required = new Set(requestedAccountIds.filter(Boolean).map(String));
+    const pending = [...required];
+    while (pending.length) {
+      const id = pending.pop();
+      const account = byId.get(id);
+      if (!account) throw new Error(`JOURNAL_ACCOUNT_NOT_FOUND:${id}`);
+      const parentId = account.parentId ? String(account.parentId) : '';
+      if (parentId && !required.has(parentId)) {
+        required.add(parentId);
+        pending.push(parentId);
+      }
+    }
+    const requiredRows = rows.filter(account => required.has(String(account.id)));
+    syncAccounts(requiredRows, { removeMissing: false });
+    return { repaired: requiredRows.length, requested: required.size };
+  }
+
   function syncCollection(key, value) {
     const name = COLLECTION_NAMES.get(key);
     if (!name) return false;
@@ -365,23 +415,7 @@ export function createRelationalStore(db) {
     if (name !== 'accounts') clearCollection(key);
 
     if (name === 'accounts') {
-      const incomingIds = [];
-      rows.forEach(account => {
-        incomingIds.push(text(account.id));
-        insertAccount.run(
-          text(account.id), text(account.code), text(account.nameAr) ?? '', text(account.nameEn) ?? '', number(account.level),
-          text(account.accountType) ?? '', text(account.reportType) ?? '', text(account.parentId), text(account.nature) ?? '',
-          text(account.category) ?? '', text(account.subLedgerType) ?? 'NONE', text(account.defaultCurrency) ?? '',
-          number(account.openingBalance), bool(account.isActive), json(account),
-        );
-        db.prepare('DELETE FROM erp_account_currencies WHERE account_id=?').run(text(account.id));
-        (Array.isArray(account.currencies) ? account.currencies : []).forEach(currency => {
-          insertAccountCurrency.run(text(account.id), text(currency.id), text(currency.code) ?? '', bool(currency.isDefault), bool(currency.isActive));
-        });
-      });
-      if (incomingIds.length) db.prepare(`DELETE FROM erp_accounts WHERE id NOT IN (${incomingIds.map(() => '?').join(',')})`).run(...incomingIds);
-      else db.exec('DELETE FROM erp_accounts');
-      projectionStatus.run(key, rows.length);
+      syncAccounts(rows, { removeMissing: true, projectionKey: key });
     }
 
     if (name === 'journals') {
@@ -542,5 +576,5 @@ export function createRelationalStore(db) {
     return { ok: issues === 0, issues, foreignKeyViolations, orphanJournalLines, orphanPaymentLines, orphanReceiptLines, duplicateDocumentNumbers, unbalancedPostedJournals, auditEvents: scalar('SELECT count(*) AS count FROM erp_audit_events') };
   }
 
-  return { ensureSchema, syncCollection, clearCollection, clearAll, rebuildAll, readCollection, diagnostics, info };
+  return { ensureSchema, syncCollection, clearCollection, clearAll, ensureAccounts, rebuildAll, readCollection, diagnostics, info };
 }

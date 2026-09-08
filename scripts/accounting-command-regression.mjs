@@ -12,8 +12,14 @@ db.exec(`PRAGMA foreign_keys=ON; CREATE TABLE kv_store(key TEXT PRIMARY KEY,valu
 const relational = createRelationalStore(db);
 const commands = createAccountingCommandStore(db, relational);
 const journalKey = RELATIONAL_COLLECTION_KEYS.journals;
+const accountKey = RELATIONAL_COLLECTION_KEYS.accounts;
 const auditKey = 'elite-erp-auditlogs-v6';
-const journal = [{ id: 'J1', entryNumber: 'JV-1', date: '2026-08-27', reference: '', narration: 'atomic', lines: [], totalDebit: 0, totalCredit: 0, currency: 'YER', exchangeRate: 1, status: 'PENDING_POSTING', createdBy: 'test', createdAt: '2026-08-27' }];
+const accounts = [
+  { id: 'A1', code: '1101010001', nameAr: 'الصندوق العام', nameEn: '', level: 5, accountType: 1, reportType: 1, nature: 'DEBIT', category: 'ASSET', subLedgerType: 'NONE', defaultCurrency: 'YER', openingBalance: 0, isActive: true, currencies: [] },
+  { id: 'A2', code: '1201020002', nameAr: 'حساب اختبار', nameEn: '', level: 5, accountType: 1, reportType: 1, nature: 'CREDIT', category: 'LIABILITY', subLedgerType: 'NONE', defaultCurrency: 'YER', openingBalance: 0, isActive: true, currencies: [] },
+];
+db.prepare('INSERT INTO kv_store(key,value,entity_type) VALUES(?,?,?)').run(accountKey, JSON.stringify(accounts), 'erp_state');
+const journal = [{ id: 'J1', entryNumber: 'JV-1', date: '2026-08-27', reference: '', narration: 'atomic', lines: [{ id: 'JL1', accountId: 'A1', accountCode: '1101010001', accountNameAr: 'الصندوق العام', debit: 100000, credit: 0 }, { id: 'JL2', accountId: 'A2', accountCode: '1201020002', accountNameAr: 'حساب اختبار', debit: 0, credit: 100000 }], totalDebit: 100000, totalCredit: 100000, currency: 'YER', exchangeRate: 1, status: 'PENDING_POSTING', createdBy: 'test', createdAt: '2026-08-27' }];
 const request = {
   idempotencyKey: 'POST:J1:v1', commandType: 'POST', documentType: 'JOURNAL', documentNumber: 'JV-1',
   expectedVersions: { [journalKey]: 0, [auditKey]: 0 },
@@ -22,6 +28,8 @@ const request = {
 const first = commands.execute(request);
 assert.equal(first.ok, true);
 assert.equal(first.replay, false);
+assert.equal(db.prepare('SELECT count(*) AS count FROM erp_accounts').get().count, 2);
+assert.equal(db.prepare('SELECT count(*) AS count FROM erp_journal_lines').get().count, 2);
 assert.equal(commands.versionOf(journalKey), 1);
 assert.equal(commands.execute(request).replay, true);
 const duplicate = commands.execute({ ...request, idempotencyKey: 'POST:J1:v2', expectedVersions: { [journalKey]: 1, [auditKey]: 1 } });
@@ -43,4 +51,4 @@ assert.equal(staleWindow.conflict, true);
 assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
 db.close();
 fs.rmSync(file, { force: true });
-console.log('ACCOUNTING_COMMAND_REGRESSION_OK atomic=true idempotentReplay=true duplicateDocumentBlocked=true optimisticConflictBlocked=true staleWindowWriteBlocked=true failedCommandRolledBack=true receiptDurable=true integrity=ok');
+console.log('ACCOUNTING_COMMAND_REGRESSION_OK accountProjectionRepaired=true atomic=true idempotentReplay=true duplicateDocumentBlocked=true optimisticConflictBlocked=true staleWindowWriteBlocked=true failedCommandRolledBack=true receiptDurable=true integrity=ok');

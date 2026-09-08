@@ -37,7 +37,7 @@ import TabKeepAliveContainer from './components/ui/TabKeepAliveContainer';
 import { TabsProvider, useTabs, tabIdFor } from './tabs/TabsContext';
 import { LanguageProvider, useI18n } from './i18n';
 import { useTheme } from './utils/useTheme';
-import { commitAccountingCommand, getPersistentItem, persistentVersion, removePersistentItem } from './utils/desktopStorage';
+import { commitAccountingCommand, getPersistentItem, persistentVersion, removePersistentItem, type AccountingCommandResult } from './utils/desktopStorage';
 import { accountingCommandError, type DailyPostingBatchResult, type DailyPostingRequest } from './utils/dailyPosting';
 
 import {
@@ -716,16 +716,22 @@ function AppInner() {
     setAuditLogs(prev => [newLog, ...prev]);
   };
 
+  const commitAccountingStateResult = (
+    identity: { idempotencyKey: string; commandType: string; documentType: string; documentNumber: string },
+    stateChanges: Array<{ key: string; value: unknown }>,
+    audit: AuditLog
+  ): AccountingCommandResult => {
+    if (typeof window === 'undefined' || !window.desktopStore) return { ok: true };
+    const changes = [...stateChanges, { key: K.auditLogs, value: [audit, ...auditLogs] }].map(change => ({ key: change.key, value: JSON.stringify(change.value) }));
+    const expectedVersions = Object.fromEntries(changes.map(change => [change.key, persistentVersion(change.key)]));
+    return commitAccountingCommand({ ...identity, changes, expectedVersions });
+  };
+
   const commitAccountingState = (
     identity: { idempotencyKey: string; commandType: string; documentType: string; documentNumber: string },
     stateChanges: Array<{ key: string; value: unknown }>,
     audit: AuditLog
-  ): boolean => {
-    if (typeof window === 'undefined' || !window.desktopStore) return true;
-    const changes = [...stateChanges, { key: K.auditLogs, value: [audit, ...auditLogs] }].map(change => ({ key: change.key, value: JSON.stringify(change.value) }));
-    const expectedVersions = Object.fromEntries(changes.map(change => [change.key, persistentVersion(change.key)]));
-    return commitAccountingCommand({ ...identity, changes, expectedVersions }).ok;
-  };
+  ): boolean => commitAccountingStateResult(identity, stateChanges, audit).ok;
 
   const handleAddAccount = (newAcc: Omit<Account, 'id'>) => {
     const created: Account = { ...newAcc, id: `acc-${Date.now()}` };
@@ -821,8 +827,20 @@ function AppInner() {
     const action = newEntry.status === 'POSTED' ? 'POST' as const : 'CREATE' as const;
     const details = `${newEntry.status === 'POSTED' ? 'إنشاء وترحيل' : 'حفظ قيد بانتظار الترحيل'} رقم ${newEntry.entryNumber}`;
     const audit = createAuditLog('GENERAL_LEDGER', action, details);
-    if (!commitAccountingState({ idempotencyKey: `${action}:JOURNAL:${newEntry.id}`, commandType: action, documentType: 'JOURNAL', documentNumber: newEntry.entryNumber }, [{ key: K.journals, value: nextJournals }], audit)) {
-      return { ok: false, error: 'تعذر حفظ القيد في قاعدة البيانات. لم تُفقد بيانات النموذج.' };
+    const command = commitAccountingStateResult(
+      { idempotencyKey: `${action}:JOURNAL:${newEntry.id}`, commandType: action, documentType: 'JOURNAL', documentNumber: newEntry.entryNumber },
+      [{ key: K.journals, value: nextJournals }],
+      audit
+    );
+    if (!command.ok) {
+      const accountId = command.error?.match(/JOURNAL_ACCOUNT_NOT_FOUND:([^\s]+)/)?.[1];
+      const account = accountId ? accounts.find(item => item.id === accountId) : undefined;
+      const error = command.conflict
+        ? 'تغيّرت بيانات القيد في نافذة أخرى؛ أعد فتح شاشة القيود ثم حاول مجددًا.'
+        : accountId
+          ? `تعذر حفظ القيد: الحساب ${account ? `${account.code} — ${account.nameAr}` : accountId} غير موجود في دليل الحسابات.`
+          : accountingCommandError(command.error);
+      return { ok: false, error };
     }
     setJournals(nextJournals);
     setAuditLogs(prev => [audit, ...prev]);

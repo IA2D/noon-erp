@@ -132,6 +132,8 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
   const subLedgerDataset: SubLedgerDataset = { accounts, employees, customers, vendors, cashBoxes, banks: bankAccounts, costCenters };
 
   const [subLedgerError, setSubLedgerError] = useState('');
+  // يمنع طلبات حفظ متداخلة عند النقر أو الضغط المتكرر على Enter.
+  const saveInFlight = useRef(false);
 
   const handleAccountCode = (lineId: string, code: string) => {
     setLines(prev => prev.map(l => {
@@ -297,7 +299,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
 
   const handleSubmit = (e: React.FormEvent) => {
   e.preventDefault();
-  if (!validation.isValid) return;
+  if (saveInFlight.current || !validation.isValid) return;
 
   // قيد مرحّل لا يُعدَّل مباشرة — يجب إلغاء ترحيله أولاً حفاظاً على سلامة الدفاتر
   if (editingJournal && editingJournal.status === 'POSTED') {
@@ -375,9 +377,15 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
   lines: formattedLines
  };
 
- const saveResult = editingJournal
-   ? onUpdateJournal(editingJournal.id, newEntry)
-   : onAddJournal(newEntry);
+ saveInFlight.current = true;
+ let saveResult: JournalSaveResult;
+ try {
+   saveResult = editingJournal
+     ? onUpdateJournal(editingJournal.id, newEntry)
+     : onAddJournal(newEntry);
+ } finally {
+   saveInFlight.current = false;
+ }
  // لا تُغلق النافذة ولا تمسح الإدخال إلا بعد تأكيد الحفظ من طبقة البيانات.
  // بذلك تبقى جميع السطور متاحة للتصحيح إذا رفض التحقق المتأخر القيد.
  if (!saveResult.ok) {

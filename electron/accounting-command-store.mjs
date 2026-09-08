@@ -1,4 +1,6 @@
 const ERP_PREFIX = 'elite-erp-';
+const ACCOUNT_COLLECTION_KEY = 'elite-erp-accounts-v9';
+const JOURNAL_COLLECTION_KEY = 'elite-erp-journals-v6';
 
 export function createAccountingCommandStore(db, relationalStore) {
   db.exec(`
@@ -53,6 +55,21 @@ export function createAccountingCommandStore(db, relationalStore) {
           return { ok: false, conflict: true, key, expectedVersion: Number(expected[key]), actualVersion: versionOf(key) };
         }
       }
+      // A journal line is foreign-key protected by erp_accounts. The UI state can
+      // be newer than the relational projection after an upgrade, restore, or a
+      // just-created account. Repair only its required account hierarchy before
+      // replacing the journal projection, all in this same atomic transaction.
+      const journalChange = changes.find(change => String(change.key) === JOURNAL_COLLECTION_KEY);
+      if (journalChange) {
+        const accountSource = db.prepare('SELECT value FROM kv_store WHERE key=?').get(ACCOUNT_COLLECTION_KEY)?.value;
+        if (!accountSource) throw new Error('JOURNAL_ACCOUNT_PROJECTION_SOURCE_MISSING');
+        const journals = JSON.parse(journalChange.value);
+        const accountIds = Array.isArray(journals)
+          ? journals.flatMap(journal => Array.isArray(journal?.lines) ? journal.lines.map(line => line?.accountId).filter(Boolean) : [])
+          : [];
+        relationalStore.ensureAccounts(accountSource, accountIds);
+      }
+
       const versions = {};
       for (const change of changes) {
         const key = String(change.key);
