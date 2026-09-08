@@ -680,6 +680,30 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
     return { debit: round2(debit), credit: round2(credit) };
   }, [browseRows]);
   const browseBalanced = Math.abs(browseTotals.debit - browseTotals.credit) < 0.01;
+  // أعمدة المدين والدائن في تقرير الأرصدة الافتتاحية تعرض دائماً قيمة الصف
+  // بعملته الأصلية؛ أما الصافي فيبقى بالمكافئ المحلي للتمكن من المقارنة والجمع.
+  const nativePrintAmount = (row: BrowseRow, side: 'debit' | 'credit') => {
+    const local = row[side] || 0;
+    if (row.currency === baseCode) return local;
+    const foreign = side === 'debit' ? row.debitForeign : row.creditForeign;
+    if (foreign) return foreign;
+    const rate = row.rate > 0 ? row.rate : rateOf(row.currency);
+    return rate > 0 ? round2(local / rate) : local;
+  };
+  const browseNativeTotals = useMemo(() => {
+    const totals = new Map<string, { debit: number; credit: number }>();
+    browseRows.forEach(row => {
+      const current = totals.get(row.currency) || { debit: 0, credit: 0 };
+      current.debit += nativePrintAmount(row, 'debit');
+      current.credit += nativePrintAmount(row, 'credit');
+      totals.set(row.currency, current);
+    });
+    return Array.from(totals.entries()).map(([currency, values]) => ({
+      currency,
+      debit: round2(values.debit),
+      credit: round2(values.credit),
+    }));
+  }, [browseRows, baseCode, rateOf]);
 
   const buildDeletePayload = (row: BrowseRow): SavePayload => {
     if (row.kind === 'account') {
@@ -1005,9 +1029,9 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
                     <th className="p-2 border border-slate-300">رقم الحساب</th>
                     <th className="p-2 border border-slate-300">اسم الحساب</th>
                     <th className="p-2 border border-slate-300">العملة</th>
-                    <th className="p-2 border border-slate-300">المدين المحلي</th>
-                    <th className="p-2 border border-slate-300">الدائن المحلي</th>
-                    <th className="p-2 border border-slate-300">الصافي</th>
+                    <th className="p-2 border border-slate-300">مدين</th>
+                    <th className="p-2 border border-slate-300">دائن</th>
+                    <th className="p-2 border border-slate-300">الصافي المحلي ({baseCode})</th>
 
                     <th className="p-2 border border-slate-300">الاستحقاق</th>
                   </tr>
@@ -1023,8 +1047,8 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
                         <td className="p-2 font-mono">{row.accountCode}</td>
                         <td className="p-2">{row.entity?.nameAr || row.accountName}</td>
                         <td className="p-2 font-mono">{row.currency}</td>
-                        <td className="p-2 font-mono text-left text-emerald-700 font-bold">{row.debit > 0 ? fmtAmount(row.debit) : '—'}</td>
-                        <td className="p-2 font-mono text-left text-amber-700 font-bold">{row.credit > 0 ? fmtAmount(row.credit) : '—'}</td>
+                        <td className="p-2 font-mono text-left text-emerald-700 font-bold">{nativePrintAmount(row, 'debit') > 0 ? fmtAmount(nativePrintAmount(row, 'debit')) : '—'}</td>
+                        <td className="p-2 font-mono text-left text-amber-700 font-bold">{nativePrintAmount(row, 'credit') > 0 ? fmtAmount(nativePrintAmount(row, 'credit')) : '—'}</td>
                         <td className="p-2 font-mono text-left">{net === 0 ? '—' : (
                           <span className="inline-flex w-full items-center justify-between gap-1" dir="rtl">
                             <span>{net > 0 ? 'مدين' : 'دائن'}</span>
@@ -1039,9 +1063,9 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-black">
-                    <td className="p-2 text-center" colSpan={4}>الإجمالي</td>
-                    <td className="p-2 font-mono text-left text-emerald-800">{fmtAmount(browseTotals.debit)}</td>
-                    <td className="p-2 font-mono text-left text-amber-800">{fmtAmount(browseTotals.credit)}</td>
+                    <td className="p-2 text-center" colSpan={4}>الإجمالي حسب العملة</td>
+                    <td className="p-2 font-mono text-left text-emerald-800">{browseNativeTotals.map(total => <div key={total.currency} dir="ltr">{total.currency} {total.debit > 0 ? fmtAmount(total.debit) : '—'}</div>)}</td>
+                    <td className="p-2 font-mono text-left text-amber-800">{browseNativeTotals.map(total => <div key={total.currency} dir="ltr">{total.currency} {total.credit > 0 ? fmtAmount(total.credit) : '—'}</div>)}</td>
                     <td className="p-2 font-mono" colSpan={2}>
                       {browseBalanced ? 'متوازن' : (
                         <span className="inline-flex w-full items-center justify-between gap-1" dir="rtl">

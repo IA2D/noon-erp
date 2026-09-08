@@ -27,6 +27,13 @@ assert.match(view, /const merged = \[\.\.\.sourceLines, \.\.\.newLines\]/);
 assert.doesNotMatch(view, /<SavedBalancesModal|isBrowseOpen/);
 assert.match(view, /browseRows\.length === 0/);
 assert.match(view, /browseRows\.map\(\(row, idx\)/);
+assert.match(view, /const nativePrintAmount/);
+assert.match(view, /الإجمالي حسب العملة/);
+assert.match(view, />مدين<\/th>/);
+assert.match(view, />دائن<\/th>/);
+assert.match(view, /الصافي المحلي \(\{baseCode\}\)/);
+assert.doesNotMatch(view, /المدين المحلي/);
+assert.doesNotMatch(view, /الدائن المحلي/);
 for (const source of [employees, customers, vendors]) {
   assert.match(source, /w-80 flex-shrink-0 min-w-0/);
 }
