@@ -30,6 +30,8 @@ import { currencyDecimals } from '../../utils/money';
 
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
+interface JournalSaveResult { ok: boolean; error?: string; }
+
 interface Props {
  journals: JournalEntry[];
  accounts: Account[];
@@ -40,8 +42,8 @@ interface Props {
  vendors: Vendor[];
  costCenters: CostCenter[];
  currencies: Currency[];
-   onAddJournal: (entry: JournalEntry) => void;
-   onUpdateJournal: (id: string, entry: JournalEntry) => void;
+   onAddJournal: (entry: JournalEntry) => JournalSaveResult;
+   onUpdateJournal: (id: string, entry: JournalEntry) => JournalSaveResult;
   onVoidJournal: (id: string) => void;
   onRestoreJournal: (id: string) => void;
   currentUserName: string;
@@ -373,16 +375,22 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
   lines: formattedLines
  };
 
- if (editingJournal) {
-  onUpdateJournal(editingJournal.id, newEntry);
- } else {
-  onAddJournal(newEntry);
+ const saveResult = editingJournal
+   ? onUpdateJournal(editingJournal.id, newEntry)
+   : onAddJournal(newEntry);
+ // لا تُغلق النافذة ولا تمسح الإدخال إلا بعد تأكيد الحفظ من طبقة البيانات.
+ // بذلك تبقى جميع السطور متاحة للتصحيح إذا رفض التحقق المتأخر القيد.
+ if (!saveResult.ok) {
+   const error = saveResult.error || 'تعذر حفظ القيد. راجع البيانات ثم أعد المحاولة.';
+   setSubLedgerError(error);
+   toast('error', error);
+   return;
  }
  // عرض القيد المحفوظ/المعدّل مباشرة في الواجهة الرئيسية
  setSelectedEntryId(newEntry.id);
  closeJournalModal();
 
- // Reset form
+ // Reset form only after a confirmed save.
  setReference('');
  setNarration('');
  setAttachments([]);

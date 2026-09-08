@@ -808,23 +808,29 @@ function AppInner() {
     return true;
   };
 
-  const handleAddJournal = (newEntry: JournalEntry) => {
+  const handleAddJournal = (newEntry: JournalEntry): { ok: boolean; error?: string } => {
     const validation = newEntry.status === 'PENDING_POSTING'
       ? validateJournalForPosting(newEntry, accounts, journals, currencies)
       : validateGeneratedJournalForPosting(newEntry, accounts, journals, currencies);
     if (!validation.valid) {
-      addAuditLog('GENERAL_LEDGER', 'POST', `رُفض القيد الآلي ${newEntry.entryNumber}: ${validation.errors.join(' | ')}`);
-      return false;
+      const error = validation.errors.join(' | ');
+      addAuditLog('GENERAL_LEDGER', 'POST', `رُفض القيد الآلي ${newEntry.entryNumber}: ${error}`);
+      return { ok: false, error };
     }
     const nextJournals = [newEntry, ...journals];
     const action = newEntry.status === 'POSTED' ? 'POST' as const : 'CREATE' as const;
     const details = `${newEntry.status === 'POSTED' ? 'إنشاء وترحيل' : 'حفظ قيد بانتظار الترحيل'} رقم ${newEntry.entryNumber}`;
     const audit = createAuditLog('GENERAL_LEDGER', action, details);
-    if (!commitAccountingState({ idempotencyKey: `${action}:JOURNAL:${newEntry.id}`, commandType: action, documentType: 'JOURNAL', documentNumber: newEntry.entryNumber }, [{ key: K.journals, value: nextJournals }], audit)) return false;
+    if (!commitAccountingState({ idempotencyKey: `${action}:JOURNAL:${newEntry.id}`, commandType: action, documentType: 'JOURNAL', documentNumber: newEntry.entryNumber }, [{ key: K.journals, value: nextJournals }], audit)) {
+      return { ok: false, error: 'تعذر حفظ القيد في قاعدة البيانات. لم تُفقد بيانات النموذج.' };
+    }
     setJournals(nextJournals);
     setAuditLogs(prev => [audit, ...prev]);
-    return true;
+    return { ok: true };
   };
+
+   // Backward-compatible boolean adapter for modules that only need success/failure.
+  const handleAddJournalBoolean = (newEntry: JournalEntry): boolean => handleAddJournal(newEntry).ok;
 
   const handleCloseYear = (year: string, closingEntry: JournalEntry | null) => {
     const pendingDocuments = [
@@ -1344,18 +1350,27 @@ function AppInner() {
     return false;
   };
 
-  const handleUpdateJournal = (id: string, updated: JournalEntry, opts?: { skipClosedCheck?: boolean }) => {
+  const handleUpdateJournal = (id: string, updated: JournalEntry, opts?: { skipClosedCheck?: boolean }): { ok: boolean; error?: string } => {
     const current = journals.find(j => j.id === id);
     if (current?.status === 'POSTED') {
+      const error = `لا يمكن تعديل القيد المُرحّل ${current.entryNumber} — استخدم الإلغاء أو القيد العكسي.`;
       addAuditLog('GENERAL_LEDGER', 'UPDATE', `رُفض تعديل القيد المُرحّل ${current.entryNumber} — استخدم الإلغاء أو القيد العكسي`);
-      return;
+      return { ok: false, error };
     }
     if (!opts?.skipClosedCheck && isPeriodClosed(updated.date, closedYears, closedMonths)) {
+      const error = 'تاريخ القيد داخل فترة مغلقة.';
       addAuditLog('GENERAL_LEDGER', 'UPDATE', `رُفض حفظ القيد ${updated.entryNumber} — بتاريخ داخل فترة مغلقة`);
-      return;
+      return { ok: false, error };
+    }
+    const validation = validateJournalForPosting(updated, accounts, journals, currencies);
+    if (!validation.valid) {
+      const error = validation.errors.join(' | ');
+      addAuditLog('GENERAL_LEDGER', 'UPDATE', `رُفض حفظ القيد ${updated.entryNumber}: ${error}`);
+      return { ok: false, error };
     }
     setJournals(prev => prev.map(j => (j.id === id ? updated : j)));
     addAuditLog('GENERAL_LEDGER', 'UPDATE', `تعديل قيد اليومية رقم ${updated.entryNumber}`);
+    return { ok: true };
   };
 
   const handleAddTrust = (trust: Trust) => {
@@ -1915,7 +1930,7 @@ function AppInner() {
             employees={employees}
             onAddTrust={handleAddTrust}
             onUpdateTrust={handleUpdateTrust}
-            onAddJournal={handleAddJournal}
+            onAddJournal={handleAddJournalBoolean}
             currentUserName={currentUserName}
             closedYears={closedYears}
           />
@@ -1935,7 +1950,7 @@ function AppInner() {
             currencies={currencies}
             onAddCustody={handleAddCustody}
             onUpdateCustody={handleUpdateCustody}
-            onAddJournal={handleAddJournal}
+            onAddJournal={handleAddJournalBoolean}
             currentUserName={currentUserName}
             closedYears={closedYears}
           />
@@ -2060,7 +2075,7 @@ function AppInner() {
             onUnpostJournal={handleUnpostJournal}
             onUnpostVoucher={handleUnpostVoucher}
             onCreateOpeningEntry={handleCreateOpeningEntry}
-            onCreateRevaluationJournal={handleAddJournal}
+            onCreateRevaluationJournal={handleAddJournalBoolean}
             currentUserName={currentUserName}
           />
         );
