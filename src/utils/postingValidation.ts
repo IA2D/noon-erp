@@ -70,6 +70,10 @@ function validateJournal(
     const isBase = currency ? currency.isBase : code === base?.code;
     const rate = isBase ? 1 : Number(line.exchangeRate || entry.exchangeRate);
     if (!(rate > 0)) errors.push(`السطر ${index + 1}: سعر الصرف يجب أن يكون موجباً.`);
+    // Custody settlement journals persist the entered local amount as the
+    // authoritative accounting value. Their foreign amount is evidence and
+    // may be rounded independently when a settlement is edited.
+    const custodySettlementJournal = entry.reference?.startsWith('CUSTODY-');
     if (currency && !isBase && !line.isExchangeDifferenceAdjustment) {
       const foreignDecimals = currencyDecimals(code, currencies);
       const foreignDebit = Number(line.debitForeign) || 0;
@@ -77,8 +81,8 @@ function validateJournal(
       if (hasExcessPrecision(foreignDebit, foreignDecimals) || hasExcessPrecision(foreignCredit, foreignDecimals)) errors.push(`السطر ${index + 1}: المبلغ الأصلي يتجاوز دقة ${code} (${foreignDecimals}).`);
       if (foreignDebit < 0 || foreignCredit < 0 || (foreignDebit > 0 && foreignCredit > 0)) errors.push(`السطر ${index + 1}: طرف العملة الأصلية غير صالح.`);
       if ((debit > 0 && !(foreignDebit > 0)) || (credit > 0 && !(foreignCredit > 0))) errors.push(`السطر ${index + 1}: المبلغ الأصلي مطلوب للسطر ذي العملة الأجنبية.`);
-      if (foreignDebit > 0 && !amountsEqual(debit, multiplyMoney(roundTo(foreignDebit, foreignDecimals), rate, localDecimals), localDecimals)) errors.push(`السطر ${index + 1}: المدين المحلي لا يطابق المدين الأصلي × السعر المخزن.`);
-      if (foreignCredit > 0 && !amountsEqual(credit, multiplyMoney(roundTo(foreignCredit, foreignDecimals), rate, localDecimals), localDecimals)) errors.push(`السطر ${index + 1}: الدائن المحلي لا يطابق الدائن الأصلي × السعر المخزن.`);
+      if (!custodySettlementJournal && foreignDebit > 0 && !amountsEqual(debit, multiplyMoney(roundTo(foreignDebit, foreignDecimals), rate, localDecimals), localDecimals)) errors.push(`السطر ${index + 1}: المدين المحلي لا يطابق المدين الأصلي × السعر المخزن.`);
+      if (!custodySettlementJournal && foreignCredit > 0 && !amountsEqual(credit, multiplyMoney(roundTo(foreignCredit, foreignDecimals), rate, localDecimals), localDecimals)) errors.push(`السطر ${index + 1}: الدائن المحلي لا يطابق الدائن الأصلي × السعر المخزن.`);
     }
   });
   if (round2(entry.totalDebit) !== lineValidation.totalDebit || round2(entry.totalCredit) !== lineValidation.totalCredit) {
