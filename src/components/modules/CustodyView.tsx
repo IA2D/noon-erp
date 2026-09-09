@@ -652,6 +652,7 @@ export default function CustodyView({
   const [disburseTarget, setDisburseTarget] = useState<Custody | null>(null);
   const [disburseSource, setDisburseSource] = useState('');
   const [settleTarget, setSettleTarget] = useState<Custody | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<CustodySettlement | null>(null);
   const [settleMaximized, setSettleMaximized] = useState(false);
   const [settleItems, setSettleItems] = useState<CustodySettlementItem[]>([]);
   const [settlementEditId, setSettlementEditId] = useState<string | null>(null);
@@ -1284,7 +1285,7 @@ export default function CustodyView({
     const settledAmount = round2(settlements.reduce((sum, item) => sum + item.totalExpense, 0));
     const apTransferredAmount = round2(settlements.reduce((sum, item) => sum + item.apTransferred, 0));
     const status = statusAfterSettlement({ ...custody, settledAmount, apTransferredAmount }, 0);
-    onUpdateCustody(custody.id, {
+    const updates: Partial<Custody> = {
       settlements,
       settledAmount,
       refundedAmount: round2(settlements.reduce((sum, item) => sum + item.cashRefunded, 0)),
@@ -1293,7 +1294,10 @@ export default function CustodyView({
       actualClearanceDate: status === 'FULL_SETTLED' ? custody.actualClearanceDate : undefined,
       transactions: custody.transactions.filter(item => item.settlementId !== settlement.id),
       updatedAt: nowStamp(),
-    });
+    };
+    onUpdateCustody(custody.id, updates);
+    setSettleTarget(current => current?.id === custody.id ? { ...current, ...updates } : current);
+    setDeleteConfirmation(null);
     if (settlementEditId === settlement.id) {
       setSettlementEditId(null);
       setSettleItems([]);
@@ -2007,7 +2011,7 @@ export default function CustodyView({
                           <button type="button" onClick={() => { setSettlementEditId(item.id); setSettleItems(item.items.map(line => ({ ...line }))); setSettlementAttachments(item.attachments || []); setApAccountId(''); }} className={`px-3 py-1.5 text-xs font-bold ${settlementEditId === item.id ? 'bg-sky-100 text-sky-800 dark:bg-sky-500/25 dark:text-sky-200' : 'text-slate-600 dark:text-slate-300'}`}>
                             {item.settlementNumber} — {fmtC(item.totalExpense, settleTarget.currency || baseCurrency)}
                           </button>
-                          <button type="button" title="حذف التصفية وعكس قيدها" onClick={() => deleteSettlement(settleTarget, item)} className="border-r border-slate-300 dark:border-slate-600 px-2 text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/20"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button type="button" title="حذف التصفية وعكس قيدها" onClick={() => setDeleteConfirmation(item)} className="border-r border-slate-300 dark:border-slate-600 px-2 text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/20"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                       ))}
                     </div>
@@ -2045,6 +2049,22 @@ export default function CustodyView({
           </ModalShell>
         );
       })()}
+
+      {deleteConfirmation && settleTarget && (
+        <ModalShell id="custody-delete-settlement-confirm" open title="تأكيد حذف التصفية" icon={Trash2} onClose={() => setDeleteConfirmation(null)} footer={null} closeOnBackdrop={false} size="sm">
+          <div dir="rtl" className="space-y-4 text-right">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+              <p className="font-bold">هل تريد حذف التصفية <bdi>{deleteConfirmation.settlementNumber}</bdi>؟</p>
+              <p className="mt-2 text-sm">العهدة: <bdi>{settleTarget.custodyNumber}</bdi> — المبلغ: <bdi>{fmtC(deleteConfirmation.totalExpense, settleTarget.currency || baseCurrency)}</bdi></p>
+            </div>
+            <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">سيتم حذف بنود هذه التصفية وعكس قيدها المحاسبي وإعادة احتساب رصيد العهدة. لن تتأثر التصفيات الأخرى.</p>
+            <div className="flex justify-end gap-3">
+              <button type="button" autoFocus onClick={() => setDeleteConfirmation(null)} className="rounded-xl border border-slate-300 px-4 py-2 text-slate-700 dark:border-slate-600 dark:text-slate-200">إلغاء</button>
+              <button type="button" onClick={() => deleteSettlement(settleTarget, deleteConfirmation)} className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600">تأكيد الحذف وعكس القيد</button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
 
       {refundTarget && (
         <ModalShell id="custody-refund" open={!!refundTarget} title={`رد نقدية — ${refundTarget.custodyNumber}`} icon={Undo2} onClose={() => setRefundTarget(null)} footer={null} closeOnBackdrop={false}>
