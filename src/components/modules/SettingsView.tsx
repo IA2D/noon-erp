@@ -1075,7 +1075,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
       {pendingFactoryReset && (() => {
         const fiscalYear = loadBranchesLocal()[0]?.fiscalYear || new Date().getFullYear();
         const full = pendingFactoryReset === 'FULL_SYSTEM';
-        return <ModalShell id="settings-factory-reset" open title={full ? 'تأكيد ضبط مصنع كامل النظام' : 'تأكيد ضبط مصنع للسنة المالية'} icon={Trash2} size="sm" footer={null} closeOnBackdrop={false} bodyClassName="p-0">
+        return <ModalShell id="settings-factory-reset" open title={full ? 'تأكيد ضبط مصنع كامل النظام' : 'تأكيد ضبط مصنع للسنة المالية'} icon={Trash2} size="sm" footer={null} onClose={() => setPendingFactoryReset(null)} closeOnBackdrop={false} bodyClassName="p-0">
           <div className="space-y-4 p-6">
             {factoryResetStep === 1 && <>
               <p className="text-sm leading-relaxed text-slate-300">هل أنت متأكد من بدء عملية ضبط المصنع؟</p>
@@ -1123,3 +1123,4 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
     </div>
   );
 }
+
