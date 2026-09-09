@@ -127,6 +127,7 @@ interface Props {
   onAddCustody: (c: Custody) => void;
   onUpdateCustody: (id: string, updates: Partial<Custody>) => void;
   onAddJournal: (j: JournalEntry) => boolean;
+  onUpdateJournal?: (id: string, j: JournalEntry) => boolean;
   currentUserName: string;
   closedYears?: string[];
 }
@@ -565,6 +566,7 @@ export default function CustodyView({
   onAddCustody,
   onUpdateCustody,
   onAddJournal,
+  onUpdateJournal,
   currentUserName,
   closedYears,
 }: Props) {
@@ -650,6 +652,7 @@ export default function CustodyView({
   const [settleTarget, setSettleTarget] = useState<Custody | null>(null);
   const [settleMaximized, setSettleMaximized] = useState(false);
   const [settleItems, setSettleItems] = useState<CustodySettlementItem[]>([]);
+  const [settlementEditId, setSettlementEditId] = useState<string | null>(null);
   const [settlementAttachments, setSettlementAttachments] = useState<SupportingDocument[]>([]);
   const [apAccountId, setApAccountId] = useState('');
   const [refundTarget, setRefundTarget] = useState<Custody | null>(null);
@@ -1141,12 +1144,13 @@ export default function CustodyView({
     setDisburseSource('');
   };
 
-  const openSettle = (c: Custody) => {
+  const openSettle = (c: Custody, existing?: CustodySettlement) => {
     openModal(() => {
       setSettleTarget(c);
       setSettleMaximized(false);
-      setSettleItems([]);
-      setSettlementAttachments([]);
+      setSettlementEditId(existing?.id || null);
+      setSettleItems(existing ? existing.items.map(item => ({ ...item })) : []);
+      setSettlementAttachments(existing?.attachments || []);
       setApAccountId('');
     });
   };
@@ -1190,17 +1194,20 @@ export default function CustodyView({
       createdBy: currentUserName,
       reference: `CUSTODY-${settleTarget.custodyNumber}`,
     };
-    const journal = buildSettlementJournal(ctx, settleTarget, settleItems, advanceAcc, apAcc ?? null);
-    if (!onAddJournal(journal)) {
-      toast('error', 'تعذر ترحيل قيد تصفية العهدة؛ لم تُعدّل العهدة.');
+    const existingSettlement = settlementEditId ? settleTarget.settlements.find(item => item.id === settlementEditId) : undefined;
+    const journal = buildSettlementJournal({ ...ctx, journalId: existingSettlement?.journalEntryId || ctx.journalId }, settleTarget, settleItems, advanceAcc, apAcc ?? null);
+    const journalSaved = existingSettlement?.journalEntryId && onUpdateJournal
+      ? onUpdateJournal(existingSettlement.journalEntryId, journal)
+      : onAddJournal(journal);
+    if (!journalSaved) {
+      toast('error', 'تعذر حفظ قيد تصفية العهدة؛ لم تُعدّل التصفية.');
       return;
     }
 
-    const cashRefunded = 0;
-    const nextStatus = statusAfterSettlement(settleTarget, expenseTotal);
+    const cashRefunded = existingSettlement?.cashRefunded || 0;
     const settlement: CustodySettlement = {
-      id: `ls-${Date.now()}`,
-      settlementNumber: `STL-${settleTarget.settlements.length + 1}`,
+      id: existingSettlement?.id || `ls-${Date.now()}`,
+      settlementNumber: existingSettlement?.settlementNumber || `STL-${settleTarget.settlements.length + 1}`,
       date: today(),
       items: settleItems,
       totalExpense: expenseTotal,
@@ -1209,29 +1216,37 @@ export default function CustodyView({
       apTransferred: excess,
       narration: `تصفية ${settleTarget.custodyNumber} بالمستندات`,
       journalEntryId: journal.id,
-      createdBy: currentUserName,
-      createdAt: nowStamp(),
+      createdBy: existingSettlement?.createdBy || currentUserName,
+      createdAt: existingSettlement?.createdAt || nowStamp(),
       attachments: settlementAttachments,
     };
+    const nextSettlements = existingSettlement
+      ? settleTarget.settlements.map(item => item.id === existingSettlement.id ? settlement : item)
+      : [...settleTarget.settlements, settlement];
     const txns: CustodyTransaction[] = [
-      { id: `lt-${Date.now()}`, type: 'SETTLEMENT', date: today(), amount: expenseTotal, journalEntryId: journal.id, settlementId: settlement.id, narration: `تصفية بالمستندات (${settleItems.length} بند)`, createdBy: currentUserName, createdAt: nowStamp() },
+      { id: existingSettlement ? (settleTarget.transactions.find(item => item.settlementId === existingSettlement.id)?.id || `lt-${Date.now()}`) : `lt-${Date.now()}`, type: 'SETTLEMENT', date: existingSettlement ? (settleTarget.transactions.find(item => item.settlementId === existingSettlement.id)?.date || today()) : today(), amount: expenseTotal, journalEntryId: journal.id, settlementId: settlement.id, narration: `تصفية بالمستندات (${settleItems.length} بند)`, createdBy: currentUserName, createdAt: existingSettlement ? (settleTarget.transactions.find(item => item.settlementId === existingSettlement.id)?.createdAt || nowStamp()) : nowStamp() },
       ...(cashRefunded > 0
         ? [{ id: `lt-${Date.now()}-r`, type: 'REFUND' as const, date: today(), amount: cashRefunded, narration: 'رد فائض نقدي للصندوق', createdBy: currentUserName, createdAt: nowStamp() }]
         : []),
     ];
+    const totalSettled = nextSettlements.reduce((sum, item) => sum + item.totalExpense, 0);
+    const totalAp = nextSettlements.reduce((sum, item) => sum + item.apTransferred, 0);
+    const nextStatus = statusAfterSettlement({ ...settleTarget, settledAmount: totalSettled, apTransferredAmount: totalAp }, 0);
+    const previousSettlementTxnIds = existingSettlement ? new Set(settleTarget.transactions.filter(item => item.settlementId === existingSettlement.id).map(item => item.id)) : new Set<string>();
     onUpdateCustody(settleTarget.id, {
-      settledAmount: Math.round((settleTarget.settledAmount + Math.min(expenseTotal, remaining)) * 100) / 100,
-      refundedAmount: Math.round((settleTarget.refundedAmount + cashRefunded) * 100) / 100,
+      settledAmount: Math.round(totalSettled * 100) / 100,
+      refundedAmount: nextSettlements.reduce((sum, item) => sum + item.cashRefunded, 0),
       shortageAmount: settleTarget.shortageAmount,
-      apTransferredAmount: Math.round((settleTarget.apTransferredAmount + excess) * 100) / 100,
+      apTransferredAmount: Math.round(totalAp * 100) / 100,
       status: nextStatus,
       actualClearanceDate: nextStatus === 'FULL_SETTLED' ? today() : undefined,
-      settlements: [...settleTarget.settlements, settlement],
-      transactions: [...settleTarget.transactions, ...txns],
+      settlements: nextSettlements,
+      transactions: [...settleTarget.transactions.filter(item => !previousSettlementTxnIds.has(item.id)), ...txns],
       updatedAt: nowStamp(),
     });
     toast('success', `تمت تصفية ${settleTarget.custodyNumber} (${fmtC(expenseTotal, settleTarget.currency || baseCurrency)}) وترحيل القيد ${journal.entryNumber}. الحالة: ${CUSTODY_STATUS_LABEL[nextStatus]}`);
     setSettleTarget(null);
+    setSettlementEditId(null);
     setSettleMaximized(false);
   };
 
@@ -1457,12 +1472,12 @@ export default function CustodyView({
                   <th className="p-2 w-10 text-center">#</th>
                   <th className="p-2 min-w-[245px]">الحساب المحاسبي *</th>
                   <th className="p-2 min-w-[180px]">الحساب التحليلي</th>
-                  <th className="p-2 min-w-[175px]">مركز التكلفة</th>
-                  <th className="p-2 min-w-[230px]">الوصف *</th>
                   <th className="p-2 min-w-[90px]">العملة</th>
                   <th className="p-2 min-w-[105px]">سعر الصرف</th>
-                  <th className="p-2 min-w-[135px]">المبلغ الأجنبي</th>
+                  <th className="p-2 min-w-[230px]">الوصف *</th>
                   <th className="p-2 min-w-[135px]">المبلغ المحلي ({baseCurrency})</th>
+                  <th className="p-2 min-w-[135px]">المبلغ الأجنبي</th>
+                  <th className="p-2 min-w-[175px]">مركز التكلفة</th>
                   <th className="p-2 min-w-[130px]">رقم المرجع</th>
                   <th className="p-2 w-10" aria-label="حذف" />
                 </tr>
@@ -1495,24 +1510,9 @@ export default function CustodyView({
                         : it.subLedgerType === 'NONE' ? <div className="h-9 px-2 flex items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400">بدون حساب تحليلي</div>
                         : <div data-settlement-analytical={it.id}><SubLedgerF9Cell compact dataset={subLedgerDataset} account={accounts.find(account => account.id === it.accountId)} subLedgerId={it.subLedgerId} subLedgerName={it.subLedgerName} onChange={(subLedgerId, subLedgerName) => updateItem(idx, { subLedgerId: subLedgerId || undefined, subLedgerName: subLedgerName || undefined })} onAfterSelect={() => focusSettlementField(`[data-settlement-cost-center="${it.id}"] input`)} /></div>}
                     </td>
-                    <td className="p-2" data-settlement-cost-center={it.id}>
-                      <F9SearchInput
-                        value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
-                        onChange={() => undefined}
-                        items={costCenters}
-                        columns={[{ label: 'الكود', render: center => center.code }, { label: 'مركز التكلفة', render: center => center.nameAr }]}
-                        searchText={center => `${center.code} ${center.nameAr}`}
-                        browseTitle="اختيار مركز التكلفة"
-                        onSelect={center => updateItem(idx, { costCenterId: center.id })}
-                        onAfterSelect={() => focusSettlementField(`[data-settlement-description="${it.id}"]`)}
-                        inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة', 'data-enter-nav-field': `settlement-cost-center-${it.id}` }}
-                        className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
-                      />
-                    </td>
-                    <td className="p-2"><input data-enter-nav-field={`settlement-description-${it.id}`} data-settlement-description={it.id} type="text" value={it.description} onChange={event => updateItem(idx, { description: event.target.value })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                     <td className="p-2"><select value={itemCurrencyOf(it)} disabled={!it.accountId} onChange={event => { const nextCurrency = event.target.value; const nextRate = nextCurrency === baseCurrency ? 1 : (rateOf(nextCurrency) || 1); const local = itemLocalAmount(it); updateItem(idx, { currency: nextCurrency, exchangeRate: nextRate, amount: nextCurrency === baseCurrency ? local : Math.round((local / nextRate) * 100) / 100, localAmount: local }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 disabled:opacity-60 disabled:cursor-not-allowed">{currencyOptions.map(option => <option key={option.code} value={option.code}>{option.code}</option>)}</select></td>
                     <td className="p-2"><AmountInput value={itemRateOf(it)} disabled={!it.accountId || itemCurrencyOf(it) === baseCurrency} onChange={value => { const nextRate = Number(value) || 1; const foreign = Number(it.amount) || 0; updateItem(idx, { exchangeRate: nextRate, localAmount: Math.round(foreign * nextRate * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 disabled:opacity-60" /></td>
-                    <td className="p-2">{itemCurrencyOf(it) === baseCurrency ? <div className={readonlyAmountClass}>—</div> : <AmountInput data-enter-field={`settlement-foreign-${it.id}`} value={it.amount} onChange={value => { const foreign = Number(value) || 0; updateItem(idx, { amount: foreign, localAmount: Math.round(foreign * itemRateOf(it) * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />}</td>
+                    <td className="p-2"><input data-enter-nav-field={`settlement-description-${it.id}`} data-settlement-description={it.id} type="text" value={it.description} onChange={event => updateItem(idx, { description: event.target.value })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                     <td className="p-2"><AmountInput data-enter-field={`settlement-local-${it.id}`} value={itemLocalAmount(it)} onChange={value => {
                       const local = Number(value) || 0;
                       const itemCurrency = itemCurrencyOf(it);
@@ -1532,6 +1532,21 @@ export default function CustodyView({
                         updateItem(idx, { localAmount: local, amount: Math.round((local / itemRateOf(it)) * 100) / 100 });
                       }
                     }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                    <td className="p-2">{itemCurrencyOf(it) === baseCurrency ? <div className={readonlyAmountClass}>—</div> : <AmountInput data-enter-field={`settlement-foreign-${it.id}`} value={it.amount} onChange={value => { const foreign = Number(value) || 0; updateItem(idx, { amount: foreign, localAmount: Math.round(foreign * itemRateOf(it) * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />}</td>
+                    <td className="p-2" data-settlement-cost-center={it.id}>
+                      <F9SearchInput
+                        value={it.costCenterId ? `${costCenters.find(center => center.id === it.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === it.costCenterId)?.nameAr || ''}` : ''}
+                        onChange={() => undefined}
+                        items={costCenters}
+                        columns={[{ label: 'الكود', render: center => center.code }, { label: 'مركز التكلفة', render: center => center.nameAr }]}
+                        searchText={center => `${center.code} ${center.nameAr}`}
+                        browseTitle="اختيار مركز التكلفة"
+                        onSelect={center => updateItem(idx, { costCenterId: center.id })}
+                        onAfterSelect={() => focusSettlementField(`[data-settlement-description="${it.id}"]`)}
+                        inputProps={{ readOnly: true, title: 'اضغط F9 لاختيار مركز التكلفة', 'data-enter-nav-field': `settlement-cost-center-${it.id}` }}
+                        className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
+                      />
+                    </td>
                     <td className="p-2"><input type="text" value={it.referenceNumber || ''} onChange={event => updateItem(idx, { referenceNumber: event.target.value || undefined })} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                     <td className="p-2 text-center"><button type="button" onClick={() => removeItem(idx)} title="حذف البند" className="p-1.5 text-red-600 hover:bg-red-100 rounded cursor-pointer"><X className="w-3.5 h-3.5" /></button></td>
                   </tr>
@@ -2172,6 +2187,7 @@ export default function CustodyView({
                         <div className="flex items-center justify-between">
                           <span className="font-mono font-bold text-emerald-600">{s.settlementNumber} • {s.date}</span>
                           <span className="font-mono font-bold text-slate-900 dark:text-white">{fmtC(s.totalExpense, c.currency || baseCurrency)}</span>
+                          <button type="button" onClick={() => { openSettle(c, s); setDetailsTarget(null); }} className="text-sky-600 hover:text-sky-800 font-bold">تعديل</button>
                         </div>
                         <p className="text-slate-500 dark:text-slate-400">{s.items.length} بند {s.cashRefunded > 0 ? `• فائض معاد: ${fmtC(s.cashRefunded, c.currency || baseCurrency)}` : ''}{s.apTransferred > 0 ? ` • محوَّل AP: ${fmtC(s.apTransferred, c.currency || baseCurrency)}` : ''}{s.shortageAmount > 0 ? ` • عجز: ${fmtC(s.shortageAmount, c.currency || baseCurrency)}` : ''}</p>
                       </div>

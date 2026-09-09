@@ -1350,6 +1350,8 @@ function AppInner() {
     return true;
   };
 
+  const handleUpdateJournalBoolean = (id: string, entry: JournalEntry): boolean => handleUpdateJournal(id, entry).ok;
+
   const handleVoidJournal = (id: string) => {
     const found = journals.find(j => j.id === id);
     if (!found) return false;
@@ -1969,6 +1971,7 @@ function AppInner() {
             onAddCustody={handleAddCustody}
             onUpdateCustody={handleUpdateCustody}
             onAddJournal={handleAddJournalBoolean}
+            onUpdateJournal={handleUpdateJournalBoolean}
             currentUserName={currentUserName}
             closedYears={closedYears}
           />
