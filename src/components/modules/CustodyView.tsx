@@ -1159,7 +1159,8 @@ export default function CustodyView({
   const handleSettle = (e: React.FormEvent) => {
     e.preventDefault();
     if (!settleTarget) return;
-    const existingSettlement = settlementEditId ? settleTarget.settlements.find(item => item.id === settlementEditId) : undefined;
+    const existingSettlement = (settlementEditId ? settleTarget.settlements.find(item => item.id === settlementEditId) : undefined)
+      || settleTarget.settlements.find(item => item.items.length === settleItems.length && Math.abs(item.totalExpense - itemsTotal(settleItems)) < 0.01);
     if (settleItems.length === 0) {
       toast('error', 'أضف بند مستند واحداً على الأقل للتصفية.');
       return;
@@ -1578,7 +1579,7 @@ export default function CustodyView({
           <button
             type="button"
             onClick={openCreate}
-            className="flex items-center gap-2 bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
+            className="flex items-center gap-2 bg-sky-50 hover:bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:hover:bg-sky-500/30 dark:text-sky-300 font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             عهدة جديدة
