@@ -16,6 +16,7 @@ import {
   rootOf,
   cashBoxPostingAccounts,
   bankPostingAccounts,
+  hasAncestorOrSelfCode,
 } from '../../utils/accountingEngine';
 import {
   FileBarChart2,

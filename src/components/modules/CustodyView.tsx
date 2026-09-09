@@ -1145,12 +1145,13 @@ export default function CustodyView({
   };
 
   const openSettle = (c: Custody, existing?: CustodySettlement) => {
+    const selected = existing || [...c.settlements].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     openModal(() => {
       setSettleTarget(c);
       setSettleMaximized(false);
-      setSettlementEditId(existing?.id || null);
-      setSettleItems(existing ? existing.items.map(item => ({ ...item })) : []);
-      setSettlementAttachments(existing?.attachments || []);
+      setSettlementEditId(selected?.id || null);
+      setSettleItems(selected ? selected.items.map(item => ({ ...item })) : []);
+      setSettlementAttachments(selected?.attachments || []);
       setApAccountId('');
     });
   };
@@ -1158,6 +1159,7 @@ export default function CustodyView({
   const handleSettle = (e: React.FormEvent) => {
     e.preventDefault();
     if (!settleTarget) return;
+    const existingSettlement = settlementEditId ? settleTarget.settlements.find(item => item.id === settlementEditId) : undefined;
     if (settleItems.length === 0) {
       toast('error', 'أضف بند مستند واحداً على الأقل للتصفية.');
       return;
@@ -1176,7 +1178,7 @@ export default function CustodyView({
       return;
     }
     const expenseTotal = itemsTotal(settleItems);
-    const remaining = outstandingBalance(settleTarget);
+    const remaining = outstandingBalance(settleTarget) + (existingSettlement?.totalExpense || 0) + (existingSettlement?.apTransferred || 0);
     const excess = Math.max(0, Math.round((expenseTotal - remaining) * 100) / 100);
     if (excess > 0 && !apAccountId) {
       toast('error', `قيمة المستندات (${fmtC(expenseTotal, settleTarget.currency || baseCurrency)}) تتجاوز الرصيد القائم (${fmtC(remaining, settleTarget.currency || baseCurrency)}) — اختر حساب دائن (AP) للمستحق للموظف.`);
@@ -1194,7 +1196,6 @@ export default function CustodyView({
       createdBy: currentUserName,
       reference: `CUSTODY-${settleTarget.custodyNumber}`,
     };
-    const existingSettlement = settlementEditId ? settleTarget.settlements.find(item => item.id === settlementEditId) : undefined;
     const journal = buildSettlementJournal({ ...ctx, journalId: existingSettlement?.journalEntryId || ctx.journalId }, settleTarget, settleItems, advanceAcc, apAcc ?? null);
     const journalSaved = existingSettlement?.journalEntryId && onUpdateJournal
       ? onUpdateJournal(existingSettlement.journalEntryId, journal)
@@ -1946,6 +1947,21 @@ export default function CustodyView({
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+                {settleTarget.settlements.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200">التصفيات السابقة</span>
+                      <button type="button" onClick={() => { setSettlementEditId(null); setSettleItems([]); setSettlementAttachments([]); setApAccountId(''); }} className="px-3 py-1 rounded-lg bg-sky-50 text-sky-700 text-xs font-bold">إضافة تصفية جديدة</button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {settleTarget.settlements.map(item => (
+                        <button key={item.id} type="button" onClick={() => { setSettlementEditId(item.id); setSettleItems(item.items.map(line => ({ ...line }))); setSettlementAttachments(item.attachments || []); setApAccountId(''); }} className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${settlementEditId === item.id ? 'border-sky-500 bg-sky-100 text-sky-800' : 'border-slate-300 text-slate-600 dark:text-slate-300'}`}>
+                          {item.settlementNumber} — {fmtC(item.totalExpense, settleTarget.currency || baseCurrency)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {ItemEditor({ items: settleItems, setItems: setSettleItems, currency: settleTarget.currency || baseCurrency, exchangeRate: settleTarget.exchangeRate || 1 })}
                 <AttachmentPicker documents={settlementAttachments} onChange={setSettlementAttachments} uploadedBy={currentUserName} documentType="CUSTODY_SETTLEMENT_SUPPORT" />
 
@@ -2387,10 +2403,10 @@ export default function CustodyView({
                     {c.status === 'CREATED' ? 'اعتماد وصرف آلي' : 'صرف العهدة (قيد آلي)'}
                   </button>
                 )}
-                {canSettle(c) && (
+                {(canSettle(c) || (c.status === 'FULL_SETTLED' && c.settlements.length > 0)) && (
                   <button type="button" onClick={() => { openSettle(c); setRowMenu(null); }} className={menuItem}>
                     <FileSignature className="w-4 h-4 text-emerald-600" />
-                    تصفية العهدة بالمستندات
+                    {c.settlements.length > 0 ? 'عرض وتعديل تصفيات العهدة' : 'تصفية العهدة بالمستندات'}
                   </button>
                 )}
                 {canSettle(c) && (
