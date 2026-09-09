@@ -521,34 +521,18 @@ export default function FinancialReportsView({
   const isOriginalCurrencyReport = selectedCurrency !== 'ALL' && currency !== baseCode;
   const toReportCurrency = (n: number) => roundTo(n || 0, selectedDecimals);
 
-  // Pending vouchers have no posted journal yet. Build a read-only journal
-  // projection so every financial report can show them immediately, while the
-  // immutable voucher remains the source of truth and its status stays visible.
-  const pendingVoucherJournals = useMemo<JournalEntry[]>(() => {
-    const existing = new Set(journals.map(journal => journal.id));
-    const make = (voucher: PaymentVoucher | ReceiptVoucher, kind: 'PAYMENT' | 'RECEIPT'): JournalEntry | null => {
-      if (voucher.status === 'VOIDED' || voucher.journalEntryId || existing.has(voucher.id)) return null;
-      const isPayment = kind === 'PAYMENT';
-      const sourceAmount = Number(voucher.totalAmount) || 0;
-      const sourceLocal = Math.round(sourceAmount * (Number(voucher.exchangeRate) || 1) * 100) / 100;
-      const lines: JournalEntry['lines'] = [];
-      voucher.lines.forEach(line => {
-        const local = Number(line.localAmount) || Math.round((Number(line.amount) || 0) * (Number(line.exchangeRate || voucher.exchangeRate) || 1) * 100) / 100;
-        lines.push({ id: `pending-${voucher.id}-${line.id}`, accountId: line.accountId, accountCode: line.accountCode, accountNameAr: line.accountNameAr, debit: isPayment ? local : 0, credit: isPayment ? 0 : local, description: line.description || voucher.narration, costCenterId: line.costCenterId, subLedgerType: line.subLedgerType, subLedgerId: line.subLedgerId, subLedgerName: line.subLedgerName, currency: line.currency || voucher.currency, exchangeRate: line.exchangeRate || voucher.exchangeRate, debitForeign: isPayment ? line.amount : 0, creditForeign: isPayment ? 0 : line.amount, referenceNumber: line.referenceNumber });
-      });
-      const source = accounts.find(account => account.id === voucher.sourceAccountId);
-      lines.push({ id: `pending-${voucher.id}-source`, accountId: voucher.sourceAccountId, accountCode: source?.code || '', accountNameAr: source?.nameAr || voucher.sourceAccountNameAr, debit: isPayment ? 0 : sourceLocal, credit: isPayment ? sourceLocal : 0, description: voucher.narration, currency: voucher.currency, exchangeRate: voucher.exchangeRate, debitForeign: isPayment ? 0 : sourceAmount, creditForeign: isPayment ? sourceAmount : 0, referenceNumber: voucher.referenceNumber });
-      return { id: `pending-voucher-${voucher.id}`, entryNumber: isPayment ? (voucher as PaymentVoucher).voucherNumber : (voucher as ReceiptVoucher).receiptNumber, date: voucher.date, reference: voucher.referenceNumber || '', narration: voucher.narration, currency: voucher.currency, exchangeRate: voucher.exchangeRate, status: 'PENDING_POSTING', type: isPayment ? 'PV' : 'RV', sourceType: isPayment ? 'PAYMENT_VOUCHER' : 'RECEIPT_VOUCHER', referenceCode: isPayment ? (voucher as PaymentVoucher).voucherNumber : (voucher as ReceiptVoucher).receiptNumber, totalDebit: sourceLocal, totalCredit: sourceLocal, createdBy: voucher.createdBy, createdAt: voucher.createdAt, lines };
-    };
-    return [...vouchers.flatMap(voucher => { const item = make(voucher, 'PAYMENT'); return item ? [item] : []; }), ...receiptVouchers.flatMap(voucher => { const item = make(voucher, 'RECEIPT'); return item ? [item] : []; })];
-  }, [journals, vouchers, receiptVouchers, accounts]);
-
+  // التقارير المالية تعتمد القيود المرحّلة فقط. السند ينعكس في التقارير بعد ترحيله إلى الأستاذ العام.
   // Normalizes legacy voucher source lines before projection. Without this a
   // foreign-currency bank/cash payment with no opening balance disappears
   // from its own currency statement because its source side was stored as YER.
   const reportingJournals = useMemo(
-    () => normalizeVoucherSourceJournalCurrencies([...journals, ...pendingVoucherJournals].map(journal => ({ ...journal, date: dateToIso(journal.date) })), [...vouchers, ...receiptVouchers], baseCode, selectedDecimals),
-    [journals, pendingVoucherJournals, vouchers, receiptVouchers, baseCode, selectedDecimals]
+    () => normalizeVoucherSourceJournalCurrencies(
+      journals.filter(journal => journal.status === 'POSTED').map(journal => ({ ...journal, date: dateToIso(journal.date) })),
+      [...vouchers, ...receiptVouchers],
+      baseCode,
+      selectedDecimals,
+    ),
+    [journals, vouchers, receiptVouchers, baseCode, selectedDecimals]
   );
 
   const baseJournals = useMemo(
@@ -559,7 +543,7 @@ export default function FinancialReportsView({
   const reportJournals = useMemo(() => baseJournals, [baseJournals]);
 
   const journalsInRange = useMemo(() => reportDocuments(reportJournals, fromDate, toDate, true), [reportJournals, fromDate, toDate]);
-  // Operational document reports include pending records, visibly labelled; financial statements remain POSTED-only.
+  // كل التقرير المالي يُبنى من القيود المرحلة فقط؛ لا تظهر المستندات المنتظرة.
   const documentJournals = useMemo(() => reportDocuments(
     projectJournalsToCurrency(reportingJournals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true, true), fromDate, toDate, true
   ), [reportingJournals, fromDate, toDate, currency, baseCode, selectedDecimals, isOriginalCurrencyReport]);
@@ -1158,11 +1142,6 @@ export default function FinancialReportsView({
           // سلف الموظفين الشهرية المستوى الرابع 110206 يدعم بيانات العميل القديمة والجديدة.
           return code === '1102060001' || code.startsWith('110206') || account?.parentId === '110206';
         };
-        const voucherLineBelongsToEmployee = (line: PaymentVoucher['lines'][number], voucher: PaymentVoucher) =>
-          isMonthlyEmployeeAdvanceAccount(line.accountId, line.accountCode) && (
-            line.subLedgerId === entity.id ||
-            (!line.subLedgerId && [voucher.payeeName, line.subLedgerName].some(name => name?.trim() === en.name))
-          );
         reportJournals.forEach(j => j.lines.forEach(l => {
           // كشف الموظف مخصص لسلف الموظفين الشهرية فقط؛ عهد الموظف لها كشف مستقل.
           // يدعم الحساب التشغيلي ومجموعة السلف وأرشيف السندات الذي يفتقد معرف الكيان.
@@ -1180,44 +1159,7 @@ export default function FinancialReportsView({
           else if (inDateRange(j.date, fromDate, toDate)) rows.push(toRow(j, l));
         }));
 
-        if (reportType === 'EMPLOYEES_REPORT') {
-          // سندات الصرف المنتظرة لا يكون لها قيد يومية حتى تُرحّل. تظهر هنا مباشرة
-          // حتى يظل كشف الموظف التحليلي شاملاً كل سند، من دون مضاعفة السند المرحّل.
-          vouchers.forEach(voucher => {
-            voucher.lines.forEach(line => {
-              const belongsToEmployeeAdvance = voucherLineBelongsToEmployee(line, voucher);
-              if (!belongsToEmployeeAdvance) return;
-              // لا نكرر سطر السند الذي ظهر بالفعل عبر قيده المرحّل. إذا كان
-              // القيد موجوداً لكن بلا بيانات تحليلية صحيحة، نضيف السند نفسه.
-              if (rows.some(row => row.docNumber === voucher.voucherNumber)) return;
-              const lineCurrency = line.currency || voucher.currency || baseCode;
-              if (isOriginalCurrencyReport && lineCurrency !== currency) return;
-              const localAmount = typeof line.localAmount === 'number' && line.localAmount > 0
-                ? line.localAmount
-                : lineCurrency === baseCode
-                  ? line.amount
-                  : line.amount * (line.exchangeRate || voucher.exchangeRate || 1);
-              const displayedAmount = !isOriginalCurrencyReport && lineCurrency !== baseCode
-                ? line.amount
-                : localAmount;
-              if (includeOpening && isBeforeReport(voucher.date, fromDate)) {
-                openingBalance += displayedAmount;
-                openingByCurrency[lineCurrency] = round2((openingByCurrency[lineCurrency] || 0) + displayedAmount);
-              } else if (inDateRange(voucher.date, fromDate, toDate)) {
-                rows.push({
-                  date: dateToIso(voucher.date),
-                  docType: `سند صرف نقدي${voucher.status === 'VOIDED' ? ' (ملغي)' : ' (بانتظار الترحيل)'}`,
-                  docNumber: voucher.voucherNumber,
-                  reference: line.referenceNumber || voucher.referenceNumber || '—',
-                  description: line.description || voucher.narration || `سند صرف إلى ${voucher.payeeName}`,
-                  debit: displayedAmount,
-                  credit: 0,
-                  currency: lineCurrency,
-                });
-              }
-            });
-          });
-        }
+
         rows.sort(sortRows);
         return [{
         key: `${reportType}-${en.id}`,
@@ -1324,14 +1266,14 @@ export default function FinancialReportsView({
 
   const filteredPaymentVouchers = useMemo(() =>
     sortReportRecordsChronologically(
-      reportDocuments(vouchers || [], fromDate, toDate, true).filter(v => !isOriginalCurrencyReport || v.currency === currency),
+      reportDocuments(vouchers || [], fromDate, toDate, true).filter(v => v.status === 'POSTED' && (!isOriginalCurrencyReport || v.currency === currency)),
       voucher => voucher.voucherNumber,
     ).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
     [vouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
   );
   const filteredReceiptVouchers = useMemo(() =>
     sortReportRecordsChronologically(
-      reportDocuments(receiptVouchers || [], fromDate, toDate, true).filter(v => !isOriginalCurrencyReport || v.currency === currency),
+      reportDocuments(receiptVouchers || [], fromDate, toDate, true).filter(v => v.status === 'POSTED' && (!isOriginalCurrencyReport || v.currency === currency)),
       voucher => voucher.receiptNumber,
     ).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
     [receiptVouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]

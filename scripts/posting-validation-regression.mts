@@ -11,6 +11,7 @@ const accounts = [account('cash', '1101010001', 5, 'DEBIT'), account('expense', 
 const currencies: Currency[] = [
   { id: 'yer', code: 'YER', nameAr: 'ريال', nameEn: 'Rial', symbol: 'ر.ي', decimals: 0, isBase: true, exchangeRate: 1, minExchangeRate: 1, maxExchangeRate: 1, isActive: true, createdAt: '' },
   { id: 'usd', code: 'USD', nameAr: 'دولار', nameEn: 'Dollar', symbol: '$', decimals: 2, isBase: false, exchangeRate: 530, minExchangeRate: 1, maxExchangeRate: 1000, isActive: true, createdAt: '' },
+  { id: 'sar', code: 'SAR', nameAr: 'ريال سعودي', nameEn: 'Saudi Riyal', symbol: 'ر.س', decimals: 2, isBase: false, exchangeRate: 140, minExchangeRate: 1, maxExchangeRate: 1000, isActive: true, createdAt: '' },
 ];
 const line = (id: string, accountId: string, debit: number, credit: number): JournalLine => ({ id, accountId, accountCode: accountId, accountNameAr: accountId, debit, credit, description: id });
 const journal = (patch: Partial<JournalEntry> = {}): JournalEntry => ({
@@ -23,7 +24,7 @@ assert.equal(validateJournalForPosting(journal(), accounts, []).valid, true);
 assert.equal(validateJournalForPosting(journal({ totalDebit: 90 }), accounts, []).valid, false);
 assert.equal(validateJournalForPosting(journal(), accounts, [journal({ id: 'j2' })]).errors.some(item => item.includes('مستخدم مسبقاً')), true);
 assert.equal(validateJournalForPosting(journal({ lines: [line('l1', 'group', 100, 0), line('l2', 'cash', 0, 100)] }), accounts, []).valid, false);
-assert.equal(validateJournalForPosting(journal({ lines: [line('l1', 'customer', 100, 0), line('l2', 'cash', 0, 100)] }), accounts, []).errors.some(item => item.includes('الحساب المساعد')), true);
+assert.equal(validateJournalForPosting(journal({ lines: [line('l1', 'customer', 100, 0), line('l2', 'cash', 0, 100)] }), accounts, []).errors.some(item => item.includes('الحساب التحليلي')), true);
 const foreignJournal = journal({ totalDebit: 530, totalCredit: 530, lines: [
   { ...line('l1', 'expense', 530, 0), currency: 'USD', exchangeRate: 530, debitForeign: 1 },
   { ...line('l2', 'cash', 0, 530), currency: 'YER', exchangeRate: 1 },
@@ -45,5 +46,12 @@ const foreignVoucher = voucher({ currency: 'USD', exchangeRate: 530, lines: [{ .
 assert.equal(validateVoucherForPosting('PAYMENT', foreignVoucher, accounts, [], [], currencies).valid, true);
 assert.equal(validateVoucherForPosting('PAYMENT', { ...foreignVoucher, lines: [{ ...foreignVoucher.lines[0], localAmount: 662 }] }, accounts, [], [], currencies).errors.some(item => item.includes('المعادل المحلي')), true);
 assert.equal(validateVoucherForPosting('PAYMENT', { ...foreignVoucher, totalAmount: 1.251, subtotalAmount: 1.251, lines: [{ ...foreignVoucher.lines[0], amount: 1.251, totalAmount: 1.251 }] }, accounts, [], [], currencies).errors.some(item => item.includes('يتجاوز دقة')), true);
+const mixedCurrencyTransfer = voucher({
+  sourceAccountId: 'cash', currency: 'YER', exchangeRate: 1,
+  lines: [{ ...voucher().lines[0], accountId: 'cash', accountCode: '1101010001', currency: 'SAR', amount: 100, totalAmount: 100, exchangeRate: 140, localAmount: 14000 }],
+  subtotalAmount: 14000, totalAmount: 14000,
+});
+assert.equal(validateVoucherForPosting('PAYMENT', mixedCurrencyTransfer, accounts, [], [], currencies).valid, true);
+assert.equal(validateVoucherForPosting('RECEIPT', { ...mixedCurrencyTransfer, receiptNumber: 'RV-1', receiptMethod: 'CASH', payerName: 'Customer' } as unknown as import('../src/types/erp').ReceiptVoucher, accounts, [], [], currencies).valid, true);
 
-console.log('POSTING_VALIDATION_REGRESSION_OK validJournal=true totalMismatchBlocked=true duplicateJournalBlocked=true nonPostingBlocked=true subledgerBlocked=true validVoucher=true voucherTotalBlocked=true sameAccountBlocked=true retryBlocked=true foreignJournalReproduced=true foreignMismatchBlocked=true currencyPrecision=true excessPrecisionBlocked=true');
+console.log('POSTING_VALIDATION_REGRESSION_OK validJournal=true totalMismatchBlocked=true duplicateJournalBlocked=true nonPostingBlocked=true subledgerBlocked=true validVoucher=true voucherTotalBlocked=true sameAccountBlocked=true retryBlocked=true foreignJournalReproduced=true foreignMismatchBlocked=true currencyPrecision=true excessPrecisionBlocked=true mixedCurrencySourceAndDistribution=true');

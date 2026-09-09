@@ -230,7 +230,14 @@ export function validateVoucherForPosting(
   let totalDocument = 0;
   voucher.lines.forEach((line, index) => {
     const account = validatePostingAccount(line.accountId, accounts, `السطر ${index + 1}`, errors);
-    if (line.accountId === voucher.sourceAccountId) errors.push(`السطر ${index + 1}: حساب المصدر لا يجوز أن يكون حساب التوزيع نفسه.`);
+    const lineCurrency = line.currency || voucher.currency;
+    // التحويل بين صندوق/بنك المصدر وطرف أو مصدر آخر مسموح حتى لو اشتركا في
+    // الحساب المحاسبي الرئيسي، طالما اختلفت العملة أو الحساب التحليلي. نمنع
+    // فقط السطر الذي يعيد قيد المصدر نفسه بالعملة والكيان نفسيهما.
+    const sameSourceIdentity = line.accountId === voucher.sourceAccountId
+      && lineCurrency === voucher.currency
+      && (!voucher.sourceEntityId || !line.subLedgerId || line.subLedgerId === voucher.sourceEntityId);
+    if (sameSourceIdentity) errors.push(`السطر ${index + 1}: حساب المصدر لا يجوز أن يكون حساب التوزيع نفسه.`);
     if (!(line.amount > 0)) errors.push(`السطر ${index + 1}: يجب أن يكون المبلغ أكبر من صفر.`);
     const rate = line.currency && line.currency !== voucher.currency ? line.exchangeRate : (line.exchangeRate || voucher.exchangeRate);
     if (!(rate && rate > 0)) errors.push(`السطر ${index + 1}: سعر الصرف غير صالح.`);
