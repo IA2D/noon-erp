@@ -1972,8 +1972,8 @@ function AppInner() {
             currencies={currencies}
             onAddCustody={handleAddCustody}
             onUpdateCustody={handleUpdateCustody}
-            onAddJournal={handleAddJournalBoolean}
-            onUpdateJournal={handleUpdateJournalBoolean}
+            onAddJournal={handleAddJournal}
+            onUpdateJournal={handleUpdateJournal}
             onVoidJournal={handleVoidJournal}
             currentUserName={currentUserName}
             closedYears={closedYears}

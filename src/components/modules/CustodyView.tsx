@@ -126,8 +126,8 @@ interface Props {
   currencies: Currency[];
   onAddCustody: (c: Custody) => void;
   onUpdateCustody: (id: string, updates: Partial<Custody>) => void;
-  onAddJournal: (j: JournalEntry) => boolean;
-  onUpdateJournal?: (id: string, j: JournalEntry) => boolean;
+  onAddJournal: (j: JournalEntry) => boolean | { ok: boolean; error?: string };
+  onUpdateJournal?: (id: string, j: JournalEntry) => boolean | { ok: boolean; error?: string };
   onVoidJournal?: (id: string) => boolean;
   currentUserName: string;
   closedYears?: string[];
@@ -1205,13 +1205,19 @@ export default function CustodyView({
     const priorJournal = existingSettlement?.journalEntryId ? journals.find(item => item.id === existingSettlement.journalEntryId) : undefined;
     const mustReversePriorJournal = priorJournal?.status === 'POSTED';
     const journal = buildSettlementJournal({ ...ctx, journalId: mustReversePriorJournal ? ctx.journalId : (existingSettlement?.journalEntryId || ctx.journalId) }, settlementBase, settleItems, advanceAcc, apAcc ?? null);
+    const updateResult = existingSettlement?.journalEntryId && !mustReversePriorJournal && onUpdateJournal
+      ? onUpdateJournal(existingSettlement.journalEntryId, journal)
+      : undefined;
+    let addResult: boolean | { ok: boolean; error?: string } | undefined;
     const journalSaved = existingSettlement?.journalEntryId
       ? (mustReversePriorJournal
-        ? (onVoidJournal?.(existingSettlement.journalEntryId) === true && onAddJournal(journal))
-        : Boolean(onUpdateJournal?.(existingSettlement.journalEntryId, journal)))
-      : onAddJournal(journal);
+        ? (onVoidJournal?.(existingSettlement.journalEntryId) === true && Boolean((addResult = onAddJournal(journal)) && (typeof addResult === 'object' ? addResult.ok : addResult)))
+        : Boolean(typeof updateResult === 'object' ? updateResult.ok : updateResult))
+      : Boolean((addResult = onAddJournal(journal)) && (typeof addResult === 'object' ? addResult.ok : addResult));
     if (!journalSaved) {
-      toast('error', 'تعذر حفظ قيد تصفية العهدة؛ لم تُعدّل التصفية.');
+      const failedResult = (typeof updateResult === 'object' ? updateResult : addResult);
+      const reason = typeof failedResult === 'object' && failedResult.error ? ` السبب: ${failedResult.error}` : ' السبب غير متاح من موفر القيد.';
+      toast('error', `تعذر حفظ قيد تصفية العهدة ${settleTarget.custodyNumber}؛ لم تُعدّل التصفية.${reason}`);
       return;
     }
 
