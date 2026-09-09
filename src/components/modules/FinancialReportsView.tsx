@@ -64,6 +64,7 @@ import { currencyDecimals, roundTo } from '../../utils/money';
 import { accountsWithCurrencyOpenings, normalizeVoucherSourceJournalCurrencies, projectJournalsToCurrency } from '../../utils/currencyReporting';
 import { defaultReportToDate, toLocalIsoDate } from '../../utils/dateDefaults';
 import { reconcileControlAccountOpenings } from '../../services/openingBalancesService';
+import { summarizeStatementsByCurrency } from '../../utils/statementSummary';
 
 interface Props {
   accounts: Account[];
@@ -1185,41 +1186,25 @@ export default function FinancialReportsView({
     // and original currency is represented by one summary row rather than a
     // separate report page.
     if (isSummary) {
-      const summaryRows: PrintableStatementRow[] = [];
-      statementSpecs.forEach(spec => {
-        const byCurrency = new Map<string, PrintableStatementRow[]>();
-        spec.rows.forEach(row => {
-          const code = row.currency || baseCode;
-          const rows = byCurrency.get(code) || [];
-          rows.push(row);
-          byCurrency.set(code, rows);
-        });
-        Object.keys(spec.openingByCurrency || {}).forEach(code => {
-          if (!byCurrency.has(code)) byCurrency.set(code, []);
-        });
-        if (!byCurrency.size) byCurrency.set(spec.currencyCode || baseCode, []);
-        byCurrency.forEach((rows, code) => {
-          const opening = spec.openingByCurrency?.[code] ?? (byCurrency.size === 1 ? spec.opening : 0);
-          const debit = round2(rows.reduce((sum, row) => sum + row.debit, 0));
-          const credit = round2(rows.reduce((sum, row) => sum + row.credit, 0));
-          // يستخدم الإجمالي المحلي سعر العملة الحالي، لا سعر حركة تاريخية.
-          const currentRate = code === baseCode ? 1 : (currencies.find(item => item.code === code)?.exchangeRate || 1);
-          summaryRows.push({
-            id: `${spec.key}-${code}`,
-            date: '—',
-            docType: 'إجمالي',
-            docNumber: spec.subjectCode,
-            reference: '—',
-            description: `${spec.subjectName}${opening ? ` — افتتاحي: ${fmt(opening)}` : ''}`,
-            debit,
-            credit,
-            localDebit: round2(debit * currentRate),
-            localCredit: round2(credit * currentRate),
-            opening,
-            localOpening: round2(opening * currentRate),
-            currency: code,
-          });
-        });
+      // هذا الإسقاط الوحيد للإجمالي: يأخذ صفوف الكشف التحليلي نفسها ثم يجمعها
+      // حسب العملة. لذلك لا يمكن أن تسقط حركة من الرصيد الختامي الإجمالي.
+      const summaryRows = summarizeStatementsByCurrency(statementSpecs, baseCode).map(item => {
+        const currentRate = item.currency === baseCode ? 1 : (currencies.find(currency => currency.code === item.currency)?.exchangeRate || 1);
+        return {
+          id: item.id,
+          date: '—',
+          docType: 'إجمالي',
+          docNumber: item.subjectCode,
+          reference: '—',
+          description: `${item.subjectName}${item.opening ? ` — افتتاحي: ${fmt(item.opening)}` : ''}`,
+          debit: item.debit,
+          credit: item.credit,
+          localDebit: round2(item.debit * currentRate),
+          localCredit: round2(item.credit * currentRate),
+          opening: item.opening,
+          localOpening: round2(item.opening * currentRate),
+          currency: item.currency,
+        };
       });
       return [{
         key: `${reportType}-summary`,
@@ -1230,7 +1215,7 @@ export default function FinancialReportsView({
         subjectExtra: 'كل عملة تجمع حساباتها أولاً، ثم يظهر إجماليها بالعملة المحلية بسعر الصرف الحالي.',
         opening: 0,
         showOpening: false,
-        rows: summaryRows.sort((a, b) => (a.currency || baseCode).localeCompare(b.currency || baseCode) || a.description.localeCompare(b.description, 'ar')),
+        rows: summaryRows,
         currencyCode: baseCode,
       }];
     }
