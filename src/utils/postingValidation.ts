@@ -73,7 +73,7 @@ function validateJournal(
     // Custody settlement journals persist the entered local amount as the
     // authoritative accounting value. Their foreign amount is evidence and
     // may be rounded independently when a settlement is edited.
-    const custodySettlementJournal = entry.reference?.startsWith('CUSTODY-');
+    const custodySettlementJournal = entry.reference?.startsWith('CUSTODY-') || entry.reference?.startsWith('REV-');
     if (currency && !isBase && !line.isExchangeDifferenceAdjustment) {
       const foreignDecimals = currencyDecimals(code, currencies);
       const foreignDebit = Number(line.debitForeign) || 0;
