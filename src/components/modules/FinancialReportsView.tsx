@@ -520,12 +520,34 @@ export default function FinancialReportsView({
   const isOriginalCurrencyReport = selectedCurrency !== 'ALL' && currency !== baseCode;
   const toReportCurrency = (n: number) => roundTo(n || 0, selectedDecimals);
 
+  // Pending vouchers have no posted journal yet. Build a read-only journal
+  // projection so every financial report can show them immediately, while the
+  // immutable voucher remains the source of truth and its status stays visible.
+  const pendingVoucherJournals = useMemo<JournalEntry[]>(() => {
+    const existing = new Set(journals.map(journal => journal.id));
+    const make = (voucher: PaymentVoucher | ReceiptVoucher, kind: 'PAYMENT' | 'RECEIPT'): JournalEntry | null => {
+      if (voucher.status === 'VOIDED' || voucher.journalEntryId || existing.has(voucher.id)) return null;
+      const isPayment = kind === 'PAYMENT';
+      const sourceAmount = Number(voucher.totalAmount) || 0;
+      const sourceLocal = Math.round(sourceAmount * (Number(voucher.exchangeRate) || 1) * 100) / 100;
+      const lines: JournalEntry['lines'] = [];
+      voucher.lines.forEach(line => {
+        const local = Number(line.localAmount) || Math.round((Number(line.amount) || 0) * (Number(line.exchangeRate || voucher.exchangeRate) || 1) * 100) / 100;
+        lines.push({ id: `pending-${voucher.id}-${line.id}`, accountId: line.accountId, accountCode: line.accountCode, accountNameAr: line.accountNameAr, debit: isPayment ? local : 0, credit: isPayment ? 0 : local, description: line.description || voucher.narration, costCenterId: line.costCenterId, subLedgerType: line.subLedgerType, subLedgerId: line.subLedgerId, subLedgerName: line.subLedgerName, currency: line.currency || voucher.currency, exchangeRate: line.exchangeRate || voucher.exchangeRate, debitForeign: isPayment ? line.amount : 0, creditForeign: isPayment ? 0 : line.amount, referenceNumber: line.referenceNumber });
+      });
+      const source = accounts.find(account => account.id === voucher.sourceAccountId);
+      lines.push({ id: `pending-${voucher.id}-source`, accountId: voucher.sourceAccountId, accountCode: source?.code || '', accountNameAr: source?.nameAr || voucher.sourceAccountNameAr, debit: isPayment ? 0 : sourceLocal, credit: isPayment ? sourceLocal : 0, description: voucher.narration, currency: voucher.currency, exchangeRate: voucher.exchangeRate, debitForeign: isPayment ? 0 : sourceAmount, creditForeign: isPayment ? sourceAmount : 0, referenceNumber: voucher.referenceNumber });
+      return { id: `pending-voucher-${voucher.id}`, entryNumber: isPayment ? (voucher as PaymentVoucher).voucherNumber : (voucher as ReceiptVoucher).receiptNumber, date: voucher.date, reference: voucher.referenceNumber || '', narration: voucher.narration, currency: voucher.currency, exchangeRate: voucher.exchangeRate, status: 'PENDING_POSTING', type: isPayment ? 'PV' : 'RV', sourceType: isPayment ? 'PAYMENT_VOUCHER' : 'RECEIPT_VOUCHER', referenceCode: isPayment ? (voucher as PaymentVoucher).voucherNumber : (voucher as ReceiptVoucher).receiptNumber, totalDebit: sourceLocal, totalCredit: sourceLocal, createdBy: voucher.createdBy, createdAt: voucher.createdAt, lines };
+    };
+    return [...vouchers.flatMap(voucher => { const item = make(voucher, 'PAYMENT'); return item ? [item] : []; }), ...receiptVouchers.flatMap(voucher => { const item = make(voucher, 'RECEIPT'); return item ? [item] : []; })];
+  }, [journals, vouchers, receiptVouchers, accounts]);
+
   // Normalizes legacy voucher source lines before projection. Without this a
   // foreign-currency bank/cash payment with no opening balance disappears
   // from its own currency statement because its source side was stored as YER.
   const reportingJournals = useMemo(
-    () => normalizeVoucherSourceJournalCurrencies(journals.map(journal => ({ ...journal, date: dateToIso(journal.date) })), [...vouchers, ...receiptVouchers], baseCode, selectedDecimals),
-    [journals, vouchers, receiptVouchers, baseCode, selectedDecimals]
+    () => normalizeVoucherSourceJournalCurrencies([...journals, ...pendingVoucherJournals].map(journal => ({ ...journal, date: dateToIso(journal.date) })), [...vouchers, ...receiptVouchers], baseCode, selectedDecimals),
+    [journals, pendingVoucherJournals, vouchers, receiptVouchers, baseCode, selectedDecimals]
   );
 
   const baseJournals = useMemo(
@@ -3507,3 +3529,4 @@ export default function FinancialReportsView({
     </div>
   );
 }
+
