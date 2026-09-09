@@ -655,7 +655,8 @@ export default function FinancialReportsView({
       localCumulativeDebit: number;
       localCumulativeCredit: number;
     }[] = [];
-    reportAccounts.filter(acc => isPostingAccount(acc) && (hasAncestorOrSelfCode(acc, reportAccounts, '11') || hasAncestorOrSelfCode(acc, reportAccounts, '12') || hasAncestorOrSelfCode(acc, reportAccounts, '22'))).forEach(acc => {
+    // الميزانية العمومية تعرض تفريعات الأصول (1) والخصوم وحقوق الملكية (2) فقط.
+    reportAccounts.filter(acc => isPostingAccount(acc) && (hasAncestorOrSelfCode(acc, reportAccounts, '1') || hasAncestorOrSelfCode(acc, reportAccounts, '2'))).forEach(acc => {
       const act = activity[acc.id] || { debit: 0, credit: 0 };
       const periodAct = periodMovement[acc.id] || { debit: 0, credit: 0 };
       const currentDebit = round2(periodAct.debit);
