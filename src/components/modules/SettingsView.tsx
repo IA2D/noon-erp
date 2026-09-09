@@ -216,6 +216,8 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   const [pendingRestore, setPendingRestore] = useState<Record<string, unknown> | null>(null);
   const [pendingDatabaseRestore, setPendingDatabaseRestore] = useState(false);
   const [pendingFactoryReset, setPendingFactoryReset] = useState<'FISCAL_YEAR' | 'FULL_SYSTEM' | null>(null);
+  const [factoryResetStep, setFactoryResetStep] = useState<1 | 2 | 3>(1);
+  const [factoryResetPassword, setFactoryResetPassword] = useState('');
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [storageReport, setStorageReport] = useState(getPersistentStorageReport);
   const [lastRestore, setLastRestore] = useState<PersistentRestoreResult | null>(null);
@@ -412,6 +414,13 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
 
   const applyFactoryReset = () => {
     if (!pendingFactoryReset) return;
+    if (!factoryResetPassword.trim()) { toast('error', 'أدخل كلمة المرور لتأكيد العملية.'); return; }
+    if (window.desktopStore) {
+      const session = window.desktopStore.session('');
+      const username = session?.user?.username;
+      const verified = username ? window.desktopStore.login(username, factoryResetPassword) : { ok: false };
+      if (!verified.ok) { toast('error', 'كلمة المرور غير صحيحة.'); return; }
+    }
     try {
       const safety = window.desktopStore?.createBackup();
       if (safety && !safety.ok) throw new Error(safety.error || 'Safety backup failed');
@@ -464,12 +473,16 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
         removeLocalKeys([...Object.keys(fiscalDateKey), ...fiscalStateKeys]);
       }
       setPendingFactoryReset(null);
+      setFactoryResetStep(1);
+      setFactoryResetPassword('');
       toast('success', pendingFactoryReset === 'FULL_SYSTEM' ? 'تمت استعادة ضبط المصنع للنظام بالكامل. سيُعاد تحميل التطبيق الآن.' : `تمت استعادة ضبط المصنع لبيانات السنة المالية ${fiscalYear}. سيُعاد تحميل التطبيق الآن.`);
       window.setTimeout(() => window.location.reload(), 900);
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'خطأ غير معروف';
       toast('error', `تعذر تنفيذ استعادة ضبط المصنع. لم تُغيّر البيانات. (${reason})`);
       setPendingFactoryReset(null);
+      setFactoryResetStep(1);
+      setFactoryResetPassword('');
     }
   };
 
@@ -819,8 +832,8 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                     <p className="text-sm font-bold text-red-300">استعادة ضبط المصنع</p>
                     <p className="mt-1 text-xs leading-relaxed text-slate-400">ينشئ النظام نسخة أمان تلقائية قبل التنفيذ. ضبط السنة يحذف حركات السنة المالية فقط ويُبقي الدليل والكيانات والإعدادات، أما الضبط الكامل فيعيد النظام إلى بياناته الافتراضية.</p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => setPendingFactoryReset('FISCAL_YEAR')} className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20 cursor-pointer"><RotateCw className="w-4 h-4" /> ضبط مصنع للسنة المالية</button>
-                      <button type="button" onClick={() => setPendingFactoryReset('FULL_SYSTEM')} className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/20 cursor-pointer"><Trash2 className="w-4 h-4" /> ضبط مصنع كامل النظام</button>
+                      <button type="button" onClick={() => { setFactoryResetStep(1); setFactoryResetPassword(''); setPendingFactoryReset('FISCAL_YEAR'); }} className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20 cursor-pointer"><RotateCw className="w-4 h-4" /> ضبط مصنع للسنة المالية</button>
+                      <button type="button" onClick={() => { setFactoryResetStep(1); setFactoryResetPassword(''); setPendingFactoryReset('FULL_SYSTEM'); }} className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/20 cursor-pointer"><Trash2 className="w-4 h-4" /> ضبط مصنع كامل النظام</button>
                     </div>
                   </div>
 
@@ -1059,15 +1072,28 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
         </ModalShell>
       )}
 
-      {pendingFactoryReset && (
-        <ModalShell id="settings-factory-reset" open={!!pendingFactoryReset} onClose={() => setPendingFactoryReset(null)} title={pendingFactoryReset === 'FULL_SYSTEM' ? 'تأكيد ضبط مصنع كامل النظام' : 'تأكيد ضبط مصنع للسنة المالية'} icon={Trash2} size="sm" footer={null} closeOnBackdrop={false} bodyClassName="p-0">
+      {pendingFactoryReset && (() => {
+        const fiscalYear = loadBranchesLocal()[0]?.fiscalYear || new Date().getFullYear();
+        const full = pendingFactoryReset === 'FULL_SYSTEM';
+        return <ModalShell id="settings-factory-reset" open title={full ? 'تأكيد ضبط مصنع كامل النظام' : 'تأكيد ضبط مصنع للسنة المالية'} icon={Trash2} size="sm" footer={null} closeOnBackdrop={false} bodyClassName="p-0">
           <div className="space-y-4 p-6">
-            <p className="text-sm leading-relaxed text-slate-300">{pendingFactoryReset === 'FULL_SYSTEM' ? 'سيُحذف كامل بيانات المنشأة المخزنة داخل NOON ERP ويُعاد النظام إلى بياناته الافتراضية، بما فيها الحسابات والكيانات والقيود والسندات والإعدادات.' : `سيُحذف فقط ما يخص السنة المالية ${loadBranchesLocal()[0]?.fiscalYear || new Date().getFullYear()} من القيود والسندات والعهد وحالات الإقفال، مع الإبقاء على دليل الحسابات والكيانات والإعدادات والأرصدة الافتتاحية.`}</p>
-            <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">هذه العملية لا يمكن التراجع عنها من داخل النظام. ستنشأ نسخة أمان تلقائية قبل التنفيذ.</p>
-            <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={() => setPendingFactoryReset(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-400 hover:bg-slate-900 cursor-pointer">إلغاء</button><button type="button" onClick={applyFactoryReset} className="rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-lg hover:bg-red-500 cursor-pointer">نعم، تنفيذ ضبط المصنع</button></div>
+            {factoryResetStep === 1 && <>
+              <p className="text-sm leading-relaxed text-slate-300">هل أنت متأكد من بدء عملية ضبط المصنع؟</p>
+              <div className="flex justify-end gap-3"><button type="button" onClick={() => setPendingFactoryReset(null)} className="rounded-xl px-4 py-2 text-sm text-slate-400">إلغاء</button><button type="button" onClick={() => setFactoryResetStep(2)} className="rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white">نعم، متابعة</button></div>
+            </>}
+            {factoryResetStep === 2 && <>
+              <p className="text-sm leading-relaxed text-slate-300">{full ? 'سيتم حذف الحسابات والكيانات والقيود والسندات والعهد والإعدادات وبيانات المنشأة بالكامل.' : `سيتم حذف قيود وسندات وعهد وحالات إقفال السنة المالية ${fiscalYear} فقط، مع إبقاء الدليل والكيانات والإعدادات والأرصدة الافتتاحية.`}</p>
+              <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">هذه العملية غير قابلة للاستعادة بعد التنفيذ. صدّر نسخة كاملة من قاعدة البيانات قبل المتابعة.</p>
+              <div className="flex flex-wrap justify-between gap-2"><button type="button" onClick={handleBackup} className="rounded-xl border border-emerald-500/40 px-4 py-2 text-sm font-bold text-emerald-400">تصدير كامل لقاعدة البيانات</button><div className="flex gap-3"><button type="button" onClick={() => setFactoryResetStep(1)} className="rounded-xl px-4 py-2 text-sm text-slate-400">رجوع</button><button type="button" onClick={() => setFactoryResetStep(3)} className="rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white">متابعة</button></div></div>
+            </>}
+            {factoryResetStep === 3 && <>
+              <p className="text-sm text-slate-300">أدخل كلمة المرور لتنفيذ العملية.</p>
+              <input autoFocus type="password" value={factoryResetPassword} onChange={event => setFactoryResetPassword(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') applyFactoryReset(); }} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500" placeholder="كلمة المرور" />
+              <div className="flex justify-end gap-3"><button type="button" onClick={() => setPendingFactoryReset(null)} className="rounded-xl px-4 py-2 text-sm text-slate-400">إلغاء</button><button type="button" onClick={applyFactoryReset} className="rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white">تأكيد وتنفيذ</button></div>
+            </>}
           </div>
-        </ModalShell>
-      )}
+        </ModalShell>;
+      })()}
 
       {pendingDatabaseRestore && (
         <ModalShell
