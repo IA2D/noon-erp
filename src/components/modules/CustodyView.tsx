@@ -1197,7 +1197,10 @@ export default function CustodyView({
       createdBy: currentUserName,
       reference: `CUSTODY-${settleTarget.custodyNumber}`,
     };
-    const journal = buildSettlementJournal({ ...ctx, journalId: existingSettlement?.journalEntryId || ctx.journalId }, settleTarget, settleItems, advanceAcc, apAcc ?? null);
+    const settlementBase = existingSettlement
+      ? { ...settleTarget, settledAmount: Math.max(0, settleTarget.settledAmount - existingSettlement.totalExpense), apTransferredAmount: Math.max(0, settleTarget.apTransferredAmount - existingSettlement.apTransferred) }
+      : settleTarget;
+    const journal = buildSettlementJournal({ ...ctx, journalId: existingSettlement?.journalEntryId || ctx.journalId }, settlementBase, settleItems, advanceAcc, apAcc ?? null);
     const journalSaved = existingSettlement?.journalEntryId && onUpdateJournal
       ? onUpdateJournal(existingSettlement.journalEntryId, journal)
       : onAddJournal(journal);
