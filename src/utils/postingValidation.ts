@@ -242,7 +242,16 @@ export function validateVoucherForPosting(
     }
     const local = typeof line.localAmount === 'number' && line.localAmount > 0 ? roundTo(line.localAmount, localDecimals) : expectedLocal;
     totalLocal = roundTo(totalLocal + local, localDecimals);
-    totalDocument = roundTo(totalDocument + (line.totalAmount || line.amount || 0), currencyDecimals(voucher.currency, currencies));
+    // A voucher may legitimately contain a different currency on its
+    // distribution lines (e.g. source YER, beneficiary line SAR). Compare the
+    // header total in the header currency, not by blindly summing foreign units.
+    const headerDecimals = currencyDecimals(voucher.currency, currencies);
+    const lineInHeaderCurrency = code === voucher.currency
+      ? (line.totalAmount || line.amount || 0)
+      : voucher.currency === currencies.find(item => item.isBase)?.code
+        ? local
+        : local / (Number(voucher.exchangeRate) || 1);
+    totalDocument = roundTo(totalDocument + lineInHeaderCurrency, headerDecimals);
     if (account && account.subLedgerType !== 'NONE' && (!line.subLedgerId || line.subLedgerType !== account.subLedgerType)) {
       errors.push(`السطر ${index + 1}: الحساب التحليلي ${account.subLedgerType} مطلوب.`);
     }
