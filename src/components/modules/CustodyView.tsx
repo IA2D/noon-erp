@@ -1931,7 +1931,12 @@ export default function CustodyView({
       })()}
 
       {settleTarget && (() => {
-        const remaining = outstandingBalance(settleTarget);
+        const selectedSettlement = settlementEditId ? settleTarget.settlements.find(item => item.id === settlementEditId) : undefined;
+        // While editing, return the selected settlement to the available balance
+        // before evaluating the edited values; otherwise it is counted twice.
+        const remaining = outstandingBalance(settleTarget)
+          + (selectedSettlement?.totalExpense || 0)
+          + (selectedSettlement?.apTransferred || 0);
         const expenseTotal = itemsTotal(settleItems);
         const excess = Math.max(0, expenseTotal - remaining);
         const remainingAfterSettlement = Math.max(0, remaining - expenseTotal);
