@@ -1382,7 +1382,9 @@ function AppInner() {
       addAuditLog('GENERAL_LEDGER', 'UPDATE', `رُفض حفظ القيد ${updated.entryNumber} — بتاريخ داخل فترة مغلقة`);
       return { ok: false, error };
     }
-    const validation = validateJournalForPosting(updated, accounts, journals, currencies);
+    // Exclude the record being replaced from uniqueness checks; otherwise an
+    // edit of an existing custody settlement is rejected as a duplicate.
+    const validation = validateJournalForPosting(updated, accounts, journals.filter(journal => journal.id !== id), currencies);
     if (!validation.valid) {
       const error = validation.errors.join(' | ');
       addAuditLog('GENERAL_LEDGER', 'UPDATE', `رُفض حفظ القيد ${updated.entryNumber}: ${error}`);
