@@ -128,6 +128,7 @@ interface Props {
   onUpdateCustody: (id: string, updates: Partial<Custody>) => void;
   onAddJournal: (j: JournalEntry) => boolean;
   onUpdateJournal?: (id: string, j: JournalEntry) => boolean;
+  onVoidJournal?: (id: string) => boolean;
   currentUserName: string;
   closedYears?: string[];
 }
@@ -567,6 +568,7 @@ export default function CustodyView({
   onUpdateCustody,
   onAddJournal,
   onUpdateJournal,
+  onVoidJournal,
   currentUserName,
   closedYears,
 }: Props) {
@@ -1200,9 +1202,13 @@ export default function CustodyView({
     const settlementBase = existingSettlement
       ? { ...settleTarget, settledAmount: Math.max(0, settleTarget.settledAmount - existingSettlement.totalExpense), apTransferredAmount: Math.max(0, settleTarget.apTransferredAmount - existingSettlement.apTransferred) }
       : settleTarget;
-    const journal = buildSettlementJournal({ ...ctx, journalId: existingSettlement?.journalEntryId || ctx.journalId }, settlementBase, settleItems, advanceAcc, apAcc ?? null);
-    const journalSaved = existingSettlement?.journalEntryId && onUpdateJournal
-      ? onUpdateJournal(existingSettlement.journalEntryId, journal)
+    const priorJournal = existingSettlement?.journalEntryId ? journals.find(item => item.id === existingSettlement.journalEntryId) : undefined;
+    const mustReversePriorJournal = priorJournal?.status === 'POSTED';
+    const journal = buildSettlementJournal({ ...ctx, journalId: mustReversePriorJournal ? ctx.journalId : (existingSettlement?.journalEntryId || ctx.journalId) }, settlementBase, settleItems, advanceAcc, apAcc ?? null);
+    const journalSaved = existingSettlement?.journalEntryId
+      ? (mustReversePriorJournal
+        ? (onVoidJournal?.(existingSettlement.journalEntryId) === true && onAddJournal(journal))
+        : Boolean(onUpdateJournal?.(existingSettlement.journalEntryId, journal)))
       : onAddJournal(journal);
     if (!journalSaved) {
       toast('error', 'تعذر حفظ قيد تصفية العهدة؛ لم تُعدّل التصفية.');
@@ -1261,6 +1267,33 @@ export default function CustodyView({
       setRefundAmount(Math.max(0, outstandingBalance(c)));
       setRefundSource('');
     });
+  };
+
+  const deleteSettlement = (custody: Custody, settlement: CustodySettlement) => {
+    if (settlement.journalEntryId && onVoidJournal?.(settlement.journalEntryId) !== true) {
+      toast('error', 'تعذر عكس قيد التصفية؛ لم تُحذف التصفية.');
+      return;
+    }
+    const settlements = custody.settlements.filter(item => item.id !== settlement.id);
+    const settledAmount = round2(settlements.reduce((sum, item) => sum + item.totalExpense, 0));
+    const apTransferredAmount = round2(settlements.reduce((sum, item) => sum + item.apTransferred, 0));
+    const status = statusAfterSettlement({ ...custody, settledAmount, apTransferredAmount }, 0);
+    onUpdateCustody(custody.id, {
+      settlements,
+      settledAmount,
+      refundedAmount: round2(settlements.reduce((sum, item) => sum + item.cashRefunded, 0)),
+      apTransferredAmount,
+      status,
+      actualClearanceDate: status === 'FULL_SETTLED' ? custody.actualClearanceDate : undefined,
+      transactions: custody.transactions.filter(item => item.settlementId !== settlement.id),
+      updatedAt: nowStamp(),
+    });
+    if (settlementEditId === settlement.id) {
+      setSettlementEditId(null);
+      setSettleItems([]);
+      setSettlementAttachments([]);
+    }
+    toast('success', `حُذفت التصفية ${settlement.settlementNumber} وعُكس قيدها المحاسبي.`);
   };
 
   const handleRefund = (e: React.FormEvent) => {
@@ -1964,9 +1997,12 @@ export default function CustodyView({
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {settleTarget.settlements.map(item => (
-                        <button key={item.id} type="button" onClick={() => { setSettlementEditId(item.id); setSettleItems(item.items.map(line => ({ ...line }))); setSettlementAttachments(item.attachments || []); setApAccountId(''); }} className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${settlementEditId === item.id ? 'border-sky-500 bg-sky-100 text-sky-800' : 'border-slate-300 text-slate-600 dark:text-slate-300'}`}>
-                          {item.settlementNumber} — {fmtC(item.totalExpense, settleTarget.currency || baseCurrency)}
-                        </button>
+                        <div key={item.id} className="inline-flex overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600">
+                          <button type="button" onClick={() => { setSettlementEditId(item.id); setSettleItems(item.items.map(line => ({ ...line }))); setSettlementAttachments(item.attachments || []); setApAccountId(''); }} className={`px-3 py-1.5 text-xs font-bold ${settlementEditId === item.id ? 'bg-sky-100 text-sky-800 dark:bg-sky-500/25 dark:text-sky-200' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {item.settlementNumber} — {fmtC(item.totalExpense, settleTarget.currency || baseCurrency)}
+                          </button>
+                          <button type="button" title="حذف التصفية وعكس قيدها" onClick={() => deleteSettlement(settleTarget, item)} className="border-r border-slate-300 dark:border-slate-600 px-2 text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/20"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
                       ))}
                     </div>
                   </div>

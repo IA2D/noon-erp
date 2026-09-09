@@ -1974,6 +1974,7 @@ function AppInner() {
             onUpdateCustody={handleUpdateCustody}
             onAddJournal={handleAddJournalBoolean}
             onUpdateJournal={handleUpdateJournalBoolean}
+            onVoidJournal={handleVoidJournal}
             currentUserName={currentUserName}
             closedYears={closedYears}
           />
