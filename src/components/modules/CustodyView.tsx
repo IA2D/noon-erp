@@ -1204,15 +1204,23 @@ export default function CustodyView({
       ? { ...settleTarget, settledAmount: Math.max(0, settleTarget.settledAmount - existingSettlement.totalExpense), apTransferredAmount: Math.max(0, settleTarget.apTransferredAmount - existingSettlement.apTransferred) }
       : settleTarget;
     const priorJournal = existingSettlement?.journalEntryId ? journals.find(item => item.id === existingSettlement.journalEntryId) : undefined;
-    const mustReversePriorJournal = priorJournal?.status === 'POSTED';
-    const journal = buildSettlementJournal({ ...ctx, journalId: mustReversePriorJournal ? ctx.journalId : (existingSettlement?.journalEntryId || ctx.journalId) }, settlementBase, settleItems, advanceAcc, apAcc ?? null);
-    const updateResult = existingSettlement?.journalEntryId && !mustReversePriorJournal && onUpdateJournal
+    // A previous failed edit may already have reversed this settlement journal.
+    // Treat it as retired and continue with the replacement instead of attempting
+    // a second reversal, which is correctly rejected by the accounting lifecycle.
+    const priorJournalAlreadyReversed = Boolean(
+      priorJournal?.reversedByEntryId ||
+      (priorJournal && journals.some(item => item.reversalOfEntryId === priorJournal.id && item.status === 'POSTED')),
+    );
+    const mustReversePriorJournal = priorJournal?.status === 'POSTED' && !priorJournalAlreadyReversed;
+    const mustCreateReplacementJournal = Boolean(priorJournal?.status === 'POSTED');
+    const journal = buildSettlementJournal({ ...ctx, journalId: mustCreateReplacementJournal ? ctx.journalId : (existingSettlement?.journalEntryId || ctx.journalId) }, settlementBase, settleItems, advanceAcc, apAcc ?? null);
+    const updateResult = existingSettlement?.journalEntryId && !mustCreateReplacementJournal && onUpdateJournal
       ? onUpdateJournal(existingSettlement.journalEntryId, journal)
       : undefined;
     let addResult: boolean | { ok: boolean; error?: string } | undefined;
     const journalSaved = existingSettlement?.journalEntryId
-      ? (mustReversePriorJournal
-        ? (onVoidJournal?.(existingSettlement.journalEntryId) === true && Boolean((addResult = onAddJournal(journal)) && (typeof addResult === 'object' ? addResult.ok : addResult)))
+      ? (mustCreateReplacementJournal
+        ? ((!mustReversePriorJournal || onVoidJournal?.(existingSettlement.journalEntryId) === true) && Boolean((addResult = onAddJournal(journal)) && (typeof addResult === 'object' ? addResult.ok : addResult)))
         : Boolean(typeof updateResult === 'object' ? updateResult.ok : updateResult))
       : Boolean((addResult = onAddJournal(journal)) && (typeof addResult === 'object' ? addResult.ok : addResult));
     if (!journalSaved) {
@@ -1277,7 +1285,9 @@ export default function CustodyView({
   };
 
   const deleteSettlement = (custody: Custody, settlement: CustodySettlement) => {
-    if (settlement.journalEntryId && onVoidJournal?.(settlement.journalEntryId) !== true) {
+    const settlementJournal = settlement.journalEntryId ? journals.find(item => item.id === settlement.journalEntryId) : undefined;
+    const alreadyReversed = Boolean(settlementJournal?.reversedByEntryId || (settlementJournal && journals.some(item => item.reversalOfEntryId === settlementJournal.id && item.status === 'POSTED')));
+    if (settlement.journalEntryId && !alreadyReversed && onVoidJournal?.(settlement.journalEntryId) !== true) {
       toast('error', 'تعذر عكس قيد التصفية؛ لم تُحذف التصفية.');
       return;
     }
