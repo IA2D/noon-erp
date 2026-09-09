@@ -1271,6 +1271,8 @@ export default function FinancialReportsView({
             credit,
             localDebit: round2(debit * currentRate),
             localCredit: round2(credit * currentRate),
+            opening,
+            localOpening: round2(opening * currentRate),
             currency: code,
           });
         });
@@ -3054,14 +3056,15 @@ export default function FinancialReportsView({
               if (isSummary) spec.rows.forEach(row => { const code = row.currency || baseCode; const bucket = summaryGroups.get(code) || []; bucket.push(row); summaryGroups.set(code, bucket); });
               const totalDebit = isSummary ? spec.rows.reduce((sum, row) => sum + (row.localDebit ?? row.debit), 0) : spec.rows.reduce((sum, row) => sum + row.debit, 0);
               const totalCredit = isSummary ? spec.rows.reduce((sum, row) => sum + (row.localCredit ?? row.credit), 0) : spec.rows.reduce((sum, row) => sum + row.credit, 0);
-              const closing = spec.opening + totalDebit - totalCredit;
+              const summaryOpening = isSummary ? spec.rows.reduce((sum, row) => sum + (row.localOpening ?? 0), 0) : spec.opening;
+              const closing = summaryOpening + totalDebit - totalCredit;
               const closingAbs = Math.abs(closing);
               const closingTag = closing >= 0 ? 'عليكم (مدين)' : 'لكم (دائن)';
               // Every printable statement can be split by its original currency.
               // The wording must follow that section, not the page's base currency.
               const tafqeetText = tafqeetAmount(closingAbs, specCurrencyName, specCode);
-              const openingDebit = spec.opening > 0 ? spec.opening : 0;
-              const openingCredit = spec.opening < 0 ? Math.abs(spec.opening) : 0;
+              const openingDebit = summaryOpening > 0 ? summaryOpening : 0;
+              const openingCredit = summaryOpening < 0 ? Math.abs(summaryOpening) : 0;
               return (
                 <FinancialReportPrintLayout
                   key={spec.key}
@@ -3092,7 +3095,7 @@ export default function FinancialReportsView({
                     ))}
                   </div>
 
-                  {isSummary ? <table className="report-table"><thead><tr><th>#</th><th>الحساب / الكيان</th><th>العملة</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>{[...summaryGroups.entries()].sort(([a], [b]) => a.localeCompare(b)).flatMap(([code, rows]) => { const debit = rows.reduce((sum, row) => sum + row.debit, 0); const credit = rows.reduce((sum, row) => sum + row.credit, 0); return [<tr key={`${code}-heading`} style={{ fontWeight: 900, background: '#e8e7fc' }}><td colSpan={6}>العملة: {code}</td></tr>, ...rows.map((row, index) => <tr key={row.id || `${code}-${index}`}><td>{index + 1}</td><td>{row.description}</td><td>{code}</td><td className="report-num">{row.debit ? fmt(row.debit) : ''}</td><td className="report-num">{row.credit ? fmt(row.credit) : ''}</td><td className="report-num">{fmt(row.debit - row.credit)}</td></tr>), <tr key={`${code}-total`} style={{ fontWeight: 900, background: '#f1f5f9' }}><td colSpan={3}>إجمالي {code}</td><td className="report-num">{fmt(debit)}</td><td className="report-num">{fmt(credit)}</td><td className="report-num">{fmt(debit - credit)}</td></tr>]; })}</tbody><tfoot><tr style={{ background: '#c5c7f1', fontWeight: 900 }}><td colSpan={3}>الإجمالي بالعملة المحلية ({baseCode}) بسعر الصرف الحالي</td><td className="report-num">{fmt(totalDebit)}</td><td className="report-num">{fmt(totalCredit)}</td><td className="report-num">{fmt(closing)}</td></tr></tfoot></table> :                   <table className="report-table">
+                  {isSummary ? <table className="report-table"><thead><tr><th>#</th><th>الحساب / الكيان</th><th>العملة</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>{[...summaryGroups.entries()].sort(([a], [b]) => a.localeCompare(b)).flatMap(([code, rows]) => { const debit = rows.reduce((sum, row) => sum + row.debit, 0); const credit = rows.reduce((sum, row) => sum + row.credit, 0); const opening = rows.reduce((sum, row) => sum + (row.opening ?? 0), 0); const groupClosing = opening + debit - credit; return [<tr key={`${code}-heading`} style={{ fontWeight: 900, background: '#e8e7fc' }}><td colSpan={6}>العملة: {code}</td></tr>, ...rows.map((row, index) => <tr key={row.id || `${code}-${index}`}><td>{index + 1}</td><td>{row.description}</td><td>{code}</td><td className="report-num">{row.debit ? fmt(row.debit) : ''}</td><td className="report-num">{row.credit ? fmt(row.credit) : ''}</td><td className="report-num">{fmt((row.opening ?? 0) + row.debit - row.credit)}</td></tr>), <tr key={`${code}-total`} style={{ fontWeight: 900, background: '#f1f5f9' }}><td colSpan={3}>إجمالي {code}</td><td className="report-num">{fmt(debit)}</td><td className="report-num">{fmt(credit)}</td><td className="report-num">{fmt(groupClosing)}</td></tr>]; })}</tbody><tfoot><tr style={{ background: '#c5c7f1', fontWeight: 900 }}><td colSpan={3}>الإجمالي بالعملة المحلية ({baseCode}) بسعر الصرف الحالي</td><td className="report-num">{fmt(totalDebit)}</td><td className="report-num">{fmt(totalCredit)}</td><td className="report-num">{fmt(closing)}</td></tr></tfoot></table> :                   <table className="report-table">
                     <thead>
                       <tr>
                         <th>#</th>
@@ -3529,4 +3532,10 @@ export default function FinancialReportsView({
     </div>
   );
 }
+
+
+
+
+
+
 
