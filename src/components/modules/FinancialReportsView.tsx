@@ -531,7 +531,9 @@ export default function FinancialReportsView({
       .flatMap(journal => [journal.referenceCode, journal.reference].filter(Boolean)));
     const make = (voucher: PaymentVoucher | ReceiptVoucher, kind: 'PAYMENT' | 'RECEIPT'): JournalEntry | null => {
       const documentNumber = kind === 'PAYMENT' ? (voucher as PaymentVoucher).voucherNumber : (voucher as ReceiptVoucher).receiptNumber;
-      if (voucher.status !== 'PENDING_POSTING' || voucher.journalEntryId || knownJournalIds.has(voucher.id) || knownDocumentNumbers.has(documentNumber)) return null;
+      // لا نعتمد journalEntryId وحده: قد يبقى الرابط مخزناً بعد فشل/حذف القيد.
+      // متى لم يوجد قيد حي مطابق، يسقط السند في كل التقارير حتى لا تختفي الحركة.
+      if (voucher.status === 'VOIDED' || knownJournalIds.has(voucher.id) || knownDocumentNumbers.has(documentNumber)) return null;
       const isPayment = kind === 'PAYMENT';
       const sourceAmount = Number(voucher.totalAmount) || 0;
       const sourceLocal = voucher.lines.reduce((sum, line) => sum + (Number(line.localAmount) || Number(line.amount) * (Number(line.exchangeRate || voucher.exchangeRate) || 1)), 0);
@@ -1010,11 +1012,16 @@ export default function FinancialReportsView({
   const docTypeByJournal = useMemo(() => {
     const map: Record<string, string> = {};
     vouchers.forEach(v => {
+      // السند المنتظر له إسقاط تقريري مؤقت بالمعرف نفسه، فيظهر كـ «سند صرف»
+      // في كشف الصندوق/البنك والكيانات، وليس كقيد يومية مجهول.
+      if (v.status !== 'VOIDED') map[`pending-voucher-${v.id}`] = 'سند صرف نقدي';
       if (v.journalEntryId) {
         map[v.journalEntryId] = v.status === 'VOIDED' ? 'سند صرف (ملغي)' : 'سند صرف نقدي';
       }
     });
     receiptVouchers.forEach(r => {
+      // يقابل المصدر/الطرف في سند القبض نفس السلوك قبل الترحيل.
+      if (r.status !== 'VOIDED') map[`pending-voucher-${r.id}`] = 'سند قبض نقدي';
       if (r.journalEntryId) {
         map[r.journalEntryId] = r.status === 'VOIDED' ? 'سند قبض (ملغي)' : 'سند قبض نقدي';
       }
