@@ -23,6 +23,29 @@ let authStore;
 let activeSessionToken = null;
 let backupScheduleTimer = null;
 const printPreviewWindows = new Set();
+let mainWindow = null;
+let quitConfirmed = false;
+
+function openVisibleWindowCount() {
+  return BrowserWindow.getAllWindows().filter(window => !window.isDestroyed() && window.isVisible()).length;
+}
+
+function confirmQuitWithOpenWindows(owner) {
+  if (quitConfirmed || openVisibleWindowCount() <= 1) return true;
+  const choice = dialog.showMessageBoxSync(owner && !owner.isDestroyed() ? owner : undefined, {
+    type: 'question',
+    title: 'NOON ERP',
+    message: 'هناك أكثر من نافذة مفتوحة',
+    detail: 'سيؤدي إغلاق البرنامج إلى إغلاق جميع النوافذ المفتوحة. هل تريد المتابعة؟',
+    buttons: ['إغلاق البرنامج', 'إلغاء'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+  });
+  if (choice !== 0) return false;
+  quitConfirmed = true;
+  return true;
+}
 const smokeResultPath = process.env.FULLERP_SMOKE_RESULT || '';
 const smokeMode = process.env.FULLERP_SMOKE_TEST === '1' && Boolean(smokeResultPath);
 const SETTINGS_STORAGE_KEY = 'elite-erp-settings-v6';
@@ -392,6 +415,18 @@ function createWindow() {
     },
   });
 
+  mainWindow = window;
+  window.on('close', event => {
+    // إغلاق النافذة الرئيسية وحده هو نية إغلاق البرنامج؛ لا نؤكد عند إغلاق
+    // نافذة معاينة منفردة. الموافقة تُغلق البرنامج والنوافذ التابعة معاً.
+    if (quitConfirmed || openVisibleWindowCount() <= 1) return;
+    event.preventDefault();
+    if (confirmQuitWithOpenWindows(window)) app.quit();
+  });
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null;
+  });
+
   bindConfiguredUiScale(window, readUiScalePercent);
 
   if (!smokeMode) window.once('ready-to-show', () => window.show());
@@ -476,7 +511,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', event => {
+  // يغطي الإغلاق من شريط المهام أو اختصار النظام، وليس زر إغلاق النافذة فقط.
+  if (!confirmQuitWithOpenWindows(mainWindow)) {
+    event.preventDefault();
+    return;
+  }
   if (backupScheduleTimer) clearInterval(backupScheduleTimer);
   if (db) {
     try { createInternalBackup('shutdown'); } catch (error) { console.error('[database-backup:quit]', error); }
