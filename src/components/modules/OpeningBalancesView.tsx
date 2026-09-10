@@ -191,7 +191,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
     }
   };
 
-  const setValue = (key: string, field: RowEditField, raw: string) => {
+  const setValue = (key: string, field: RowEditField, raw: string, reconcileRate = false) => {
     const n = parseNum(raw);
     setLines(prev => prev.map(l => {
       if (l.key !== key) return l;
@@ -203,22 +203,18 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
         case 'credit': {
           if (current.currency !== baseCode) {
             const foreignSide = field === 'debit' ? (current.debitForeign || 0) : (current.creditForeign || 0);
-            let rate = current.rate;
-            if (foreignSide > 0) {
-              const nextState = handleCurrencyFieldChange('local', n, {
-                foreignAmount: foreignSide,
-                exchangeRate: current.rate,
-                localAmount: field === 'debit' ? current.debit : current.credit,
-              });
-              rate = nextState.exchangeRate;
-            }
+            const nextState = handleCurrencyFieldChange('local', n, {
+              foreignAmount: foreignSide,
+              exchangeRate: current.rate,
+              localAmount: field === 'debit' ? current.debit : current.credit,
+            }, undefined, undefined, reconcileRate);
             next = {
               ...base,
               debit: field === 'debit' ? n : (n > 0 ? 0 : current.debit),
               credit: field === 'credit' ? n : (n > 0 ? 0 : current.credit),
-              debitForeign: current.debitForeign || 0,
-              creditForeign: current.creditForeign || 0,
-              rate,
+              debitForeign: field === 'debit' ? nextState.foreignAmount : (n > 0 ? 0 : current.debitForeign || 0),
+              creditForeign: field === 'credit' ? nextState.foreignAmount : (n > 0 ? 0 : current.creditForeign || 0),
+              rate: nextState.exchangeRate,
             };
           } else {
             next = { ...base, debit: field === 'debit' ? n : (n > 0 ? 0 : current.debit), credit: field === 'credit' ? n : (n > 0 ? 0 : current.credit), debitForeign: 0, creditForeign: 0 };
@@ -961,6 +957,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
         onAccountTyped={handleAccountTyped}
         onAccountEnter={handleAccountEnter}
         onSetValue={setValue}
+        onCommitValue={(key, field, raw) => setValue(key, field, raw, true)}
         onSetCurrency={setCurrency}
         onSetDocumentRef={(key, v) => setRowText(key, 'documentRef', v)}
         onSetDueDate={(key, v) => setRowText(key, 'dueDate', v)}

@@ -653,14 +653,26 @@ export default function PaymentVouchersView({
       return;
     }
     const foreign = Number(foreignTotalAmount) || 0;
-    if (foreign > 0) {
+    if (foreign > 0 || val > 0) {
       const next = handleCurrencyFieldChange('local', val, {
         foreignAmount: foreign,
         exchangeRate: Number(exchangeRate) || 1,
         localAmount: creditLocalTotal,
       });
+      // أثناء الكتابة نحدّث المقابل الأجنبي بسعر ثابت، بدلاً من قفز السعر
+      // بسبب قيمة أجنبية مقربة من ضغطة سابقة.
+      setForeignTotalAmount(next.foreignAmount);
       setExchangeRate(next.exchangeRate);
     }
+  };
+
+  const handleCreditLocalAmountCommit = (v: string) => {
+    if (isBaseCurrency) return;
+    const local = parseFloat(v) || 0;
+    const foreign = Number(foreignTotalAmount) || 0;
+    if (!(local > 0 && foreign > 0)) return;
+    const next = handleCurrencyFieldChange('local', local, { foreignAmount: foreign, exchangeRate: Number(exchangeRate) || 1, localAmount: creditLocalTotal }, undefined, undefined, true);
+    if (!rateGuard.violationOf(next.exchangeRate, currency)) setExchangeRate(next.exchangeRate);
   };
 
   /**
@@ -668,6 +680,19 @@ export default function PaymentVouchersView({
    * تعيد false وتمنع الحفظ عند خروج سعر ترويسة السند أو أي سطر عن النطاق [min_rate..max_rate].
    * تحقق إلزامي صارم — لا تجاوز بالصلاحية، والإشعار عبر Toast.
    */
+  const commitLineLocalAmount = (lineId: string, raw: string) => {
+    const local = parseFloat(raw) || 0;
+    setLines(prev => prev.map(line => {
+      if (line.id !== lineId || line.currency === baseCurrencyCode || !(local > 0) || !(Number(line.amount) > 0)) return line;
+      const next = handleCurrencyFieldChange('local', local, {
+        foreignAmount: Number(line.amount) || 0,
+        exchangeRate: Number(line.exchangeRate) || 1,
+        localAmount: Number(line.localAmount) || 0,
+      }, undefined, undefined, true);
+      return rateGuard.violationOf(next.exchangeRate, line.currency) ? line : { ...line, exchangeRate: next.exchangeRate, localAmount: next.localAmount };
+    }));
+  };
+
   const enforceRateBoundaries = (): boolean => {
     const violations: string[] = [];
     if (!isBaseCurrency) {
@@ -1284,6 +1309,7 @@ export default function PaymentVouchersView({
                         <AmountInput
                           value={creditLocalAmount || ''}
                           onChange={handleCreditLocalAmountChange}
+                          onCommit={handleCreditLocalAmountCommit}
                           disabled={!headerCurrencyReady}
 
                           className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white text-center focus:outline-none focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1292,9 +1318,10 @@ export default function PaymentVouchersView({
                         <AmountInput
                           value={creditLocalTotal}
                           onChange={handleCreditLocalAmountChange}
+                          onCommit={handleCreditLocalAmountCommit}
                           disabled={!headerCurrencyReady}
 
-                          title="تحرير المبلغ المحلي يعيد حساب سعر الصرف تلقائياً = المحلي ÷ الأجنبي"
+                          title="يبقى سعر الصرف ثابتاً أثناء الكتابة ويُعاير عند تثبيت القيمة"
                           className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white text-center focus:outline-none focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       )}
@@ -1622,9 +1649,10 @@ export default function PaymentVouchersView({
                                         localAmount: next.localAmount,
                                       } : l));
                                     }}
+                                    onCommit={v => commitLineLocalAmount(line.id, v)}
                                     disabled={!currencyActive}
 
-                                    title="تحرير المبلغ المحلي يعيد حساب سعر الصرف تلقائياً = المحلي ÷ الأجنبي"
+                                    title="أثناء الكتابة يبقى سعر الصرف ثابتاً؛ يُعاير عند تثبيت القيمة فقط."
                                     className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                 )}

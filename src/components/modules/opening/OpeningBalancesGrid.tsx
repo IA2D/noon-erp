@@ -50,6 +50,7 @@ interface Props {
   onAccountTyped: (key: string, text: string) => void;
   onAccountEnter: (key: string, text: string) => void;
   onSetValue: (key: string, field: RowEditField, raw: string) => void;
+  onCommitValue: (key: string, field: RowEditField, raw: string) => void;
   onSetCurrency: (key: string, code: string) => void;
   onSetDocumentRef: (key: string, value: string) => void;
   onSetDueDate: (key: string, value: string) => void;
@@ -115,6 +116,7 @@ export default function OpeningBalancesGrid({
   onAccountTyped,
   onAccountEnter,
   onSetValue,
+  onCommitValue,
   onSetCurrency,
   onSetDocumentRef,
   onSetDueDate,
@@ -414,6 +416,7 @@ export default function OpeningBalancesGrid({
                         <AmountInput
                           value={foreign ? l.row!.debitForeign : local.debit}
                           onChange={raw => onSetValue(l.key, foreign ? 'debitForeign' : 'debit', raw)}
+                          onCommit={raw => !foreign && onCommitValue(l.key, 'debit', raw)}
                           className={debitInputCls}
 
                           disabled={readOnly}
@@ -429,6 +432,7 @@ export default function OpeningBalancesGrid({
                         <AmountInput
                           value={foreign ? l.row!.creditForeign : local.credit}
                           onChange={raw => onSetValue(l.key, foreign ? 'creditForeign' : 'credit', raw)}
+                          onCommit={raw => !foreign && onCommitValue(l.key, 'credit', raw)}
                           className={creditInputCls}
 
                           disabled={readOnly}

@@ -293,7 +293,15 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, accounts, employee
       exchangeRate: Number(form.exchangeRate) || 1,
       localAmount,
     });
-    update({ exchangeRate: next.exchangeRate });
+    update({ amount: next.foreignAmount, exchangeRate: next.exchangeRate });
+  };
+  const commitLocalAmount = (raw: string) => {
+    if (isBaseCur) return;
+    const local = Number(raw) || 0;
+    const amount = Number(form.amount) || 0;
+    if (!(local > 0 && amount > 0)) return;
+    const next = handleCurrencyFieldChange('local', local, { foreignAmount: amount, exchangeRate: Number(form.exchangeRate) || 1, localAmount }, undefined, undefined, true);
+    if (!rateGuard.violationOf(next.exchangeRate, curCode)) update({ exchangeRate: next.exchangeRate, amount: next.foreignAmount });
   };
   const methodSources =
     form.disbursementMethod === 'CASH'
@@ -465,7 +473,8 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, accounts, employee
                 disabled={locked}
                 value={localAmount}
                 onChange={updateLocalAmount}
-                title="تحرير المبلغ المحلي يعيد حساب سعر الصرف تلقائياً = المحلي ÷ الأجنبي"
+                onCommit={commitLocalAmount}
+                title="يبقى سعر الصرف ثابتاً أثناء الكتابة ويُعاير عند تثبيت القيمة"
                 className="h-10 w-full px-3 py-2 text-sm border rounded-md bg-background border-input focus:outline-none focus:ring-2 focus:ring-primary"
               />
 
@@ -1627,7 +1636,20 @@ export default function CustodyView({
                         // تبقى الحدود المعتمدة للعملة نافذة؛ لا نُنشئ سعراً تلقائياً خارجها.
                         updateItem(idx, { localAmount: local, amount: Math.round((local / itemRateOf(it)) * 100) / 100 });
                       }
-                    }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
+                    }} onCommit={value => {
+                      const local = Number(value) || 0;
+                      const itemCurrency = itemCurrencyOf(it);
+                      const foreign = Number(it.amount) || 0;
+                      if (itemCurrency === baseCurrency || local <= 0 || foreign <= 0) return;
+                      const next = handleCurrencyFieldChange('local', local, {
+                        foreignAmount: foreign,
+                        exchangeRate: itemRateOf(it),
+                        localAmount: itemLocalAmount(it),
+                      }, undefined, undefined, true);
+                      if (!rateGuard.violationOf(next.exchangeRate, itemCurrency)) {
+                        updateItem(idx, { localAmount: next.localAmount, amount: next.foreignAmount, exchangeRate: next.exchangeRate });
+                      }
+                    }} title="يبقى سعر الصرف ثابتاً أثناء الكتابة ويُعاير عند تثبيت القيمة" className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" /></td>
                     <td className="p-2">{itemCurrencyOf(it) === baseCurrency ? <div className={readonlyAmountClass}>—</div> : <AmountInput data-enter-field={`settlement-foreign-${it.id}`} value={it.amount} onChange={value => { const foreign = Number(value) || 0; updateItem(idx, { amount: foreign, localAmount: Math.round(foreign * itemRateOf(it) * 100) / 100 }); }} className="w-full h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-sky-500" />}</td>
                     <td className="p-2" data-settlement-cost-center={it.id}>
                       <F9SearchInput

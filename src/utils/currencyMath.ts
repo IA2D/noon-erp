@@ -11,7 +11,9 @@ export const handleCurrencyFieldChange = (
   value: number,
   current: CurrencyRowState,
   ratePrecision: number = EXCHANGE_RATE_PRECISION,
-  amountPrecision: number = 2
+  amountPrecision: number = 2,
+  /** لا تعاير السعر أثناء الكتابة؛ تستخدم عند تثبيت القيمة (blur/save) فقط. */
+  reconcileExistingForeign: boolean = false,
 ): CurrencyRowState => {
   const val = Number(value) || 0;
 
@@ -34,10 +36,12 @@ export const handleCurrencyFieldChange = (
     // عند إدخال المحلي أولاً لا نعيده إلى صفر في الحقل الخاضع للتحكم:
     // نشتق المقابل الأجنبي من السعر الحالي. أما عند وجود مبلغ أجنبي سابق
     // فنحافظ عليه ونعاير السعر كي يظل الطرفان متوافقين.
-    if (existingForeign > 0) {
+    if (existingForeign > 0 && reconcileExistingForeign) {
       const exchangeRate = roundTo(localAmount / existingForeign, ratePrecision);
       return { ...current, localAmount, exchangeRate };
     }
+    // أثناء الكتابة يظل سعر الصرف ثابتاً ويُحدّث المقابل الأجنبي؛ لا يجوز أن
+    // يقفز السعر بعد كل رقم بسبب مبلغ أجنبي مقرب من ضغطة سابقة.
     const foreignAmount = currentRate > 0
       ? roundTo(localAmount / currentRate, amountPrecision)
       : 0;

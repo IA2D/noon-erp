@@ -4,6 +4,8 @@ import { fmtAmount } from '../utils/format';
 interface AmountInputProps {
   value: string | number;
   onChange: (value: string) => void;
+  /** يستدعى مرة عند تثبيت الإدخال بعد فقدان التركيز. */
+  onCommit?: (value: string) => void;
   className?: string;
   title?: string;
   required?: boolean;
@@ -45,11 +47,13 @@ const clean = (raw: string): string => {
   return s;
 };
 
-export default function AmountInput({ value, onChange, className, title, required, disabled, readOnly, id, name, ref, onKeyDown, onClick, 'data-enter-field': enterField }: AmountInputProps) {
+export default function AmountInput({ value, onChange, onCommit, className, title, required, disabled, readOnly, id, name, ref, onKeyDown, onClick, 'data-enter-field': enterField }: AmountInputProps) {
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState('');
   const onChangeRef = useRef(onChange);
+  const onCommitRef = useRef(onCommit);
   onChangeRef.current = onChange;
+  onCommitRef.current = onCommit;
 
   useEffect(() => {
     if (!focused) {
@@ -73,16 +77,19 @@ export default function AmountInput({ value, onChange, className, title, require
     if (trimmed === '') {
       setText('');
       onChangeRef.current('');
+      onCommitRef.current?.('');
       return;
     }
     const n = Number(trimmed);
     if (!Number.isFinite(n)) {
       setText('');
       onChangeRef.current('');
+      onCommitRef.current?.('');
       return;
     }
     setText(fmtAmount(n));
     onChangeRef.current(String(n));
+    onCommitRef.current?.(String(n));
   };
 
   return (

@@ -201,7 +201,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
     }));
   };
 
-  const updateLineAmount = (lineId: string, side: 'debit' | 'credit', raw: string, source: 'local' | 'foreign') => {
+  const updateLineAmount = (lineId: string, side: 'debit' | 'credit', raw: string, source: 'local' | 'foreign', reconcileRate = false) => {
     const val = Number(raw) || 0;
     setLines(prev => prev.map(l => {
       if (l.id !== lineId) return l;
@@ -224,7 +224,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
             foreignAmount,
             exchangeRate: rate,
             localAmount: Number(l[side]) || 0,
-          });
+          }, undefined, undefined, reconcileRate);
           if (!rateGuard.violationOf(next.exchangeRate, l.currency)) {
             updated.exchangeRate = next.exchangeRate;
           }
@@ -997,7 +997,8 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
 
    value={line.debit}
    onChange={v => updateLineAmount(line.id, 'debit', v, 'local')}
-   title={!isBaseLine ? 'تحرير المحلي يعيد حساب سعر الصرف = المحلي ÷ الأجنبي' : undefined}
+   onCommit={v => updateLineAmount(line.id, 'debit', v, 'local', true)}
+   title={!isBaseLine ? 'يبقى سعر الصرف ثابتاً أثناء الكتابة ويُعاير عند تثبيت القيمة' : undefined}
    className={`w-full px-2 py-1.5 text-xs rounded font-mono text-left glass-input font-bold ${isBaseLine ? 'text-emerald-400' : 'text-emerald-300'}`}
    />
    </td>
@@ -1017,7 +1018,8 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
 
    value={line.credit}
    onChange={v => updateLineAmount(line.id, 'credit', v, 'local')}
-   title={!isBaseLine ? 'تحرير المحلي يعيد حساب سعر الصرف = المحلي ÷ الأجنبي' : undefined}
+   onCommit={v => updateLineAmount(line.id, 'credit', v, 'local', true)}
+   title={!isBaseLine ? 'يبقى سعر الصرف ثابتاً أثناء الكتابة ويُعاير عند تثبيت القيمة' : undefined}
    className={`w-full px-2 py-1.5 text-xs rounded font-mono text-left glass-input font-bold ${isBaseLine ? 'text-sky-400' : 'text-sky-300'}`}
    />
    </td>

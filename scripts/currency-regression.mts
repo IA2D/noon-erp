@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import type { Account } from '../src/types/erp';
 import { amountsEqual, currencyDecimals, fromMinorUnits, multiplyMoney, roundTo, toMinorUnits } from '../src/utils/money';
 import { handleCurrencyFieldChange, reconcileSingleForeignLineToLocalTotal } from '../src/utils/currencyMath';
@@ -8,6 +9,24 @@ import { validateJournalForPosting } from '../src/utils/postingValidation';
 import { entityOpening, entityOpeningsByCurrency } from '../src/utils/reportData';
 import { tafqeetAmount } from '../src/utils/tafqeetHelper';
 
+const amountInputSource = fs.readFileSync(new URL('../src/components/AmountInput.tsx', import.meta.url), 'utf8');
+const paymentSource = fs.readFileSync(new URL('../src/components/modules/PaymentVouchersView.tsx', import.meta.url), 'utf8');
+const receiptSource = fs.readFileSync(new URL('../src/components/modules/ReceiptVouchersWindow.tsx', import.meta.url), 'utf8');
+const journalSource = fs.readFileSync(new URL('../src/components/modules/JournalEntriesView.tsx', import.meta.url), 'utf8');
+const custodySource = fs.readFileSync(new URL('../src/components/modules/CustodyView.tsx', import.meta.url), 'utf8');
+const openingSource = fs.readFileSync(new URL('../src/components/modules/OpeningBalancesView.tsx', import.meta.url), 'utf8');
+const openingGridSource = fs.readFileSync(new URL('../src/components/modules/opening/OpeningBalancesGrid.tsx', import.meta.url), 'utf8');
+assert.match(amountInputSource, /onCommit\?: \(value: string\) => void/);
+assert.match(paymentSource, /setForeignTotalAmount\(next\.foreignAmount\)/);
+assert.match(paymentSource, /onCommit=\{handleCreditLocalAmountCommit\}/);
+assert.match(receiptSource, /onCommit=\{handleDebitLocalAmountCommit\}/);
+assert.match(journalSource, /reconcileRate = false/);
+assert.match(journalSource, /onCommit=\{v => updateLineAmount\(line\.id, 'debit', v, 'local', true\)\}/);
+assert.match(custodySource, /onCommit=\{commitLocalAmount\}/);
+assert.match(custodySource, /title=\"يبقى سعر الصرف ثابتاً أثناء الكتابة ويُعاير عند تثبيت القيمة\"/);
+assert.match(openingSource, /reconcileRate = false/);
+assert.match(openingSource, /onCommitValue=\{\(key, field, raw\) => setValue\(key, field, raw, true\)\}/);
+assert.match(openingGridSource, /onCommit=\{raw => !foreign && onCommitValue\(l\.key, 'debit', raw\)\}/);
 const currencies = [
   { id: 'yer', code: 'YER', nameAr: 'ريال', nameEn: 'Rial', symbol: 'ر.ي', decimals: 0, isBase: true, exchangeRate: 1, minExchangeRate: 1, maxExchangeRate: 1, isActive: true, createdAt: '' },
   { id: 'usd', code: 'USD', nameAr: 'دولار', nameEn: 'Dollar', symbol: '$', decimals: 2, isBase: false, exchangeRate: 530.25, minExchangeRate: 1, maxExchangeRate: 1000, isActive: true, createdAt: '' },
@@ -22,10 +41,18 @@ assert.equal(amountsEqual(1.004, 1, 2), true);
 const usdTafqeet = tafqeetAmount(20_000, 'دولار أمريكي', 'USD');
 assert.match(usdTafqeet, /دولار أمريكي/);
 assert.doesNotMatch(usdTafqeet, /ريال يمني/);
-const locallyAdjusted = handleCurrencyFieldChange('local', 250_000, { foreignAmount: 1785.71, exchangeRate: 140, localAmount: 249_999.4 });
+const locallyAdjusted = handleCurrencyFieldChange('local', 250_000, { foreignAmount: 1785.71, exchangeRate: 140, localAmount: 249_999.4 }, undefined, undefined, true);
 assert.equal(locallyAdjusted.foreignAmount, 1785.71);
 assert.equal(locallyAdjusted.exchangeRate, 140.000336);
 assert.equal(multiplyMoney(locallyAdjusted.foreignAmount, locallyAdjusted.exchangeRate, 2), 250_000);
+const typingFirstDigit = handleCurrencyFieldChange('local', 1, { foreignAmount: 0, exchangeRate: 3.75, localAmount: 0 });
+assert.equal(typingFirstDigit.foreignAmount, 0.27);
+assert.equal(typingFirstDigit.exchangeRate, 3.75);
+const typingSecondDigit = handleCurrencyFieldChange('local', 10, typingFirstDigit);
+assert.equal(typingSecondDigit.foreignAmount, 2.67);
+assert.equal(typingSecondDigit.exchangeRate, 3.75);
+const committedTypedAmount = handleCurrencyFieldChange('local', 10, typingSecondDigit, undefined, undefined, true);
+assert.equal(committedTypedAmount.exchangeRate, 3.74531835);
 const localFirst = handleCurrencyFieldChange('local', 250_000, { foreignAmount: 0, exchangeRate: 140, localAmount: 0 });
 assert.equal(localFirst.foreignAmount, 1785.71);
 assert.equal(localFirst.exchangeRate, 140);
@@ -88,4 +115,4 @@ assert.equal(journal!.totalCredit, 3_000);
 assert.equal(journal!.lines[0].rateType, 'CLOSING');
 assert.equal(journal!.rateSource, 'PERIOD_REVALUATION');
 
-console.log('CURRENCY_REGRESSION_OK currencyDecimals=true currencyTafqeet=true minorUnits=true deterministicRounding=true historicalRate=true historicalReportInvariant=true originalOpening=true voucherSourceCurrency=true cashBoxOpening=true derivedPositions=true realizedDifference=2500 realizedJournalBalanced=true unrealizedDifference=3000 balancedRevaluation=true rateEvidence=true');
+console.log('CURRENCY_REGRESSION_OK currencyDecimals=true currencyTafqeet=true minorUnits=true deterministicRounding=true historicalRate=true historicalReportInvariant=true originalOpening=true voucherSourceCurrency=true cashBoxOpening=true derivedPositions=true realizedDifference=2500 realizedJournalBalanced=true unrealizedDifference=3000 balancedRevaluation=true rateEvidence=true localTypingStable=true');
