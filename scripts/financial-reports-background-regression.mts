@@ -27,6 +27,9 @@ assert.match(source, /r\.status !== 'VOIDED'\) map\[`pending-voucher-\$\{r\.id\}
 assert.doesNotMatch(source, /journal\.type === 'PV' && journal\.referenceCode === voucher\.voucherNumber/);
 assert.match(source, /Custody amounts are persisted in their stated currency/);
 assert.match(source, /PrintableCustodyStatement/);
+assert.match(source, /titleAr: isSummary \? 'كشف مراكز التكلفة الإجمالي' : 'كشف مراكز التكلفة التحليلي'/);
+assert.match(source, /const summaryTitleAr = statementSpecs\[0\]\?\.titleAr \|\| `كشف \$\{REPORT_META\[reportType\]\.ar\} الإجمالي`/);
+assert.doesNotMatch(source, /titleAr: `\$\{REPORT_META\[reportType\]\.ar\} الإجمالي`/);
 assert.match(source, /disbursementMethod: method/);
 assert.match(source, /sourceName/);
 assert.match(source, /costCenter:/);

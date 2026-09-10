@@ -1264,9 +1264,12 @@ export default function FinancialReportsView({
           currency: item.currency,
         };
       });
+      // العنوان الإجمالي مشتق من عنوان الكشف نفسه، لا من اسم القسم المختصر.
+      // بهذا تبقى كلمة «كشف» ومستوى التقرير صحيحين في كل تقارير الكيانات والمراكز.
+      const summaryTitleAr = statementSpecs[0]?.titleAr || `كشف ${REPORT_META[reportType].ar} الإجمالي`;
       return [{
         key: `${reportType}-summary`,
-        titleAr: `${REPORT_META[reportType].ar} الإجمالي`,
+        titleAr: summaryTitleAr,
         titleEn: `${REPORT_META[reportType].en} Summary`,
         subjectCode: '—',
         subjectName: 'الحساب الإجمالي',
