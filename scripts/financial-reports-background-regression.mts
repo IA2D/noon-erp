@@ -18,10 +18,10 @@ assert.match(source, /الحساب التحليلي — عُهد الموظفي�
 assert.match(source, /normalizeVoucherSourceJournalCurrencies/);
 assert.match(source, /const isMonthlyEmployeeAdvanceAccount/);
 assert.match(source, /code\.startsWith\('110206'\)/);
-assert.doesNotMatch(source, /pendingVoucherJournals/);
-assert.doesNotMatch(source, /سندات الصرف المنتظرة لا يكون لها قيد يومية/);
-assert.match(source, /journals\.filter\(journal => journal\.status === 'POSTED'\)/);
-assert.match(source, /v\.status === 'POSTED' && \(!isOriginalCurrencyReport/);
+assert.match(source, /const pendingVoucherJournals = useMemo<JournalEntry\[\]>/);
+assert.match(source, /voucher\.status !== 'PENDING_POSTING'/);
+assert.match(source, /\[\.\.\.journals\.filter\(journal => journal\.status !== 'VOIDED'\), \...pendingVoucherJournals\]/);
+assert.match(source, /v\.status !== 'VOIDED' && \(!isOriginalCurrencyReport/);
 assert.doesNotMatch(source, /journal\.type === 'PV' && journal\.referenceCode === voucher\.voucherNumber/);
 assert.match(source, /Custody amounts are persisted in their stated currency/);
 assert.match(source, /PrintableCustodyStatement/);
@@ -35,4 +35,4 @@ assert.match(source, /summarizeStatementsByCurrency\(statementSpecs, baseCode\)/
 assert.match(source, /Each entity \/ cost centre[\s\S]*original currency is represented by one summary row/);
 assert.match(source, /!isSummary && groupedTB\.groups\.flatMap/);
 assert.match(source, /إجمالي القيود اليومية/);
-console.log('FINANCIAL_REPORTS_BACKGROUND_OK inheritedShell=true standaloneBackground=false matchesOtherModules=true entitySections=true currencySections=true combinedPrintJob=true summarySuppressesDetails=true postedOnly=true analyticalProjection=true');
+console.log('FINANCIAL_REPORTS_BACKGROUND_OK inheritedShell=true standaloneBackground=false matchesOtherModules=true entitySections=true currencySections=true combinedPrintJob=true summarySuppressesDetails=true pendingVouchersVisible=true analyticalProjection=true');

@@ -522,18 +522,69 @@ export default function FinancialReportsView({
   const isOriginalCurrencyReport = selectedCurrency !== 'ALL' && currency !== baseCode;
   const toReportCurrency = (n: number) => roundTo(n || 0, selectedDecimals);
 
-  // التقارير المالية تعتمد القيود المرحّلة فقط. السند ينعكس في التقارير بعد ترحيله إلى الأستاذ العام.
+  // تعرض التقارير السندات المنتظرة مباشرةً قبل الترحيل. ننشئ إسقاطاً
+  // للقراءة فقط كي تدخل حركاتها في الكشف والإجمالي من دون تعديل السند الأصلي.
+  const pendingVoucherJournals = useMemo<JournalEntry[]>(() => {
+    const knownJournalIds = new Set(journals.map(journal => journal.id));
+    const knownDocumentNumbers = new Set(journals
+      .filter(journal => journal.status !== 'VOIDED' && (journal.sourceType === 'PAYMENT_VOUCHER' || journal.sourceType === 'RECEIPT_VOUCHER'))
+      .flatMap(journal => [journal.referenceCode, journal.reference].filter(Boolean)));
+    const make = (voucher: PaymentVoucher | ReceiptVoucher, kind: 'PAYMENT' | 'RECEIPT'): JournalEntry | null => {
+      const documentNumber = kind === 'PAYMENT' ? (voucher as PaymentVoucher).voucherNumber : (voucher as ReceiptVoucher).receiptNumber;
+      if (voucher.status !== 'PENDING_POSTING' || voucher.journalEntryId || knownJournalIds.has(voucher.id) || knownDocumentNumbers.has(documentNumber)) return null;
+      const isPayment = kind === 'PAYMENT';
+      const sourceAmount = Number(voucher.totalAmount) || 0;
+      const sourceLocal = voucher.lines.reduce((sum, line) => sum + (Number(line.localAmount) || Number(line.amount) * (Number(line.exchangeRate || voucher.exchangeRate) || 1)), 0);
+      const lines: JournalEntry['lines'] = voucher.lines.map(line => {
+        const local = Number(line.localAmount) || Number(line.amount) * (Number(line.exchangeRate || voucher.exchangeRate) || 1);
+        return {
+          id: `pending-${voucher.id}-${line.id}`,
+          accountId: line.accountId, accountCode: line.accountCode, accountNameAr: line.accountNameAr,
+          debit: isPayment ? local : 0, credit: isPayment ? 0 : local,
+          description: line.description || voucher.narration, costCenterId: line.costCenterId,
+          subLedgerType: line.subLedgerType, subLedgerId: line.subLedgerId, subLedgerName: line.subLedgerName,
+          currency: line.currency || voucher.currency, exchangeRate: line.exchangeRate || voucher.exchangeRate,
+          debitForeign: isPayment ? line.amount : 0, creditForeign: isPayment ? 0 : line.amount,
+          referenceNumber: line.referenceNumber,
+        };
+      });
+      const source = accounts.find(account => account.id === voucher.sourceAccountId);
+      lines.push({
+        id: `pending-${voucher.id}-source`, accountId: voucher.sourceAccountId,
+        accountCode: source?.code || '', accountNameAr: source?.nameAr || voucher.sourceAccountNameAr,
+        debit: isPayment ? 0 : sourceLocal, credit: isPayment ? sourceLocal : 0,
+        description: voucher.narration, currency: voucher.currency, exchangeRate: voucher.exchangeRate,
+        debitForeign: isPayment ? 0 : sourceAmount, creditForeign: isPayment ? sourceAmount : 0,
+        referenceNumber: voucher.referenceNumber,
+        subLedgerType: voucher.sourceType === 'CASH_BOX' ? 'CASH_BOX' : voucher.sourceType === 'BANK_ACCOUNT' ? 'BANK' : 'NONE',
+        subLedgerId: voucher.sourceEntityId, subLedgerName: voucher.sourceAccountNameAr,
+      });
+      return {
+        id: `pending-voucher-${voucher.id}`, entryNumber: documentNumber, date: voucher.date,
+        reference: voucher.referenceNumber || '', narration: voucher.narration, currency: voucher.currency,
+        exchangeRate: voucher.exchangeRate, status: 'PENDING_POSTING', type: isPayment ? 'PV' : 'RV',
+        sourceType: isPayment ? 'PAYMENT_VOUCHER' : 'RECEIPT_VOUCHER', referenceCode: documentNumber,
+        totalDebit: sourceLocal, totalCredit: sourceLocal, createdBy: voucher.createdBy, createdAt: voucher.createdAt,
+        lines,
+      };
+    };
+    return [
+      ...vouchers.flatMap(voucher => { const projected = make(voucher, 'PAYMENT'); return projected ? [projected] : []; }),
+      ...receiptVouchers.flatMap(voucher => { const projected = make(voucher, 'RECEIPT'); return projected ? [projected] : []; }),
+    ];
+  }, [journals, vouchers, receiptVouchers, accounts]);
+
   // Normalizes legacy voucher source lines before projection. Without this a
   // foreign-currency bank/cash payment with no opening balance disappears
   // from its own currency statement because its source side was stored as YER.
   const reportingJournals = useMemo(
     () => normalizeVoucherSourceJournalCurrencies(
-      journals.filter(journal => journal.status === 'POSTED').map(journal => ({ ...journal, date: dateToIso(journal.date) })),
+      [...journals.filter(journal => journal.status !== 'VOIDED'), ...pendingVoucherJournals].map(journal => ({ ...journal, date: dateToIso(journal.date) })),
       [...vouchers, ...receiptVouchers],
       baseCode,
       selectedDecimals,
     ),
-    [journals, vouchers, receiptVouchers, baseCode, selectedDecimals]
+    [journals, pendingVoucherJournals, vouchers, receiptVouchers, baseCode, selectedDecimals]
   );
 
   const baseJournals = useMemo(
@@ -544,7 +595,7 @@ export default function FinancialReportsView({
   const reportJournals = useMemo(() => baseJournals, [baseJournals]);
 
   const journalsInRange = useMemo(() => reportDocuments(reportJournals, fromDate, toDate, true), [reportJournals, fromDate, toDate]);
-  // كل التقرير المالي يُبنى من القيود المرحلة فقط؛ لا تظهر المستندات المنتظرة.
+  // تشمل التقارير القيود والسندات المنتظرة، بعلامة «بانتظار الترحيل».
   const documentJournals = useMemo(() => reportDocuments(
     projectJournalsToCurrency(reportingJournals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true, true), fromDate, toDate, true
   ), [reportingJournals, fromDate, toDate, currency, baseCode, selectedDecimals, isOriginalCurrencyReport]);
@@ -1251,14 +1302,14 @@ export default function FinancialReportsView({
 
   const filteredPaymentVouchers = useMemo(() =>
     sortReportRecordsChronologically(
-      reportDocuments(vouchers || [], fromDate, toDate, true).filter(v => v.status === 'POSTED' && (!isOriginalCurrencyReport || v.currency === currency)),
+      reportDocuments(vouchers || [], fromDate, toDate, true).filter(v => v.status !== 'VOIDED' && (!isOriginalCurrencyReport || v.currency === currency)),
       voucher => voucher.voucherNumber,
     ).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
     [vouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
   );
   const filteredReceiptVouchers = useMemo(() =>
     sortReportRecordsChronologically(
-      reportDocuments(receiptVouchers || [], fromDate, toDate, true).filter(v => v.status === 'POSTED' && (!isOriginalCurrencyReport || v.currency === currency)),
+      reportDocuments(receiptVouchers || [], fromDate, toDate, true).filter(v => v.status !== 'VOIDED' && (!isOriginalCurrencyReport || v.currency === currency)),
       voucher => voucher.receiptNumber,
     ).map(v => ({...v, totalAmount: roundTo(voucherReportAmount(v,isOriginalCurrencyReport ? currency : baseCode,baseCode),selectedDecimals)})),
     [receiptVouchers, fromDate, toDate, isOriginalCurrencyReport, currency, baseCode, selectedDecimals]
