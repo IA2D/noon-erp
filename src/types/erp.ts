@@ -338,6 +338,8 @@ export interface CustodySettlementItem {
 
 /** جلسة تصفية واحدة (قد تكون جزئية) */
 export interface CustodySettlement {
+  /** المستندات أو رد نقدي؛ تظل العمليتان ضمن سجل التصفية نفسه. */
+  kind?: 'DOCUMENTS' | 'CASH_REFUND';
   id: string;
   settlementNumber: string;    // e.g. STL-1
   date: string;

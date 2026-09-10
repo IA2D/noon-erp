@@ -1155,7 +1155,7 @@ export default function CustodyView({
   };
 
   const openSettle = (c: Custody, existing?: CustodySettlement) => {
-    const selected = existing || [...c.settlements].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    const selected = existing || [...c.settlements].filter(item => item.kind !== 'CASH_REFUND').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     openModal(() => {
       setSettleTarget(c);
       setSettleMaximized(false);
@@ -1189,7 +1189,8 @@ export default function CustodyView({
       return;
     }
     const expenseTotal = itemsTotal(settleItems);
-    const remaining = outstandingBalance(settleTarget) + (existingSettlement?.totalExpense || 0) + (existingSettlement?.apTransferred || 0);
+    // عند تعديل تصفية، نعيد كل مركباتها إلى المتاح مؤقتاً، بما فيها رد الفائض.
+    const remaining = outstandingBalance(settleTarget) + (existingSettlement?.totalExpense || 0) + (existingSettlement?.apTransferred || 0) + (existingSettlement?.cashRefunded || 0);
     const excess = Math.max(0, Math.round((expenseTotal - remaining) * 100) / 100);
     if (excess > 0 && !apAccountId) {
       toast('error', `قيمة المستندات (${fmtC(expenseTotal, settleTarget.currency || baseCurrency)}) تتجاوز الرصيد القائم (${fmtC(remaining, settleTarget.currency || baseCurrency)}) — اختر حساب دائن (AP) للمستحق للموظف.`);
@@ -1208,7 +1209,12 @@ export default function CustodyView({
       reference: `CUSTODY-${settleTarget.custodyNumber}`,
     };
     const settlementBase = existingSettlement
-      ? { ...settleTarget, settledAmount: Math.max(0, settleTarget.settledAmount - existingSettlement.totalExpense), apTransferredAmount: Math.max(0, settleTarget.apTransferredAmount - existingSettlement.apTransferred) }
+      ? {
+        ...settleTarget,
+        settledAmount: Math.max(0, settleTarget.settledAmount - existingSettlement.totalExpense),
+        refundedAmount: Math.max(0, settleTarget.refundedAmount - existingSettlement.cashRefunded),
+        apTransferredAmount: Math.max(0, settleTarget.apTransferredAmount - existingSettlement.apTransferred),
+      }
       : settleTarget;
     const priorJournal = existingSettlement?.journalEntryId ? journals.find(item => item.id === existingSettlement.journalEntryId) : undefined;
     // A previous failed edit may already have reversed this settlement journal.
@@ -1239,6 +1245,7 @@ export default function CustodyView({
 
     const cashRefunded = existingSettlement?.cashRefunded || 0;
     const settlement: CustodySettlement = {
+      kind: existingSettlement?.kind || 'DOCUMENTS',
       id: existingSettlement?.id || `ls-${Date.now()}`,
       settlementNumber: existingSettlement?.settlementNumber || `STL-${settleTarget.settlements.length + 1}`,
       date: today(),
@@ -1264,11 +1271,15 @@ export default function CustodyView({
     ];
     const totalSettled = nextSettlements.reduce((sum, item) => sum + item.totalExpense, 0);
     const totalAp = nextSettlements.reduce((sum, item) => sum + item.apTransferred, 0);
-    const nextStatus = statusAfterSettlement({ ...settleTarget, settledAmount: totalSettled, apTransferredAmount: totalAp }, 0);
+    const settlementRefunded = nextSettlements.reduce((sum, item) => sum + item.cashRefunded, 0);
+    // لا تمسح ردود الفائض التاريخية التي لم تكن مرتبطة بجلسة تصفية في الإصدارات السابقة.
+    const legacyRefunded = Math.max(0, round2(settleTarget.refundedAmount - settleTarget.settlements.reduce((sum, item) => sum + item.cashRefunded, 0)));
+    const totalRefunded = round2(legacyRefunded + settlementRefunded);
+    const nextStatus = statusAfterSettlement({ ...settleTarget, settledAmount: totalSettled, refundedAmount: totalRefunded, apTransferredAmount: totalAp }, 0);
     const previousSettlementTxnIds = existingSettlement ? new Set(settleTarget.transactions.filter(item => item.settlementId === existingSettlement.id).map(item => item.id)) : new Set<string>();
     onUpdateCustody(settleTarget.id, {
       settledAmount: Math.round(totalSettled * 100) / 100,
-      refundedAmount: nextSettlements.reduce((sum, item) => sum + item.cashRefunded, 0),
+      refundedAmount: totalRefunded,
       shortageAmount: settleTarget.shortageAmount,
       apTransferredAmount: Math.round(totalAp * 100) / 100,
       status: nextStatus,
@@ -1301,11 +1312,13 @@ export default function CustodyView({
     const settlements = custody.settlements.filter(item => item.id !== settlement.id);
     const settledAmount = round2(settlements.reduce((sum, item) => sum + item.totalExpense, 0));
     const apTransferredAmount = round2(settlements.reduce((sum, item) => sum + item.apTransferred, 0));
-    const status = statusAfterSettlement({ ...custody, settledAmount, apTransferredAmount }, 0);
+    const legacyRefunded = Math.max(0, round2(custody.refundedAmount - custody.settlements.reduce((sum, item) => sum + item.cashRefunded, 0)));
+    const refundedAmount = round2(legacyRefunded + settlements.reduce((sum, item) => sum + item.cashRefunded, 0));
+    const status = statusAfterSettlement({ ...custody, settledAmount, refundedAmount, apTransferredAmount }, 0);
     const updates: Partial<Custody> = {
       settlements,
       settledAmount,
-      refundedAmount: round2(settlements.reduce((sum, item) => sum + item.cashRefunded, 0)),
+      refundedAmount,
       apTransferredAmount,
       status,
       actualClearanceDate: status === 'FULL_SETTLED' ? custody.actualClearanceDate : undefined,
@@ -1375,14 +1388,32 @@ export default function CustodyView({
       createdBy: currentUserName,
       createdAt: nowStamp(),
     };
-    const newRefunded = refundTarget.refundedAmount + amount;
-    const stillOpen = Math.round((refundTarget.disbursedAmount - refundTarget.settledAmount - newRefunded - refundTarget.apTransferredAmount) * 100) / 100;
-    const nextStatus: CustodyStatus = stillOpen <= 0.01 ? (refundTarget.status === 'DISBURSED' || refundTarget.status === 'PARTIAL_SETTLED' ? 'FULL_SETTLED' : refundTarget.status) : 'PARTIAL_SETTLED';
+    // رد الفائض جلسة تصفية مستقلة؛ لذلك يظل ضمن الرصيد عند تعديل أو حذف أي تصفية أخرى.
+    const refundSettlement: CustodySettlement = {
+      kind: 'CASH_REFUND',
+      id: `ls-refund-${Date.now()}`,
+      settlementNumber: `STL-${refundTarget.settlements.length + 1}`,
+      date: today(),
+      items: [],
+      totalExpense: 0,
+      cashRefunded: amount,
+      shortageAmount: 0,
+      apTransferred: 0,
+      narration: `رد فائض نقدي إلى ${source.account.nameAr}`,
+      journalEntryId: journal.id,
+      createdBy: currentUserName,
+      createdAt: nowStamp(),
+    };
+    const settlements = [...refundTarget.settlements, refundSettlement];
+    const legacyRefunded = Math.max(0, round2(refundTarget.refundedAmount - refundTarget.settlements.reduce((sum, item) => sum + item.cashRefunded, 0)));
+    const refundedAmount = round2(legacyRefunded + settlements.reduce((sum, item) => sum + item.cashRefunded, 0));
+    const nextStatus = statusAfterSettlement({ ...refundTarget, refundedAmount }, 0);
     onUpdateCustody(refundTarget.id, {
-      refundedAmount: newRefunded,
+      refundedAmount,
       status: nextStatus,
       actualClearanceDate: nextStatus === 'FULL_SETTLED' ? today() : refundTarget.actualClearanceDate,
-      transactions: [...refundTarget.transactions, txn],
+      settlements,
+      transactions: [...refundTarget.transactions, { ...txn, type: 'REFUND', settlementId: refundSettlement.id, narration: `تصفية رد فائض نقدي إلى ${source.account.nameAr}` }],
       updatedAt: nowStamp(),
     });
     toast('success', `تم رد ${fmtC(amount, refundTarget.currency || baseCurrency)} من ${refundTarget.custodyNumber} وترحيل القيد ${journal.entryNumber}.`);
@@ -1999,7 +2030,8 @@ export default function CustodyView({
         // before evaluating the edited values; otherwise it is counted twice.
         const remaining = outstandingBalance(settleTarget)
           + (selectedSettlement?.totalExpense || 0)
-          + (selectedSettlement?.apTransferred || 0);
+          + (selectedSettlement?.apTransferred || 0)
+          + (selectedSettlement?.cashRefunded || 0);
         const expenseTotal = itemsTotal(settleItems);
         const excess = Math.max(0, expenseTotal - remaining);
         const remainingAfterSettlement = Math.max(0, remaining - expenseTotal);
@@ -2025,8 +2057,14 @@ export default function CustodyView({
                     <div className="flex flex-wrap gap-2">
                       {settleTarget.settlements.map(item => (
                         <div key={item.id} className="inline-flex overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600">
-                          <button type="button" onClick={() => { setSettlementEditId(item.id); setSettleItems(item.items.map(line => ({ ...line }))); setSettlementAttachments(item.attachments || []); setApAccountId(''); }} className={`px-3 py-1.5 text-xs font-bold ${settlementEditId === item.id ? 'bg-sky-100 text-sky-800 dark:bg-sky-500/25 dark:text-sky-200' : 'text-slate-600 dark:text-slate-300'}`}>
-                            {item.settlementNumber} — {fmtC(item.totalExpense, settleTarget.currency || baseCurrency)}
+                          <button type="button" onClick={() => {
+                            if (item.kind === 'CASH_REFUND') {
+                              toast('info', 'رد الفائض جلسة تصفية نقدية؛ يمكن حذفها وعكس قيدها من زر الحذف.');
+                              return;
+                            }
+                            setSettlementEditId(item.id); setSettleItems(item.items.map(line => ({ ...line }))); setSettlementAttachments(item.attachments || []); setApAccountId('');
+                          }} className={`px-3 py-1.5 text-xs font-bold ${settlementEditId === item.id ? 'bg-sky-100 text-sky-800 dark:bg-sky-500/25 dark:text-sky-200' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {item.kind === 'CASH_REFUND' ? `رد فائض نقدي — ${fmtC(item.cashRefunded, settleTarget.currency || baseCurrency)}` : `${item.settlementNumber} — ${fmtC(item.totalExpense, settleTarget.currency || baseCurrency)}`}
                           </button>
                           <button type="button" title="حذف التصفية وعكس قيدها" onClick={() => setDeleteConfirmation(item)} className="border-r border-slate-300 dark:border-slate-600 px-2 text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/20"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
