@@ -406,18 +406,25 @@ const CustodyFormFields = ({ form, setForm, locked, baseCode, accounts, employee
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start w-full">
           <div className="flex flex-col gap-1.5 w-full">
             <label className="text-sm font-medium whitespace-nowrap text-right">مركز التكلفة</label>
-            <SearchableSelect
-              value={form.costCenterId}
-              onChange={id => update({ costCenterId: id })}
-              options={costCenters}
-              getValue={cc => cc.id}
-              getLabel={cc => <span>{cc.code} - {cc.nameAr}</span>}
-              getSearchText={cc => `${cc.code} ${cc.nameAr}`}
-
-              allowClear
-              clearLabel="بدون مركز تكلفة"
-              searchPlaceholder="بحث بالكود أو الاسم..."
-              searchIcon={Network}
+            <F9SearchInput
+              value={form.costCenterId ? `${costCenters.find(center => center.id === form.costCenterId)?.code || ''} - ${costCenters.find(center => center.id === form.costCenterId)?.nameAr || ''}` : ''}
+              onChange={() => undefined}
+              items={costCenters}
+              columns={[{ label: 'الكود', render: center => center.code }, { label: 'مركز التكلفة', render: center => center.nameAr }]}
+              searchText={center => `${center.code} ${center.nameAr}`}
+              browseTitle="اختيار مركز التكلفة"
+              onSelect={center => update({ costCenterId: center.id })}
+              inputProps={{
+                readOnly: true,
+                title: 'اضغط F9 لاختيار مركز التكلفة أو Delete لمسح الاختيار',
+                onKeyDown: event => {
+                  if ((event.key === 'Delete' || event.key === 'Backspace') && form.costCenterId) {
+                    event.preventDefault();
+                    update({ costCenterId: '' });
+                  }
+                },
+              }}
+              className={`${FORM_INPUT} cursor-pointer`}
             />
           </div>
           <div className="flex flex-col gap-1.5 w-full">
