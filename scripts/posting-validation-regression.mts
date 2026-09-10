@@ -46,12 +46,24 @@ const foreignVoucher = voucher({ currency: 'USD', exchangeRate: 530, lines: [{ .
 assert.equal(validateVoucherForPosting('PAYMENT', foreignVoucher, accounts, [], [], currencies).valid, true);
 assert.equal(validateVoucherForPosting('PAYMENT', { ...foreignVoucher, lines: [{ ...foreignVoucher.lines[0], localAmount: 662 }] }, accounts, [], [], currencies).errors.some(item => item.includes('المعادل المحلي')), true);
 assert.equal(validateVoucherForPosting('PAYMENT', { ...foreignVoucher, totalAmount: 1.251, subtotalAmount: 1.251, lines: [{ ...foreignVoucher.lines[0], amount: 1.251, totalAmount: 1.251 }] }, accounts, [], [], currencies).errors.some(item => item.includes('يتجاوز دقة')), true);
-const mixedCurrencyTransfer = voucher({
-  sourceAccountId: 'cash', currency: 'YER', exchangeRate: 1,
-  lines: [{ ...voucher().lines[0], accountId: 'cash', accountCode: '1101010001', currency: 'SAR', amount: 100, totalAmount: 100, exchangeRate: 140, localAmount: 14000 }],
-  subtotalAmount: 14000, totalAmount: 14000,
-});
-assert.equal(validateVoucherForPosting('PAYMENT', mixedCurrencyTransfer, accounts, [], [], currencies).valid, true);
-assert.equal(validateVoucherForPosting('RECEIPT', { ...mixedCurrencyTransfer, receiptNumber: 'RV-1', receiptMethod: 'CASH', payerName: 'Customer' } as unknown as import('../src/types/erp').ReceiptVoucher, accounts, [], [], currencies).valid, true);
+const currencyAmounts = {
+  YER: { amount: 525, rate: 1, header: 525 },
+  USD: { amount: 140, rate: 3.75, header: 140 },
+  SAR: { amount: 3.75, rate: 140, header: 3.75 },
+} as const;
+for (const sourceCurrency of Object.keys(currencyAmounts) as Array<keyof typeof currencyAmounts>) {
+  for (const lineCurrency of Object.keys(currencyAmounts) as Array<keyof typeof currencyAmounts>) {
+    if (sourceCurrency === lineCurrency) continue;
+    const source = currencyAmounts[sourceCurrency];
+    const target = currencyAmounts[lineCurrency];
+    const mixedCurrencyTransfer = voucher({
+      sourceAccountId: 'cash', currency: sourceCurrency, exchangeRate: source.rate,
+      lines: [{ ...voucher().lines[0], accountId: 'cash', accountCode: '1101010001', currency: lineCurrency, amount: target.amount, totalAmount: target.amount, exchangeRate: target.rate, localAmount: 525 }],
+      subtotalAmount: source.header, totalAmount: source.header,
+    });
+    assert.equal(validateVoucherForPosting('PAYMENT', mixedCurrencyTransfer, accounts, [], [], currencies).valid, true, `${sourceCurrency} source -> ${lineCurrency} payment line must post`);
+    assert.equal(validateVoucherForPosting('RECEIPT', { ...mixedCurrencyTransfer, receiptNumber: `RV-${sourceCurrency}-${lineCurrency}`, receiptMethod: 'CASH', payerName: 'Customer' } as unknown as import('../src/types/erp').ReceiptVoucher, accounts, [], [], currencies).valid, true, `${sourceCurrency} source -> ${lineCurrency} receipt line must post`);
+  }
+}
 
-console.log('POSTING_VALIDATION_REGRESSION_OK validJournal=true totalMismatchBlocked=true duplicateJournalBlocked=true nonPostingBlocked=true subledgerBlocked=true validVoucher=true voucherTotalBlocked=true sameAccountBlocked=true retryBlocked=true foreignJournalReproduced=true foreignMismatchBlocked=true currencyPrecision=true excessPrecisionBlocked=true mixedCurrencySourceAndDistribution=true');
+console.log('POSTING_VALIDATION_REGRESSION_OK validJournal=true totalMismatchBlocked=true duplicateJournalBlocked=true nonPostingBlocked=true subledgerBlocked=true validVoucher=true voucherTotalBlocked=true sameAccountBlocked=true retryBlocked=true foreignJournalReproduced=true foreignMismatchBlocked=true currencyPrecision=true excessPrecisionBlocked=true allMixedCurrencySourceAndDistributionPairs=true');
