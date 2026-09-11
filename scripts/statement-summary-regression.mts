@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { summarizeStatementsByCurrency } from '../src/utils/statementSummary';
+import { summarizeStatementCurrencyConversions, summarizeStatementsByCurrency } from '../src/utils/statementSummary';
 
 const analyticalCashStatements = [
   {
@@ -40,5 +40,10 @@ assert.deepEqual(yer.map(row => [row.subjectCode, row.closing]).sort((a, b) => S
 assert.deepEqual([usd?.opening, usd?.debit, usd?.credit, usd?.closing], [10, 57.5, 12.5, 55]);
 assert.deepEqual([sar?.opening, sar?.debit, sar?.credit, sar?.closing], [5, 0, 2, 3]);
 for (const row of summary) assert.equal(row.closing, row.opening + row.debit - row.credit);
+const conversions = summarizeStatementCurrencyConversions(summary, 'YER', { USD: 530, SAR: 140 });
+assert.deepEqual(conversions.map(row => [row.currency, row.closing, row.exchangeRate, row.localClosing]), [
+  ['SAR', 3, 140, 420], ['USD', 55, 530, 29150], ['YER', 1150, 1, 1150],
+]);
+assert.equal(conversions.reduce((sum, row) => sum + row.localClosing, 0), 30720);
 
-console.log('STATEMENT_SUMMARY_REGRESSION_OK exactAnalyticalMovements=true perCurrencyClosing=true cashBoxMixedCurrencies=true');
+console.log('STATEMENT_SUMMARY_REGRESSION_OK exactAnalyticalMovements=true perCurrencyClosing=true cashBoxMixedCurrencies=true conversionDisclosure=true');

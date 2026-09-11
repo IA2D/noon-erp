@@ -64,7 +64,7 @@ import { currencyDecimals, roundTo } from '../../utils/money';
 import { accountsWithCurrencyOpenings, normalizeVoucherSourceJournalCurrencies, projectJournalsToCurrency } from '../../utils/currencyReporting';
 import { defaultReportToDate, toLocalIsoDate } from '../../utils/dateDefaults';
 import { reconcileControlAccountOpenings } from '../../services/openingBalancesService';
-import { summarizeStatementsByCurrency } from '../../utils/statementSummary';
+import { summarizeStatementCurrencyConversions, summarizeStatementsByCurrency } from '../../utils/statementSummary';
 
 interface Props {
   accounts: Account[];
@@ -597,7 +597,7 @@ export default function FinancialReportsView({
   const reportJournals = useMemo(() => baseJournals, [baseJournals]);
 
   const journalsInRange = useMemo(() => reportDocuments(reportJournals, fromDate, toDate, true), [reportJournals, fromDate, toDate]);
-  // تشمل التقارير القيود والسندات المنتظرة، بعلامة «بانتظار الترحيل».
+  // تشمل التقارير القيود والسندات المنتظرة من دون وسم حالة إضافي داخل التقرير.
   const documentJournals = useMemo(() => reportDocuments(
     projectJournalsToCurrency(reportingJournals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true, true), fromDate, toDate, true
   ), [reportingJournals, fromDate, toDate, currency, baseCode, selectedDecimals, isOriginalCurrencyReport]);
@@ -1084,7 +1084,7 @@ export default function FinancialReportsView({
       const useOriginalAmount = !isOriginalCurrencyReport && lineCurrency !== baseCode;
       return ({
       date: dateToIso(j.date),
-      docType: docType(j.id) + (j.status === 'VOIDED' ? ' (ملغي)' : j.status === 'PENDING_POSTING' ? ' (بانتظار الترحيل)' : ''),
+      docType: docType(j.id) + (j.status === 'VOIDED' ? ' (ملغي)' : ''),
       docNumber: j.entryNumber,
       reference: j.reference || '—',
       description: l.description || j.narration || '—',
@@ -1268,7 +1268,7 @@ export default function FinancialReportsView({
     }
 
     return [];
-  }, [reportType, journalsInRange, documentJournals, reportJournals, scopedEntities, reportAccounts, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, costCenters, docTypeByJournal, fromEntityId, toEntityId, fromDate, toDate, includeOpening, isOriginalCurrencyReport, currency, baseCode, vouchers, receiptVouchers, fromMainAccountId, toMainAccountId]);
+  }, [reportType, journalsInRange, documentJournals, reportJournals, scopedEntities, reportAccounts, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, costCenters, docTypeByJournal, fromEntityId, toEntityId, fromDate, toDate, includeOpening, isOriginalCurrencyReport, currency, baseCode, vouchers, receiptVouchers, fromMainAccountId, toMainAccountId, isSummary]);
 
   // Each original currency is an independent statement in the same print job.
   // This preserves a complete pagination run for one currency before the next starts.
@@ -1287,7 +1287,7 @@ export default function FinancialReportsView({
           docType: 'إجمالي',
           docNumber: item.subjectCode,
           reference: '—',
-          description: `${item.subjectName}${item.opening ? ` — افتتاحي: ${fmt(item.opening)}` : ''}`,
+          description: item.subjectName,
           debit: item.debit,
           credit: item.credit,
           localDebit: round2(item.debit * currentRate),
@@ -1441,7 +1441,7 @@ export default function FinancialReportsView({
           const lineCurrency = line?.currency || v.currency || baseCode;
           const amount = line ? line.amount : v.totalAmount;
           const center = line?.costCenterId ? costCenters.find(c => c.id === line.costCenterId) : undefined;
-          return [v.date, v.voucherNumber, v.payeeName, line?.description || v.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line?.referenceNumber || v.referenceNumber || '—', v.paymentMethod === 'CASH' ? 'نقداً' : v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', roundTo(amount, currencyDecimals(lineCurrency, currencies)), v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'];
+          return [v.date, v.voucherNumber, v.payeeName, line?.description || v.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line?.referenceNumber || v.referenceNumber || '—', v.paymentMethod === 'CASH' ? 'نقداً' : v.paymentMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', roundTo(amount, currencyDecimals(lineCurrency, currencies)), v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : ''];
         }));
         return { columns, rows };
       }
@@ -1454,7 +1454,7 @@ export default function FinancialReportsView({
           const lineCurrency = line?.currency || v.currency || baseCode;
           const amount = line ? line.amount : v.totalAmount;
           const center = line?.costCenterId ? costCenters.find(c => c.id === line.costCenterId) : undefined;
-          return [v.date, v.receiptNumber, v.payerName, line?.description || v.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line?.referenceNumber || v.referenceNumber || '—', v.receiptMethod === 'CASH' ? 'نقداً' : v.receiptMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', roundTo(amount, currencyDecimals(lineCurrency, currencies)), v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'];
+          return [v.date, v.receiptNumber, v.payerName, line?.description || v.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line?.referenceNumber || v.referenceNumber || '—', v.receiptMethod === 'CASH' ? 'نقداً' : v.receiptMethod === 'BANK_TRANSFER' ? 'تحويل بنكي' : 'شيك', roundTo(amount, currencyDecimals(lineCurrency, currencies)), v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : ''];
         }));
         return { columns, rows };
       }
@@ -1470,7 +1470,7 @@ export default function FinancialReportsView({
           const center = line.costCenterId ? costCenters.find(c => c.id === line.costCenterId) : undefined;
           const debit = line.debitForeign ?? line.debit;
           const credit = line.creditForeign ?? line.credit;
-          return [j.date, j.entryNumber, line.description || j.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line.referenceNumber || j.reference || j.referenceCode || '—', roundTo(debit || 0, currencyDecimals(lineCurrency, currencies)), roundTo(credit || 0, currencyDecimals(lineCurrency, currencies)), j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'];
+          return [j.date, j.entryNumber, line.description || j.narration, lineCurrency, center ? `${center.code} - ${center.nameAr}` : '—', line.referenceNumber || j.reference || j.referenceCode || '—', roundTo(debit || 0, currencyDecimals(lineCurrency, currencies)), roundTo(credit || 0, currencyDecimals(lineCurrency, currencies)), j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : ''];
         }));
         return { columns, rows };
       }
@@ -2570,7 +2570,7 @@ export default function FinancialReportsView({
                               : v.status === 'VOIDED' ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
                                 : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400'
                               }`}>
-                              {v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'}
+                              {v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : ''}
                             </span>
                           </td>
                         </tr>
@@ -2636,7 +2636,7 @@ export default function FinancialReportsView({
                               : v.status === 'VOIDED' ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
                                 : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400'
                               }`}>
-                              {v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'}
+                              {v.status === 'POSTED' ? 'مرحّل' : v.status === 'VOIDED' ? 'ملغى' : ''}
                             </span>
                           </td>
                         </tr>
@@ -2700,7 +2700,7 @@ export default function FinancialReportsView({
                               : j.status === 'VOIDED' ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
                                 : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400'
                               }`}>
-                              {j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : 'بانتظار الترحيل'}
+                              {j.status === 'POSTED' ? 'مرحّل' : j.status === 'VOIDED' ? 'ملغى' : ''}
                             </span>
                           </td>
                         </tr>
@@ -3029,7 +3029,12 @@ export default function FinancialReportsView({
               const totalDebit = isSummary ? spec.rows.reduce((sum, row) => sum + (row.localDebit ?? row.debit), 0) : spec.rows.reduce((sum, row) => sum + row.debit, 0);
               const totalCredit = isSummary ? spec.rows.reduce((sum, row) => sum + (row.localCredit ?? row.credit), 0) : spec.rows.reduce((sum, row) => sum + row.credit, 0);
               const summaryOpening = isSummary ? spec.rows.reduce((sum, row) => sum + (row.localOpening ?? 0), 0) : spec.opening;
-              const closing = summaryOpening + totalDebit - totalCredit;
+              const summaryConversions = isSummary
+                ? summarizeStatementCurrencyConversions(spec.rows, baseCode, Object.fromEntries(currencies.map(item => [item.code, item.exchangeRate])))
+                : [];
+              const closing = isSummary
+                ? summaryConversions.reduce((sum, row) => sum + row.localClosing, 0)
+                : summaryOpening + totalDebit - totalCredit;
               const closingAbs = Math.abs(closing);
               const closingTag = closing >= 0 ? 'عليكم (مدين)' : 'لكم (دائن)';
               // Every printable statement can be split by its original currency.
@@ -3067,7 +3072,7 @@ export default function FinancialReportsView({
                     ))}
                   </div>
 
-                  {isSummary ? <table className="report-table"><thead><tr><th>#</th><th>الحساب / الكيان</th><th>العملة</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>{[...summaryGroups.entries()].sort(([a], [b]) => a.localeCompare(b)).flatMap(([code, rows]) => { const debit = rows.reduce((sum, row) => sum + row.debit, 0); const credit = rows.reduce((sum, row) => sum + row.credit, 0); const opening = rows.reduce((sum, row) => sum + (row.opening ?? 0), 0); const groupClosing = opening + debit - credit; return [<tr key={`${code}-heading`} style={{ fontWeight: 900, background: '#e8e7fc' }}><td colSpan={6}>العملة: {code}</td></tr>, ...rows.map((row, index) => <tr key={row.id || `${code}-${index}`}><td>{index + 1}</td><td>{row.description}</td><td>{code}</td><td className="report-num">{row.debit ? fmt(row.debit) : ''}</td><td className="report-num">{row.credit ? fmt(row.credit) : ''}</td><td className="report-num">{fmt((row.opening ?? 0) + row.debit - row.credit)}</td></tr>), <tr key={`${code}-total`} style={{ fontWeight: 900, background: '#f1f5f9' }}><td colSpan={3}>إجمالي {code}</td><td className="report-num">{fmt(debit)}</td><td className="report-num">{fmt(credit)}</td><td className="report-num">{fmt(groupClosing)}</td></tr>]; })}</tbody><tfoot><tr style={{ background: '#c5c7f1', fontWeight: 900 }}><td colSpan={3}>الإجمالي بالعملة المحلية ({baseCode}) بسعر الصرف الحالي</td><td className="report-num">{fmt(totalDebit)}</td><td className="report-num">{fmt(totalCredit)}</td><td className="report-num">{fmt(closing)}</td></tr></tfoot></table> :                   <table className="report-table">
+                  {isSummary ? <><table className="report-table"><thead><tr><th>#</th><th>الحساب / الكيان</th><th>العملة</th><th>الرصيد</th></tr></thead><tbody>{[...summaryGroups.entries()].sort(([a], [b]) => a.localeCompare(b)).flatMap(([code, rows]) => { const opening = rows.reduce((sum, row) => sum + (row.opening ?? 0), 0); const debit = rows.reduce((sum, row) => sum + row.debit, 0); const credit = rows.reduce((sum, row) => sum + row.credit, 0); const groupClosing = opening + debit - credit; const balanceText = (amount: number) => `${amount >= 0 ? 'مدين' : 'دائن'} ${fmt(Math.abs(amount))}`; return [<tr key={`${code}-heading`} style={{ fontWeight: 900, background: '#e8e7fc' }}><td colSpan={4}>العملة: {code}</td></tr>, ...rows.map((row, index) => <tr key={row.id || `${code}-${index}`}><td>{index + 1}</td><td>{row.description}</td><td>{code}</td><td className="report-num">{balanceText((row.opening ?? 0) + row.debit - row.credit)}</td></tr>), <tr key={`${code}-total`} style={{ fontWeight: 900, background: '#f1f5f9' }}><td colSpan={3}>إجمالي {code}</td><td className="report-num">{balanceText(groupClosing)}</td></tr>]; })}</tbody><tfoot><tr style={{ background: '#c5c7f1', fontWeight: 900 }}><td colSpan={3}>إجمالي جميع العملات بالعملة المحلية ({baseCode})</td><td className="report-num">{`${closing >= 0 ? 'مدين' : 'دائن'} ${fmt(closingAbs)}`}</td></tr></tfoot></table><div style={{ marginTop: '6px', border: '1px solid #000', padding: '6px 8px', fontSize: '7.8px', lineHeight: 1.75 }}>{summaryConversions.map(row => <div key={row.currency}>إجمالي العملة: {row.currency} = {fmt(Math.abs(row.closing))} {row.currency} — سعر التحويل: {fmt(row.exchangeRate)} — الإجمالي بالعملة المحلية ({baseCode}) = {fmt(Math.abs(row.closing))} {row.currency} × {fmt(row.exchangeRate)} = {fmt(row.localClosing)} {baseCode}</div>)}<div style={{ fontWeight: 900 }}>مجموع إجمالي العملات بالعملة المحلية ({baseCode}) = {fmt(closing)} {baseCode}</div></div></> :                   <table className="report-table">
                     <thead>
                       <tr>
                         <th>#</th>
@@ -3450,12 +3455,3 @@ export default function FinancialReportsView({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-

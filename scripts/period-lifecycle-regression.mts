@@ -22,5 +22,9 @@ assert.equal(reopened.valid, true);
 assert.equal(reopened.record.status, 'OPEN');
 assert.equal(reopened.record.history.length, 4);
 assert.equal(isDateClosedByRecords('2026-12-25', [reopened.record]), false);
+const reclosed = transitionFinancialPeriod(reopened.record, { target: 'TEMP_CLOSED', actor: 'accountant', reason: 'close after approved reopen', at: '2027-01-06T00:00:00Z' });
+assert.equal(reclosed.valid, true);
+assert.equal(reclosed.record.status, 'TEMP_CLOSED');
+assert.equal(reclosed.record.version, 5);
 
-console.log('PERIOD_LIFECYCLE_REGRESSION_OK temporary=true reviewed=true final=true skippedStageBlocked=true idempotentReplay=true finalReopenApprovalRequired=true independentApproverRequired=true historyAppendOnly=true closingEntryLinked=true reopened=true');
+console.log('PERIOD_LIFECYCLE_REGRESSION_OK temporary=true reviewed=true final=true skippedStageBlocked=true idempotentReplay=true finalReopenApprovalRequired=true independentApproverRequired=true historyAppendOnly=true closingEntryLinked=true reopened=true reclosedAfterReopen=true');

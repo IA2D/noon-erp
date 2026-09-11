@@ -33,7 +33,6 @@ import ModalShell from '../ui/ModalShell';
 import EmptyState from '../ui/EmptyState';
 import KPICard from '../ui/KPICard';
 import { periodRecordFor, periodStatusLabel, type FinancialPeriodRecord } from '../../utils/periodLifecycle';
-import CurrencyRevaluationPanel from './CurrencyRevaluationPanel';
 import type { DailyPostingBatchResult, DailyPostingRequest } from '../../utils/dailyPosting';
 
 interface Props {
@@ -54,7 +53,6 @@ interface Props {
   onUnpostJournal: (id: string) => boolean;
   onUnpostVoucher: (kind: 'PAYMENT' | 'RECEIPT', id: string) => boolean;
   onCreateOpeningEntry: (year: string) => boolean;
-  onCreateRevaluationJournal: (entry: JournalEntry) => boolean | void;
   currentUserName: string;
 }
 
@@ -101,7 +99,6 @@ export default function ClosingView({
   onUnpostJournal,
   onUnpostVoucher,
   onCreateOpeningEntry,
-  onCreateRevaluationJournal,
   currentUserName
 }: Props) {
   const toast = useToast();
@@ -990,19 +987,10 @@ export default function ClosingView({
                 )}
               </div>
 
-              <CurrencyRevaluationPanel
-                year={selectedYearWizard}
-                accounts={accounts}
-                journals={journals}
-                currencies={currencies}
-                currentUserName={currentUserName}
-                onCreateJournal={onCreateRevaluationJournal}
-              />
-
-              {/* الخطوة 2: قيد الإقفال */}
+              {/* الخطوة 1: قيد الإقفال */}
               <div className="rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
                 <div className="flex items-center gap-3 px-4 py-3 bg-slate-900/60 border-b border-slate-800">
-                  {stepBadge(2)}
+                  {stepBadge(1)}
                   <div className="flex-1">
                     <div className="font-bold text-white text-sm">توليد قيد إقفال الأرباح والخسائر</div>
                     <p className="text-xs text-slate-400">نقل صافي النتيجة من الإيرادات والمصروفات إلى الأرباح المبقاة</p>

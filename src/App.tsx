@@ -926,7 +926,7 @@ function AppInner() {
     const nextPeriods = [...periodStates.filter(item => !(item.key === month && item.scope === 'MONTH')), transition.record];
     const nextClosedMonths = closedMonths.includes(month) ? closedMonths : [...closedMonths, month];
     const audit = createAuditLog('GENERAL_LEDGER', 'UPDATE', `تغيير حالة الشهر ${month}: ${current.status} ← ${target}`);
-    if (!commitAccountingState({ idempotencyKey: `PERIOD:MONTH:${month}:${target}:${transition.record.version}`, commandType: `PERIOD_${target}`, documentType: 'MONTH', documentNumber: month }, [{ key: K.periodStates, value: nextPeriods }, { key: K.closedMonths, value: nextClosedMonths }], audit)) return false;
+    if (!commitAccountingState({ idempotencyKey: `PERIOD:MONTH:${month}:${target}:${transition.record.version}`, commandType: `PERIOD_${target}`, documentType: 'MONTH', documentNumber: `${month}:${transition.record.version}` }, [{ key: K.periodStates, value: nextPeriods }, { key: K.closedMonths, value: nextClosedMonths }], audit)) return false;
     setPeriodStates(nextPeriods);
     setClosedMonths(nextClosedMonths);
     setAuditLogs(prev => [audit, ...prev]);
@@ -940,7 +940,7 @@ function AppInner() {
     const nextPeriods = [...periodStates.filter(item => !(item.key === month && item.scope === 'MONTH')), transition.record];
     const nextClosedMonths = closedMonths.filter(m => m !== month);
     const audit = createAuditLog('GENERAL_LEDGER', 'UPDATE', `إعادة فتح الشهر المالي ${month}: ${request?.reason || ''}`);
-    if (!commitAccountingState({ idempotencyKey: `PERIOD:MONTH:${month}:OPEN:${transition.record.version}`, commandType: 'PERIOD_OPEN', documentType: 'MONTH', documentNumber: month }, [{ key: K.periodStates, value: nextPeriods }, { key: K.closedMonths, value: nextClosedMonths }], audit)) return false;
+    if (!commitAccountingState({ idempotencyKey: `PERIOD:MONTH:${month}:OPEN:${transition.record.version}`, commandType: 'PERIOD_OPEN', documentType: 'MONTH', documentNumber: `${month}:${transition.record.version}` }, [{ key: K.periodStates, value: nextPeriods }, { key: K.closedMonths, value: nextClosedMonths }], audit)) return false;
     setPeriodStates(nextPeriods);
     setClosedMonths(nextClosedMonths);
     setAuditLogs(prev => [audit, ...prev]);
@@ -2099,7 +2099,6 @@ function AppInner() {
             onUnpostJournal={handleUnpostJournal}
             onUnpostVoucher={handleUnpostVoucher}
             onCreateOpeningEntry={handleCreateOpeningEntry}
-            onCreateRevaluationJournal={handleAddJournalBoolean}
             currentUserName={currentUserName}
           />
         );

@@ -5,6 +5,7 @@ import { DEFAULT_COMPANY_BRANCH } from '../../../utils/companyStore';
 import { tafqeetAmount } from '../../../utils/tafqeetHelper';
 import BaseReportTemplate from '../../ui/BaseReportTemplate';
 import { openDesktopPrintPreview } from '../../../utils/desktopPrintPreview';
+import { summarizeStatementCurrencyConversions } from '../../../utils/statementSummary';
 
 export interface CustodyStatementRow {
   id?: string;
@@ -43,6 +44,7 @@ interface Props {
   currentUserName?: string;
   company?: CompanyBranch | null;
   onClose?: () => void;
+  currencyRates?: Record<string, number>;
 }
 
 const round2 = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
@@ -56,7 +58,7 @@ const fmtDate = (value: string) => {
 export default function PrintableCustodyStatement({
   titleAr, titleEn = 'Custody Financial Statement', subjectCode, subjectName, subjectExtra,
   fromDate, toDate, currencyCode, currencyNameAr, currencySymbol, opening, rows,
-  isSummary = false, currentUserName, company, onClose,
+  isSummary = false, currentUserName, company, onClose, currencyRates,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const curName = currencyNameAr || currencyCode;
@@ -73,7 +75,9 @@ export default function PrintableCustodyStatement({
   const closing = round2(opening + totalDebit - totalCredit);
   const currencyGroups = useMemo(() => { const groups = new Map<string, typeof movements>(); movements.forEach(row => { const code = row.currency || currencyCode; const bucket = groups.get(code) || []; bucket.push(row); groups.set(code, bucket); }); return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)); }, [movements, currencyCode]);
   const localTotals = useMemo(() => currencyGroups.reduce((totals, [, group]) => ({ debit: round2(totals.debit + group.reduce((sum, row) => sum + (row.localDebit ?? row.debit), 0)), credit: round2(totals.credit + group.reduce((sum, row) => sum + (row.localCredit ?? row.credit), 0)) }), { debit: 0, credit: 0 }), [currencyGroups]);
-  const displayDebit = isSummary ? localTotals.debit : totalDebit; const displayCredit = isSummary ? localTotals.credit : totalCredit; const displayClosing = round2(opening + displayDebit - displayCredit);
+  const conversions = useMemo(() => summarizeStatementCurrencyConversions(movements, currencyCode, currencyRates), [movements, currencyCode, currencyRates]);
+  const displayDebit = isSummary ? localTotals.debit : totalDebit; const displayCredit = isSummary ? localTotals.credit : totalCredit; const displayClosing = isSummary ? round2(conversions.reduce((sum, row) => sum + row.localClosing, 0)) : round2(opening + displayDebit - displayCredit);
+  const balanceText = (amount: number) => `${amount >= 0 ? 'مدين' : 'دائن'} ${fmt(Math.abs(amount))}`;
   const handlePrint = () => openDesktopPrintPreview(ref.current, `${titleAr} - ${subjectName}`, 'landscape');
 
   return (
@@ -86,9 +90,9 @@ export default function PrintableCustodyStatement({
         <BaseReportTemplate reportTitleAr={titleAr} reportTitleEn={titleEn} fromDate={fromDate} toDate={toDate} currentUserName={currentUserName} company={company ?? DEFAULT_COMPANY_BRANCH}
           entityInfo={[{ label: 'الكود', value: subjectCode }, { label: 'الاسم', value: subjectName }, { label: 'البيان', value: subjectExtra || '—' }, { label: 'العملة', value: curName === curSym ? curName : `${curName} (${curSym})` }]}
           totalDebit={displayDebit} totalCredit={displayCredit} docCount={movements.length} openingBalance={opening} closingBalance={displayClosing}
-          tafqeetText={tafqeetAmount(Math.abs(displayClosing), curName, currencyCode)} balanceTag={displayClosing >= 0 ? 'مدين' : 'دائن'} currencyNameAr={curName} currencySymbol={curSym}>
+          tafqeetText={tafqeetAmount(Math.abs(displayClosing), curName, currencyCode)} balanceTag={displayClosing >= 0 ? 'عليكم (مدين)' : 'لكم (دائن)'} currencyNameAr={curName} currencySymbol={curSym} hideMovementSummary={isSummary}>
           {isSummary ? (
-            <table className="report-table" style={{ width: '98%', maxWidth: '98%', margin: '0 auto', borderCollapse: 'collapse', fontSize: 8 }}><thead><tr><th>#</th><th>الحساب / الموظف</th><th>العملة</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>{currencyGroups.flatMap(([code, group]) => { const debit = round2(group.reduce((sum, row) => sum + row.debit, 0)); const credit = round2(group.reduce((sum, row) => sum + row.credit, 0)); return [<tr key={`${code}-heading`}><td colSpan={6} style={{ fontWeight: 900, background: '#e8e7fc' }}>العملة: {code}</td></tr>, ...group.map((row, index) => <tr key={row.id || `${code}-${index}`}><td>{index + 1}</td><td>{row.description}</td><td>{code}</td><td>{row.debit ? fmt(row.debit) : ''}</td><td>{row.credit ? fmt(row.credit) : ''}</td><td>{fmt(row.debit - row.credit)}</td></tr>), <tr key={`${code}-total`} style={{ fontWeight: 900, background: '#f1f5f9' }}><td colSpan={3}>إجمالي {code}</td><td>{fmt(debit)}</td><td>{fmt(credit)}</td><td>{fmt(debit - credit)}</td></tr>]; })}</tbody><tfoot><tr style={{ fontWeight: 900, background: '#c5c7f1' }}><td colSpan={3}>الإجمالي بالعملة المحلية ({currencyCode}) بسعر الصرف الحالي</td><td>{fmt(localTotals.debit)}</td><td>{fmt(localTotals.credit)}</td><td>{fmt(localTotals.debit - localTotals.credit)}</td></tr></tfoot></table>
+            <><table className="report-table" style={{ width: '98%', maxWidth: '98%', margin: '0 auto', borderCollapse: 'collapse', fontSize: 8 }}><thead><tr><th>#</th><th>الحساب / الموظف</th><th>العملة</th><th>الرصيد</th></tr></thead><tbody>{currencyGroups.flatMap(([code, group]) => { const groupClosing = round2(group.reduce((sum, row) => sum + row.debit - row.credit, 0)); return [<tr key={`${code}-heading`}><td colSpan={4} style={{ fontWeight: 900, background: '#e8e7fc' }}>العملة: {code}</td></tr>, ...group.map((row, index) => <tr key={row.id || `${code}-${index}`}><td>{index + 1}</td><td>{row.description}</td><td>{code}</td><td>{balanceText(row.debit - row.credit)}</td></tr>), <tr key={`${code}-total`} style={{ fontWeight: 900, background: '#f1f5f9' }}><td colSpan={3}>إجمالي {code}</td><td>{balanceText(groupClosing)}</td></tr>]; })}</tbody><tfoot><tr style={{ fontWeight: 900, background: '#c5c7f1' }}><td colSpan={3}>إجمالي جميع العملات بالعملة المحلية ({currencyCode})</td><td>{balanceText(conversions.reduce((sum, row) => sum + row.localClosing, 0))}</td></tr></tfoot></table><div style={{ width: '98%', margin: '7px auto', border: '1px solid #000', padding: '6px 8px', fontSize: 8 }}>{conversions.map(row => <div key={row.currency}>إجمالي العملة: {row.currency} = {fmt(Math.abs(row.closing))} {row.currency} — سعر التحويل: {fmt(row.exchangeRate)} — الإجمالي بالعملة المحلية ({currencyCode}) = {fmt(Math.abs(row.closing))} {row.currency} × {fmt(row.exchangeRate)} = {fmt(row.localClosing)} {currencyCode}</div>)}<div style={{ fontWeight: 900, marginTop: 4 }}>مجموع إجمالي العملات بالعملة المحلية ({currencyCode}) = {fmt(conversions.reduce((sum, row) => sum + row.localClosing, 0))} {currencyCode}</div></div></>
           ) : (
             <table className="report-table" style={{ width: '98%', maxWidth: '98%', margin: '0 auto', borderCollapse: 'collapse', fontSize: 6.5 }}>
               <thead><tr><th>#</th><th>التاريخ</th><th>رقم العهدة</th><th>البيان</th><th>طريقة الصرف</th><th>المصدر</th><th>مركز التكلفة</th><th>رقم المرجع</th><th>العملة</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>

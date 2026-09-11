@@ -30,6 +30,8 @@ export interface BaseReportTemplateProps {
   className?: string;
   pageNumber?: number;
   totalPages?: number;
+  /** Aggregate reports disclose balances, not debit/credit movement columns. */
+  hideMovementSummary?: boolean;
 }
 
 const fmt = (n: number): string => (Number(n) || 0).toLocaleString('en-US', {
@@ -65,6 +67,7 @@ export default function BaseReportTemplate({
   className = '',
   pageNumber = 1,
   totalPages = 1,
+  hideMovementSummary = false,
 }: BaseReportTemplateProps) {
   const company = useMemo(
     () => companyProp || loadBranchesLocal()[0] || DEFAULT_COMPANY_BRANCH,
@@ -113,14 +116,14 @@ export default function BaseReportTemplate({
 
         {showSummary && (
           <div className="brt-summary">
-            <table className="brt-summary-table">
+            {!hideMovementSummary && <table className="brt-summary-table">
               <tbody><tr>
                 <td className="brt-sum-label">إجمالي العمليات ({docCount} مستند)</td>
                 <td className="brt-sum-num">{fmt(totalDebit)}</td>
                 <td className="brt-sum-num">{fmt(totalCredit)}</td>
                 {openingBalance !== undefined && <td className="brt-sum-num brt-sum-highlight">{fmt(closingBalance ?? 0)}</td>}
               </tr></tbody>
-            </table>
+            </table>}
             {closingBalance !== undefined && (
               <div className="brt-balance-box">
                 <div><b>{computedBalanceTag || 'الرصيد الختامي'}:</b> {computedTafqeet}</div>
