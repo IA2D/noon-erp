@@ -750,6 +750,39 @@ export default function FinancialReportsView({
 
   const bsCurrentDiff = round2(bsByAccount.totals.currentDebit - bsByAccount.totals.currentCredit);
   const bsCumulativeDiff = round2(bsByAccount.totals.cumulativeDebit - bsByAccount.totals.cumulativeCredit);
+  const bsDisplay = useMemo(() => {
+    type DisplayRow = { kind: 'section' | 'group' | 'account' | 'total'; code: string; name: string; partial?: number; total?: number };
+    const rows: DisplayRow[] = [];
+    const accountAmount = (r: typeof bsByAccount.rows[number]) => round2(r.cumulativeDebit - r.cumulativeCredit);
+    const section = (root: '1' | '2', label: string) => {
+      const sectionRows = bsByAccount.rows.filter(r => hasAncestorOrSelfCode(reportAccounts.find(a => a.id === r.accountId) || ({ code: r.code } as Account), reportAccounts, root));
+      // إبقاء القسم ظاهرًا حتى عند عدم وجود أرصدة، مع إجمالي صفر.
+      rows.push({ kind: 'section', code: root, name: label });
+      const groups = new Map<string, { name: string; rows: typeof sectionRows }>();
+      sectionRows.forEach(r => {
+        const account = reportAccounts.find(a => a.id === r.accountId);
+        const group = account ? ancestorChain(account, reportAccounts).find(a => a.level === 2 && a.code.startsWith(root)) : undefined;
+        const key = group?.code || root;
+        const bucket = groups.get(key);
+        if (bucket) bucket.rows.push(r); else groups.set(key, { name: group?.nameAr || label, rows: [r] });
+      });
+      let sectionTotal = 0;
+      for (const [code, group] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        const groupTotal = round2(group.rows.reduce((sum, r) => sum + accountAmount(r), 0));
+        sectionTotal += groupTotal;
+        rows.push({ kind: 'group', code, name: group.name, total: Math.abs(groupTotal) });
+        for (const r of [...group.rows].sort((a, b) => a.code.localeCompare(b.code))) rows.push({ kind: 'account', code: r.code, name: r.name, partial: Math.abs(accountAmount(r)) });
+      }
+      if (root === '2' && Math.abs(balanceSheet.netIncomeCurrentYear) > 0.005) {
+        sectionTotal += balanceSheet.netIncomeCurrentYear;
+        rows.push({ kind: 'account', code: 'NET-INCOME', name: balanceSheet.netIncomeCurrentYear >= 0 ? 'صافي أرباح الفترة — Net Profit' : 'صافي خسائر الفترة — Net Loss', partial: Math.abs(round2(balanceSheet.netIncomeCurrentYear)) });
+      }
+      rows.push({ kind: 'total', code: `TOTAL-${root}`, name: root === '1' ? 'إجمالي الأصول' : 'إجمالي الالتزامات وحقوق الملكية', total: Math.abs(round2(sectionTotal)) });
+    };
+    section('1', 'الأصول — Assets');
+    section('2', 'الالتزامات وحقوق الملكية — Liabilities & Equity');
+    return rows;
+  }, [bsByAccount.rows, reportAccounts, balanceSheet.netIncomeCurrentYear]);
   const baseCurrencyName = currencyOptions.find(c => c.code === baseCode)?.label.split(' (')[0] || baseCode;
 
   const postedCount = journalsInRange.length;
@@ -2243,61 +2276,10 @@ export default function FinancialReportsView({
 
                 <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse min-w-[920px]">
-                      <thead>
-                        <tr className="bg-[#b4a7d6] text-slate-900">
-                          <th className="px-2 py-2 border border-slate-300">#</th>
-                          <th className="px-2 py-2 border border-slate-300 text-right">رقم الحساب</th>
-                          <th className="px-2 py-2 border border-slate-300 text-right">اسم الحساب</th>
-                          <th className="px-2 py-2 border border-slate-300">العملة</th>
-                          <th className="px-2 py-2 border border-slate-300" colSpan={2}>أرصدة الفترة الحالية</th>
-                          <th className="px-2 py-2 border border-slate-300" colSpan={2}>أرصدة تراكمية</th>
-                        </tr>
-                        <tr className="bg-[#d9d2e9] text-slate-900">
-                          <th className="border border-slate-300"></th>
-                          <th className="border border-slate-300"></th>
-                          <th className="border border-slate-300"></th>
-                          <th className="border border-slate-300"></th>
-                          <th className="px-2 py-1 border border-slate-300 font-semibold">مدين</th>
-                          <th className="px-2 py-1 border border-slate-300 font-semibold">دائن</th>
-                          <th className="px-2 py-1 border border-slate-300 font-semibold">مدين</th>
-                          <th className="px-2 py-1 border border-slate-300 font-semibold">دائن</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {!isSummary && bsByAccount.rows.map((r, i) => (
-                          <tr key={r.accountId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                            <td className="px-2 py-1 border border-slate-200 text-center font-mono text-xs">{i + 1}</td>
-                            <td className="px-2 py-1 border border-slate-200 font-mono text-xs">{r.code}</td>
-                            <td className="px-2 py-1 border border-slate-200 text-right">{r.name}</td>
-                            <td className="px-2 py-1 border border-slate-200 text-center font-mono text-xs">{r.currency}</td>
-                            <td className="px-2 py-1 border border-slate-200 text-center font-mono text-xs">{r.currentDebit > 0 ? fmt(r.currentDebit) : ''}</td>
-                            <td className="px-2 py-1 border border-slate-200 text-center font-mono text-xs">{r.currentCredit > 0 ? fmt(r.currentCredit) : ''}</td>
-                            <td className="px-2 py-1 border border-slate-200 text-center font-mono text-xs">{r.cumulativeDebit > 0 ? fmt(r.cumulativeDebit) : ''}</td>
-                            <td className="px-2 py-1 border border-slate-200 text-center font-mono text-xs">{r.cumulativeCredit > 0 ? fmt(r.cumulativeCredit) : ''}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        {(Math.abs(bsCurrentDiff) > 0.005 || Math.abs(bsCumulativeDiff) > 0.005) && (
-                          <tr className="bg-[#fce4ec]">
-                            <td colSpan={4} className="px-2 py-1 border border-slate-300 font-bold text-right">الفارق بين المدين والدائن</td>
-                            <td className="px-2 py-1 border border-slate-300 text-center font-mono font-bold">{bsCurrentDiff > 0 ? fmt(bsCurrentDiff) : ''}</td>
-                            <td className="px-2 py-1 border border-slate-300 text-center font-mono font-bold">{bsCurrentDiff < 0 ? fmt(-bsCurrentDiff) : ''}</td>
-                            <td className="px-2 py-1 border border-slate-300 text-center font-mono font-bold">{bsCumulativeDiff > 0 ? fmt(bsCumulativeDiff) : ''}</td>
-                            <td className="px-2 py-1 border border-slate-300 text-center font-mono font-bold">{bsCumulativeDiff < 0 ? fmt(-bsCumulativeDiff) : ''}</td>
-                          </tr>
-                        )}
-                        <tr className="bg-[#c5c7f1] font-black text-slate-900">
-                          <td colSpan={2} className="px-2 py-2 border border-slate-300 font-bold">العدد الكلي: {bsByAccount.count}</td>
-                          <td className="px-2 py-2 border border-slate-300 font-bold text-right">الإجمالي الكلي بالعملة المحلية ({baseCode})</td>
-                          <td className="px-2 py-2 border border-slate-300 text-center font-bold">{baseCode}</td>
-                          <td className="px-2 py-2 border border-slate-300 text-center font-mono">{fmt(bsByAccount.totals.currentDebitYER)}</td>
-                          <td className="px-2 py-2 border border-slate-300 text-center font-mono">{fmt(bsByAccount.totals.currentCreditYER)}</td>
-                          <td className="px-2 py-2 border border-slate-300 text-center font-mono">{fmt(bsByAccount.totals.cumulativeDebitYER)}</td>
-                          <td className="px-2 py-2 border border-slate-300 text-center font-mono">{fmt(bsByAccount.totals.cumulativeCreditYER)}</td>
-                        </tr>
-                      </tfoot>
+                    <table className="w-full text-sm border-collapse min-w-[720px]" dir="rtl">
+                      <thead><tr className="bg-[#b4a7d6] text-slate-900"><th className="px-2 py-2 border border-slate-300 text-right">رقم الحساب</th><th className="px-2 py-2 border border-slate-300 text-right">اسم الحساب</th><th className="px-2 py-2 border border-slate-300">جزئي ({baseCode})</th><th className="px-2 py-2 border border-slate-300">كلي ({baseCode})</th></tr></thead>
+                      <tbody>{!isSummary && bsDisplay.map((r, i) => r.kind === 'section' ? <tr key={r.code} className="bg-slate-100 dark:bg-slate-800 font-black"><td colSpan={4} className="px-2 py-2 border border-slate-300 text-right">{r.name}</td></tr> : r.kind === 'group' ? <tr key={r.code} className="bg-slate-50 dark:bg-slate-800/70 font-bold"><td className="px-2 py-1 border border-slate-200 font-mono">{r.code}</td><td className="px-2 py-1 border border-slate-200 text-right">{r.name}</td><td className="px-2 py-1 border border-slate-200"></td><td className="px-2 py-1 border border-slate-200 text-center font-mono">{fmt(r.total || 0)}</td></tr> : r.kind === 'total' ? <tr key={r.code} className="bg-[#c5c7f1] font-black text-slate-900"><td colSpan={2} className="px-2 py-2 border border-slate-300 text-right">{r.name}</td><td className="px-2 py-2 border border-slate-300"></td><td className="px-2 py-2 border border-slate-300 text-center font-mono">{fmt(r.total || 0)}</td></tr> : <tr key={`${r.code}-${i}`}><td className="px-2 py-1 border border-slate-200 font-mono text-xs">{r.code}</td><td className="px-2 py-1 border border-slate-200 text-right">{r.name}</td><td className="px-2 py-1 border border-slate-200 text-center font-mono">{fmt(r.partial || 0)}</td><td className="px-2 py-1 border border-slate-200"></td></tr>)}</tbody>
+                      <tfoot><tr className="bg-[#c5c7f1] font-black text-slate-900"><td colSpan={3} className="px-2 py-2 border border-slate-300 text-right">الإجمالي العام</td><td className="px-2 py-2 border border-slate-300 text-center font-mono">{fmt(balanceSheet.totalAssets)} / {fmt(balanceSheet.totalLiabilitiesAndEquity)}</td></tr></tfoot>
                     </table>
                   </div>
                 </div>
@@ -3201,69 +3183,15 @@ export default function FinancialReportsView({
               .bs-table .num { text-align: center; font-family: 'Consolas','Courier New',monospace; }
               .bs-table .text-right { text-align: right; }
               .bs-table tfoot tr.bs-diff td { background-color: #fce4ec !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: bold; }
+              .bs-table tr.bs-section td { background-color: #e8e7fc !important; font-weight: 900; }
+              .bs-table tr.bs-group td { background-color: #f5f3fb !important; font-weight: bold; }
               .bs-table tfoot tr.bs-total td { background-color: #c5c7f1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: 900; }
             `}</style>
-            <table className="bs-table">
-              <colgroup>
-                <col style={{ width: '3%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '27%' }} />
-                <col style={{ width: '6%' }} />
-                <col style={{ width: '13%' }} />
-                <col style={{ width: '13%' }} />
-                <col style={{ width: '13%' }} />
-                <col style={{ width: '13%' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th rowSpan={2}>#</th>
-                  <th rowSpan={2}>رقم الحساب</th>
-                  <th rowSpan={2}>اسم الحساب</th>
-                  <th rowSpan={2}>العملة</th>
-                  <th colSpan={2}>أرصدة الفترة الحالية</th>
-                  <th colSpan={2}>أرصدة تراكمية</th>
-                </tr>
-                <tr>
-                  <th>مدين</th>
-                  <th>دائن</th>
-                  <th>مدين</th>
-                  <th>دائن</th>
-                </tr>
-              </thead>
-              <tbody>
-                {!isSummary && bsByAccount.rows.map((r, i) => (
-                  <tr key={r.accountId}>
-                    <td className="num">{i + 1}</td>
-                    <td className="num">{r.code}</td>
-                    <td className="text-right">{r.name}</td>
-                    <td className="num">{r.currency}</td>
-                    <td className="num">{r.currentDebit > 0 ? fmt(r.currentDebit) : ''}</td>
-                    <td className="num">{r.currentCredit > 0 ? fmt(r.currentCredit) : ''}</td>
-                    <td className="num">{r.cumulativeDebit > 0 ? fmt(r.cumulativeDebit) : ''}</td>
-                    <td className="num">{r.cumulativeCredit > 0 ? fmt(r.cumulativeCredit) : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                {(Math.abs(bsCurrentDiff) > 0.005 || Math.abs(bsCumulativeDiff) > 0.005) && (
-                  <tr className="bs-diff">
-                    <td colSpan={4} className="text-right">الفارق بين المدين والدائن</td>
-                    <td className="num">{bsCurrentDiff > 0 ? fmt(bsCurrentDiff) : ''}</td>
-                    <td className="num">{bsCurrentDiff < 0 ? fmt(-bsCurrentDiff) : ''}</td>
-                    <td className="num">{bsCumulativeDiff > 0 ? fmt(bsCumulativeDiff) : ''}</td>
-                    <td className="num">{bsCumulativeDiff < 0 ? fmt(-bsCumulativeDiff) : ''}</td>
-                  </tr>
-                )}
-                <tr className="bs-total">
-                  <td colSpan={2} className="num">العدد الكلي: {bsByAccount.count}</td>
-                  <td className="text-right">الإجمالي الكلي بالعملة المحلية ({baseCode})</td>
-                  <td className="num">{baseCode}</td>
-                  <td className="num">{fmt(bsByAccount.totals.currentDebitYER)}</td>
-                  <td className="num">{fmt(bsByAccount.totals.currentCreditYER)}</td>
-                  <td className="num">{fmt(bsByAccount.totals.cumulativeDebitYER)}</td>
-                  <td className="num">{fmt(bsByAccount.totals.cumulativeCreditYER)}</td>
-                </tr>
-              </tfoot>
+            <table className="bs-table" dir="rtl">
+              <colgroup><col style={{ width: '18%' }} /><col style={{ width: '52%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /></colgroup>
+              <thead><tr><th>رقم الحساب</th><th>اسم الحساب</th><th>جزئي ({baseCode})</th><th>كلي ({baseCode})</th></tr></thead>
+              <tbody>{!isSummary && bsDisplay.map((r, i) => r.kind === 'section' ? <tr key={r.code} className="bs-section"><td colSpan={4} className="text-right">{r.name}</td></tr> : r.kind === 'group' ? <tr key={r.code} className="bs-group"><td className="num">{r.code}</td><td className="text-right">{r.name}</td><td></td><td className="num">{fmt(r.total || 0)}</td></tr> : r.kind === 'total' ? <tr key={r.code} className="bs-total"><td colSpan={2} className="text-right">{r.name}</td><td></td><td className="num">{fmt(r.total || 0)}</td></tr> : <tr key={`${r.code}-${i}`}><td className="num">{r.code}</td><td className="text-right">{r.name}</td><td className="num">{fmt(r.partial || 0)}</td><td></td></tr>)}</tbody>
+              <tfoot><tr className="bs-total"><td colSpan={3} className="text-right">الإجمالي العام</td><td className="num">{fmt(balanceSheet.totalAssets)} / {fmt(balanceSheet.totalLiabilitiesAndEquity)}</td></tr></tfoot>
             </table>
 
             <PrintTafqeet label="الفارق بين المدين والدائن" amount={bsByAccount.totals.cumulativeDebitYER - bsByAccount.totals.cumulativeCreditYER} currencyName={baseCurrencyName} currencyCode={baseCode} />
