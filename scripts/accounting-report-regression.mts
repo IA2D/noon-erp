@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import type { Account, JournalEntry, JournalLine } from '../src/types/erp';
 import { calculateBalanceSheet, calculateCashFlowStatement, calculateEquityChangesStatement, calculateIncomeStatement } from '../src/utils/accountingEngine';
 import { buildPeriodAccounts, calculatePeriodMovement, postedJournalsInRange, validateReportPeriod } from '../src/utils/reportingPeriod';
@@ -105,5 +106,9 @@ assert.equal(equityChanges.ownerMovements, 20);
 assert.equal(equityChanges.netIncome, 30);
 assert.equal(equityChanges.closingEquity, 150);
 assert.equal(equityChanges.isReconciled, true);
+
+const reportsSource = readFileSync(new URL('../src/components/modules/FinancialReportsView.tsx', import.meta.url), 'utf8');
+assert.ok(reportsSource.includes('!showZeroAccounts && currentDebit <= 0'));
+assert.ok(reportsSource.includes('journals, showZeroAccounts]'));
 
 console.log('ACCOUNTING_REPORT_REGRESSION_OK period=2026-01 openingCash=120 openingCapital=-120 movementCash=40/10 revenue=40 expense=10 netIncome=30 assets=150 liabilitiesEquity=150 cashFlowClosing=150 cashFlowReconciled=true equityClosing=150 equityReconciled=true balanced=true pendingExcluded=true');

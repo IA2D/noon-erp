@@ -715,7 +715,7 @@ export default function FinancialReportsView({
         localCumulativeDebit = signedLocal > 0 ? signedLocal : 0;
         localCumulativeCredit = signedLocal < 0 ? Math.abs(signedLocal) : 0;
       }
-      if (currentDebit <= 0 && currentCredit <= 0 && cumulativeDebit <= 0 && cumulativeCredit <= 0) return;
+      if (!showZeroAccounts && currentDebit <= 0 && currentCredit <= 0 && cumulativeDebit <= 0 && cumulativeCredit <= 0) return;
       rows.push({
         accountId: acc.id,
         code: acc.code,
@@ -746,7 +746,7 @@ export default function FinancialReportsView({
       { currentDebit: 0, currentCredit: 0, cumulativeDebit: 0, cumulativeCredit: 0, currentDebitYER: 0, currentCreditYER: 0, cumulativeDebitYER: 0, cumulativeCreditYER: 0 }
     );
     return { rows, totals, count: rows.length };
-  }, [reportAccounts, activity, periodMovement, currency, fromDate, toDate, isOriginalCurrencyReport, journals]);
+  }, [reportAccounts, activity, periodMovement, currency, fromDate, toDate, isOriginalCurrencyReport, journals, showZeroAccounts]);
 
   const bsCurrentDiff = round2(bsByAccount.totals.currentDebit - bsByAccount.totals.currentCredit);
   const bsCumulativeDiff = round2(bsByAccount.totals.cumulativeDebit - bsByAccount.totals.cumulativeCredit);
