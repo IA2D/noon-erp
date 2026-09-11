@@ -2017,6 +2017,7 @@ export default function FinancialReportsView({
                     }
                   `}</style>
 
+                  {isSummary ? <table className="tb-official-table"><thead><tr><th>#</th><th>المجموعة</th><th>العملة</th><th>الرصيد</th></tr></thead><tbody>{groupedTB.groups.flatMap(group => { const byCurrency = new Map<string, number>(); group.rows.forEach(row => byCurrency.set(row.currency, round2((byCurrency.get(row.currency) || 0) + row.endingDebit - row.endingCredit))); return [...byCurrency.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, amount], index) => <tr key={`${group.key}-${code}`}><td>{index + 1}</td><td className="text-right">{group.labelAr}</td><td className="font-mono">{code}</td><td className="font-mono">{amount >= 0 ? 'مدين ' : 'دائن '}{fmt(Math.abs(amount))}</td></tr>); })}</tbody><tfoot><tr style={{ backgroundColor: '#fce4ec' }} className="print-color-exact"><td colSpan={3} className="font-bold text-slate-800">الرصيد الإجمالي</td><td className="font-mono font-bold text-rose-600">{groupedTB.totals.endingDebit - groupedTB.totals.endingCredit >= 0 ? 'مدين ' : 'دائن '}{fmt(Math.abs(groupedTB.totals.endingDebit - groupedTB.totals.endingCredit))}</td></tr></tfoot></table> : <>
                   <table className="tb-official-table">
                     <colgroup>
                       <col style={{ width: '3%' }} />
@@ -2118,6 +2119,7 @@ export default function FinancialReportsView({
                       </tr>
                     </tfoot>
                   </table>
+                  </>}
                 </FinancialReportPrintLayout>
               </div>
             )}
@@ -3291,6 +3293,7 @@ export default function FinancialReportsView({
               .tb-p .tr-total td { background-color:#c5c7f1 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; font-weight:900; }
               .tb-p .num { font-family:'Consolas','Courier New',monospace; }
             `}</style>
+            {isSummary ? <table className="tb-p"><thead><tr><th>#</th><th>المجموعة</th><th>العملة</th><th>الرصيد</th></tr></thead><tbody>{groupedTB.groups.flatMap(group => { const byCurrency = new Map<string, number>(); group.rows.forEach(row => byCurrency.set(row.currency, round2((byCurrency.get(row.currency) || 0) + row.endingDebit - row.endingCredit))); return [...byCurrency.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, amount], index) => <tr key={`${group.key}-${code}`}><td>{index + 1}</td><td className="text-right">{group.labelAr}</td><td className="num">{code}</td><td className="num">{amount >= 0 ? 'مدين ' : 'دائن '}{fmt(Math.abs(amount))}</td></tr>); })}</tbody><tfoot><tr className="tr-total"><td colSpan={3}>الرصيد الإجمالي</td><td className="num">{groupedTB.totals.endingDebit - groupedTB.totals.endingCredit >= 0 ? 'مدين ' : 'دائن '}{fmt(Math.abs(groupedTB.totals.endingDebit - groupedTB.totals.endingCredit))}</td></tr></tfoot></table> : <>
             <table className="tb-p">
               <colgroup>
                 <col style={{ width: '3%' }} /><col style={{ width: '12%' }} /><col style={{ width: '25%' }} /><col style={{ width: '5%' }} />
@@ -3331,6 +3334,7 @@ export default function FinancialReportsView({
                 </tr>
               </tfoot>
             </table>
+            </>}
             <PrintTafqeet label="الفرق بين المدين والدائن" amount={groupedTB.totals.endingDebit - groupedTB.totals.endingCredit} currencyName={baseCurrencyName} currencyCode={baseCode} />
             <PrintSignatures />
           </FinancialReportPrintLayout>
