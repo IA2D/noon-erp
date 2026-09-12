@@ -1350,7 +1350,12 @@ export default function ClosingView({
                     const entry = buildClosingEntry(selectedYearWizard);
                     const done = onCloseYear(selectedYearWizard, entry);
                     if (done) setConfirmClose(false);
-                    toast(done ? 'success' : 'error', done ? `تم نقل السنة ${selectedYearWizard} إلى ${wizardNextStatus ? periodStatusLabel[wizardNextStatus] : 'المرحلة التالية'}` : `تعذر تغيير حالة السنة ${selectedYearWizard}`);
+                    const reason = done ? '' : wizardNextStatus === null
+                      ? 'الانتقال المطلوب غير مسموح من الحالة الحالية.'
+                      : wizardYearJournals.some(j => j.status === 'PENDING_POSTING')
+                        ? 'توجد مستندات غير مرحّلة داخل السنة.'
+                        : 'فشل حفظ انتقال الحالة في قاعدة البيانات؛ راجع سجل التدقيق.';
+                    toast(done ? 'success' : 'error', done ? `تم نقل السنة ${selectedYearWizard} إلى ${wizardNextStatus ? periodStatusLabel[wizardNextStatus] : 'المرحلة التالية'}` : `تعذر تغيير حالة السنة ${selectedYearWizard}. السبب: ${reason}`);
                   }}
                   className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"
                 ><Lock className="w-4 h-4" />اعتماد المرحلة</button>
@@ -1459,7 +1464,14 @@ export default function ClosingView({
                 onClick={() => {
                   const done = onCreateOpeningEntry(selectedYearWizard);
                   if (done) setConfirmRollover(false);
-                  toast(done ? 'success' : 'error', done ? `تم توليد القيد الافتتاحي للسنة ${Number(selectedYearWizard) + 1}` : 'تعذر التدوير: تحقق من الإقفال النهائي والتوازن وعدم وجود قيد سابق');
+                  const rolloverReason = done ? '' : !wizardFinalClosed
+                    ? 'الإقفال النهائي للسنة المصدر غير مكتمل.'
+                    : !wizardBalanced
+                      ? `الميزانية غير متوازنة (مدين ${fmt(wizardDebit)} مقابل دائن ${fmt(wizardCredit)}).`
+                      : wizardOpeningEntry
+                        ? `يوجد قيد افتتاحي مرحّل للسنة ${Number(selectedYearWizard) + 1} بالفعل (${wizardOpeningEntry.entryNumber}).`
+                        : 'فشل حفظ قيد التدوير في قاعدة البيانات؛ راجع سجل التدقيق.';
+                  toast(done ? 'success' : 'error', done ? `تم توليد القيد الافتتاحي للسنة ${Number(selectedYearWizard) + 1}` : `تعذر التدوير للسنة ${Number(selectedYearWizard) + 1}. السبب: ${rolloverReason}`);
                 }}
                 className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"
               >
