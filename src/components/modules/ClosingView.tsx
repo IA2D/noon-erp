@@ -383,7 +383,7 @@ export default function ClosingView({
   const wizardYearClosed = wizardPeriod.status !== 'OPEN' || closedYears.includes(selectedYearWizard);
   const wizardFinalClosed = wizardPeriod.status === 'FINAL_CLOSED';
   const wizardNextStatus = wizardPeriod.status === 'OPEN' ? 'TEMP_CLOSED' : wizardPeriod.status === 'TEMP_CLOSED' ? 'REVIEWED' : wizardPeriod.status === 'REVIEWED' ? 'FINAL_CLOSED' : null;
-  const wizardClosingEntry = journals.find(j => j.reference === `CLOSE-${selectedYearWizard}` && j.status === 'POSTED');
+  const wizardClosingEntry = journals.find(j => j.reference === `CLOSE-${selectedYearWizard}` && j.status === 'POSTED' && !j.reversedByEntryId);
   const wizardOpeningEntry = journals.find(j => j.reference === `OPEN-${String(Number(selectedYearWizard) + 1)}` && j.status === 'POSTED');
   const wizardPreview = wizardFinalClosed ? null : buildClosingEntry(selectedYearWizard);
 

@@ -883,7 +883,10 @@ function AppInner() {
     const target = nextCloseStatus(current.status);
     if (!target) return false;
     const finalEntry = target === 'FINAL_CLOSED' ? closingEntry : null;
-    const existingClosing = journals.some(j => j.reference === `CLOSE-${year}` && j.status === 'POSTED');
+    // A previously closed year may have been reopened. Its original closing
+    // entry remains posted but is linked to a reversal; it must not block a
+    // fresh closing entry after the reopened year is reviewed again.
+    const existingClosing = journals.some(j => j.reference === `CLOSE-${year}` && j.status === 'POSTED' && !j.reversedByEntryId);
     if (finalEntry && !existingClosing) {
       const validation = validateGeneratedJournalForPosting(finalEntry, accounts, journals, currencies);
       if (!validation.valid) {
