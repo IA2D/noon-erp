@@ -909,7 +909,7 @@ function AppInner() {
     const audit = createAuditLog('GENERAL_LEDGER', 'POST', `تغيير حالة السنة ${year}: ${current.status} ← ${target}`);
     const changes: Array<{ key: string; value: unknown }> = [{ key: K.periodStates, value: nextPeriods }, { key: K.closedYears, value: nextClosedYears }];
     if (nextJournals !== journals) changes.push({ key: K.journals, value: nextJournals });
-    const commit = commitAccountingStateResult({ idempotencyKey: `PERIOD:YEAR:${year}:${target}:${transition.record.version}`, commandType: `PERIOD_${target}`, documentType: 'YEAR', documentNumber: year }, changes, audit);
+    const commit = commitAccountingStateResult({ idempotencyKey: `PERIOD:YEAR:${year}:${target}:${transition.record.version}`, commandType: `PERIOD_${target}`, documentType: 'YEAR', documentNumber: `${year}:${transition.record.version}` }, changes, audit);
     if (!commit.ok) return { ok: false, error: accountingCommandError(commit.error) };
     setPeriodStates(nextPeriods);
     setClosedYears(nextClosedYears);
@@ -931,7 +931,8 @@ function AppInner() {
     if (closing && !closing.reversedByEntryId && !reversePostedJournal(closing, `إعادة فتح السنة المالية ${year}: ${request?.reason || ''}`, 'GENERAL_LEDGER', [{ key: K.periodStates, value: nextPeriods }, { key: K.closedYears, value: nextClosedYears }])) return false;
     if (!closing || closing.reversedByEntryId) {
       const audit = createAuditLog('GENERAL_LEDGER', 'UPDATE', `إعادة فتح السنة المالية ${year}: ${request?.reason || ''}`);
-      if (!commitAccountingState({ idempotencyKey: `PERIOD:YEAR:${year}:OPEN:${transition.record.version}`, commandType: 'PERIOD_OPEN', documentType: 'YEAR', documentNumber: year }, [{ key: K.periodStates, value: nextPeriods }, { key: K.closedYears, value: nextClosedYears }], audit)) return false;
+      const commit = commitAccountingStateResult({ idempotencyKey: `PERIOD:YEAR:${year}:OPEN:${transition.record.version}`, commandType: 'PERIOD_OPEN', documentType: 'YEAR', documentNumber: `${year}:${transition.record.version}` }, [{ key: K.periodStates, value: nextPeriods }, { key: K.closedYears, value: nextClosedYears }], audit);
+      if (!commit.ok) { addAuditLog('GENERAL_LEDGER', 'UPDATE', `فشل حفظ إعادة فتح السنة ${year}: ${accountingCommandError(commit.error)}`); return false; }
       setAuditLogs(prev => [audit, ...prev]);
     }
     setPeriodStates(nextPeriods);
