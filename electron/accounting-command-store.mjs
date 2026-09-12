@@ -61,6 +61,16 @@ export function createAccountingCommandStore(db, relationalStore) {
             const rows = raw ? JSON.parse(raw) : [];
             documentExists = Array.isArray(rows) && rows.some(row => String(row?.entryNumber || '') === documentNumber);
           } catch { documentExists = true; }
+        } else if (commandType === 'CARRY_FORWARD' && documentType === 'YEAR') {
+          // A previous attempt may have left only the command receipt while
+          // the opening journal was rolled back. Treat that receipt as an
+          // orphan so the user can retry the rollover; protect it once the
+          // actual opening entry exists.
+          try {
+            const raw = db.prepare('SELECT value FROM kv_store WHERE key=?').get(JOURNAL_COLLECTION_KEY)?.value;
+            const rows = raw ? JSON.parse(raw) : [];
+            documentExists = Array.isArray(rows) && rows.some(row => String(row?.reference || '') === `OPEN-${documentNumber}` && row?.status === 'POSTED');
+          } catch { documentExists = true; }
         } else {
           documentExists = true;
         }
