@@ -366,6 +366,11 @@ export default function ClosingView({
 
   const [selectedYearWizard, setSelectedYearWizard] = useState<string>(currentYear);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Final annual closing has three deliberate confirmations: intent, impact/backup,
+  // then the current user's password. Earlier workflow stages retain one approval.
+  const [yearCloseStep, setYearCloseStep] = useState<1 | 2 | 3>(1);
+  const [yearClosePassword, setYearClosePassword] = useState('');
+  const [yearCloseBackupBusy, setYearCloseBackupBusy] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const [confirmRollover, setConfirmRollover] = useState(false);
 
@@ -1092,7 +1097,7 @@ export default function ClosingView({
                   {!wizardFinalClosed && wizardNextStatus && (
                     <button
                       type="button"
-                      onClick={() => setConfirmClose(true)}
+                      onClick={() => { setYearCloseStep(1); setYearClosePassword(''); setConfirmClose(true); }}
                       disabled={!!wizardCloseReason}
                       title={wizardCloseReason || 'قفل السنة المالية'}
                       className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1326,8 +1331,8 @@ export default function ClosingView({
         <ModalShell
           id="closing-confirm"
           open={!!confirmClose}
-          onClose={() => setConfirmClose(false)}
-          title={`اعتماد مرحلة إقفال السنة ${selectedYearWizard}`}
+          onClose={() => { setConfirmClose(false); setYearCloseStep(1); setYearClosePassword(''); }}
+          title={wizardNextStatus === 'FINAL_CLOSED' ? `تأكيد الإقفال النهائي للسنة ${selectedYearWizard} — المرحلة ${yearCloseStep} من 3` : `اعتماد مرحلة إقفال السنة ${selectedYearWizard}`}
           icon={Lock}
           size="sm"
           className="border-sky-500/30"
@@ -1335,35 +1340,58 @@ export default function ClosingView({
           bodyClassName="p-6 space-y-3"
           footer={
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-800 bg-slate-950/40">
-              <button type="button" onClick={() => setConfirmClose(false)} className="px-4 py-2 text-slate-400 hover:bg-white/10 rounded-xl text-sm font-medium cursor-pointer">
+              <button type="button" onClick={() => { setConfirmClose(false); setYearCloseStep(1); setYearClosePassword(''); }} className="px-4 py-2 text-slate-400 hover:bg-white/10 rounded-xl text-sm font-medium cursor-pointer">
                 إلغاء
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const entry = wizardNextStatus === 'FINAL_CLOSED' ? buildClosingEntry(selectedYearWizard) : null;
-                  const done = onCloseYear(selectedYearWizard, entry);
-                  if (done) setConfirmClose(false);
-                  toast(done ? 'success' : 'error', done ? `تم نقل السنة ${selectedYearWizard} إلى ${wizardNextStatus ? periodStatusLabel[wizardNextStatus] : 'المرحلة التالية'}` : `تعذر تغيير حالة السنة ${selectedYearWizard}`);
-                }}
-                className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"
-              >
-                <Lock className="w-4 h-4" />
-                اعتماد المرحلة
-              </button>
+              {wizardNextStatus !== 'FINAL_CLOSED' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const entry = buildClosingEntry(selectedYearWizard);
+                    const done = onCloseYear(selectedYearWizard, entry);
+                    if (done) setConfirmClose(false);
+                    toast(done ? 'success' : 'error', done ? `تم نقل السنة ${selectedYearWizard} إلى ${wizardNextStatus ? periodStatusLabel[wizardNextStatus] : 'المرحلة التالية'}` : `تعذر تغيير حالة السنة ${selectedYearWizard}`);
+                  }}
+                  className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"
+                ><Lock className="w-4 h-4" />اعتماد المرحلة</button>
+              ) : yearCloseStep < 3 ? (
+                <button type="button" onClick={() => setYearCloseStep(step => step === 1 ? 2 : 3)} className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer">
+                  متابعة
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const desktop = window.desktopStore;
+                    const session = desktop?.session('');
+                    const username = session?.user?.username;
+                    const verified = username && yearClosePassword ? desktop?.login(username, yearClosePassword) : { ok: false };
+                    if (!verified?.ok) { toast('error', 'كلمة المرور غير صحيحة. لم يتم إقفال السنة.'); return; }
+                    const entry = buildClosingEntry(selectedYearWizard);
+                    const done = onCloseYear(selectedYearWizard, entry);
+                    if (done) { setConfirmClose(false); setYearCloseStep(1); setYearClosePassword(''); }
+                    toast(done ? 'success' : 'error', done ? `تم الإقفال النهائي للسنة المالية ${selectedYearWizard}. أصبحت العمليات فيها للاستعراض والتقارير فقط.` : `تعذر الإقفال النهائي للسنة ${selectedYearWizard}`);
+                  }}
+                  className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-600/25 cursor-pointer"
+                ><Lock className="w-4 h-4" />تأكيد الإقفال النهائي</button>
+              )}
             </div>
           }
         >
-          <p className="text-sm text-slate-300 leading-relaxed">
-            سيتم نقل السنة المالية {selectedYearWizard} من {periodStatusLabel[wizardPeriod.status]} إلى {wizardNextStatus ? periodStatusLabel[wizardNextStatus] : 'الحالة التالية'}.
-            {wizardNextStatus === 'FINAL_CLOSED' && wizardPreview
-              ? ` سيتم أيضاً ترحيل قيد إقفال (${wizardPreview.lines.length} سطر) ينقل صافي النتيجة ${fmt(wizardPreview.totalDebit - wizardPreview.totalCredit)} إلى الأرباح المبقاة.`
-              : ' لا توجد أرصدة إيرادات أو مصروفات لترحيلها في هذه السنة.'}
-          </p>
-          <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-300">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>لا يمكن ترحيل أو تعديل قيود جديدة في السنة المغلقة إلا بعد إعادة فتحها من هنا.</span>
-          </div>
+          {wizardNextStatus !== 'FINAL_CLOSED' ? <>
+            <p className="text-sm text-slate-300 leading-relaxed">سيتم نقل السنة المالية {selectedYearWizard} من {periodStatusLabel[wizardPeriod.status]} إلى {wizardNextStatus ? periodStatusLabel[wizardNextStatus] : 'الحالة التالية'}.</p>
+            <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-300"><AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /><span>لا يمكن ترحيل أو تعديل قيود جديدة في السنة المغلقة إلا بعد إعادة فتحها من هنا.</span></div>
+          </> : yearCloseStep === 1 ? <>
+            <p className="text-sm leading-relaxed text-slate-200">هل أنت متأكد من تنفيذ الإقفال النهائي للسنة المالية <b>{selectedYearWizard}</b>؟</p>
+            <p className="text-xs leading-relaxed text-slate-400">هذه الخطوة تقفل السنة وتمنع إدخال أو تعديل أو حذف أو ترحيل العمليات المؤرخة داخلها.</p>
+          </> : yearCloseStep === 2 ? <>
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-200"><b className="block mb-2">تأكيد أثر الإقفال</b>بعد الإقفال النهائي تصبح القيود اليومية وسندات الصرف والقبض والعهد وتسوياتها وعملياتها داخل السنة {selectedYearWizard} للعرض والتقارير والطباعة فقط. لا يمكن تنفيذ تغييرات عليها إلا بعد إعادة فتح السنة وفق دورة الاعتماد.</div>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3"><span className="text-xs text-emerald-200">صدّر نسخة SQLite كاملة ومتحققاً منها قبل المتابعة.</span><button type="button" disabled={yearCloseBackupBusy} onClick={async () => { if (!window.desktopStore?.exportBackup) { toast('error', 'تصدير النسخة الكاملة متاح داخل تطبيق سطح المكتب.'); return; } setYearCloseBackupBusy(true); try { const result = await window.desktopStore.exportBackup(); if (!result.canceled) toast(result.ok ? 'success' : 'error', result.ok ? `تم حفظ النسخة الكاملة والتحقق منها: ${result.integrity}` : 'تعذر تصدير النسخة الكاملة.'); } finally { setYearCloseBackupBusy(false); } }} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-400/50 px-3 py-2 text-xs font-bold text-emerald-200 disabled:opacity-50"><Download className="w-3.5 h-3.5" />{yearCloseBackupBusy ? 'جارٍ التصدير…' : 'تصدير قاعدة البيانات'}</button></div>
+          </> : <>
+            <p className="text-sm leading-relaxed text-slate-200">أدخل كلمة مرور المستخدم الحالي لإتمام الإقفال النهائي للسنة {selectedYearWizard}.</p>
+            <input autoFocus type="password" value={yearClosePassword} onChange={event => setYearClosePassword(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.closest('[role="dialog"]')?.querySelector<HTMLButtonElement>('button.bg-red-600')?.click(); }} placeholder="كلمة المرور" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500" />
+            <p className="text-xs text-slate-400">لن تُنفذ العملية عند عدم مطابقة كلمة المرور.</p>
+          </>}
         </ModalShell>
       )}
 

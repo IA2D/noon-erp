@@ -733,6 +733,20 @@ function AppInner() {
     audit: AuditLog
   ): boolean => commitAccountingStateResult(identity, stateChanges, audit).ok;
 
+  // Central period lock: UI controls may be bypassed through tabs, search, or
+  // legacy documents, so every financial command is rejected here as well.
+  const isClosedFinancialDate = (date?: string) => !!date && isPeriodClosed(date, closedYears, closedMonths, periodStates);
+  const custodyTouchesClosedPeriod = (custody: Custody) => isClosedFinancialDate(custody.requestedDate)
+    || (custody.settlements || []).some(item => isClosedFinancialDate(item.date))
+    || (custody.transactions || []).some(item => isClosedFinancialDate(item.date));
+  const trustTouchesClosedPeriod = (trust: Trust) => isClosedFinancialDate(trust.date)
+    || isClosedFinancialDate(trust.settlementDate)
+    || (trust.movements || []).some(item => isClosedFinancialDate(item.date));
+  const rejectClosedFinancialCommand = (module: AuditLog['module'], action: AuditLog['action'], detail: string) => {
+    addAuditLog(module, action, `رُفض ${detail}: الفترة المالية مقفلة — الاستعراض والتقارير فقط.`);
+    return false;
+  };
+
   const handleAddAccount = (newAcc: Omit<Account, 'id'>) => {
     const created: Account = { ...newAcc, id: `acc-${Date.now()}` };
     setAccounts(prev => [...prev, created]);
@@ -815,6 +829,11 @@ function AppInner() {
   };
 
   const handleAddJournal = (newEntry: JournalEntry): { ok: boolean; error?: string } => {
+    if (isClosedFinancialDate(newEntry.date)) {
+      const error = 'تاريخ القيد داخل سنة أو فترة مالية مقفلة — الاستعراض والتقارير فقط.';
+      rejectClosedFinancialCommand('GENERAL_LEDGER', newEntry.status === 'POSTED' ? 'POST' : 'CREATE', `حفظ القيد ${newEntry.entryNumber}`);
+      return { ok: false, error };
+    }
     const validation = newEntry.status === 'PENDING_POSTING'
       ? validateJournalForPosting(newEntry, accounts, journals, currencies)
       : validateGeneratedJournalForPosting(newEntry, accounts, journals, currencies);
@@ -1396,21 +1415,29 @@ function AppInner() {
   };
 
   const handleAddTrust = (trust: Trust) => {
+    if (trustTouchesClosedPeriod(trust)) { rejectClosedFinancialCommand('TRUSTS', 'CREATE', `إصدار العهدة ${trust.trustNumber}`); return; }
     setTrusts(prev => [trust, ...prev]);
     addAuditLog('TRUSTS', 'CREATE', `إصدار عهدة جديدة ${trust.trustNumber}`);
   };
 
   const handleUpdateTrust = (id: string, updates: Partial<Trust>) => {
+    const current = trusts.find(item => item.id === id);
+    const next = current ? { ...current, ...updates } : undefined;
+    if ((current && trustTouchesClosedPeriod(current)) || (next && trustTouchesClosedPeriod(next))) { rejectClosedFinancialCommand('TRUSTS', 'UPDATE', `تعديل العهدة ${current?.trustNumber ?? id}`); return; }
     setTrusts(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     addAuditLog('TRUSTS', 'UPDATE', `تعديل بيانات العهدة رقم ${id}`);
   };
 
   const handleAddCustody = (custody: Custody) => {
+    if (custodyTouchesClosedPeriod(custody)) { rejectClosedFinancialCommand('CUSTODY', 'CREATE', `إنشاء العهدة ${custody.custodyNumber}`); return; }
     setCustodies(prev => [custody, ...prev]);
     addAuditLog('CUSTODY', 'CREATE', `إنشاء عهدة ${custody.custodyNumber}`);
   };
 
   const handleUpdateCustody = (id: string, updates: Partial<Custody>) => {
+    const current = custodies.find(item => item.id === id);
+    const next = current ? { ...current, ...updates } as Custody : undefined;
+    if ((current && custodyTouchesClosedPeriod(current)) || (next && custodyTouchesClosedPeriod(next))) { rejectClosedFinancialCommand('CUSTODY', 'UPDATE', `تعديل العهدة ${current?.custodyNumber ?? id}`); return; }
     setCustodies(prev => prev.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16) } : c));
     addAuditLog('CUSTODY', 'UPDATE', `تحديث بيانات عهدة ${id}`);
   };
@@ -1515,6 +1542,7 @@ function AppInner() {
   };
 
   const handleAddVoucher = (voucher: PaymentVoucher, journalEntry?: JournalEntry) => {
+    if (isClosedFinancialDate(voucher.date)) { rejectClosedFinancialCommand('PAYMENT_VOUCHERS', 'CREATE', `إصدار سند الصرف ${voucher.voucherNumber}`); return; }
     setVouchers(prev => [voucher, ...prev]);
     if (journalEntry) setJournals(prev => [journalEntry, ...prev]);
     addAuditLog('PAYMENT_VOUCHERS', voucher.status === 'POSTED' ? 'POST' : 'CREATE', `إصدار سند صرف رقم ${voucher.voucherNumber}`);
@@ -1523,6 +1551,7 @@ function AppInner() {
   const handleVoidVoucher = (id: string, journalEntryId?: string) => {
     const target = vouchers.find(v => v.id === id);
     if (!target) return false;
+    if (isClosedFinancialDate(target.date)) return rejectClosedFinancialCommand('PAYMENT_VOUCHERS', 'VOID', `إلغاء سند الصرف ${target.voucherNumber}`);
     if (target.status === 'POSTED') return handleUnpostVoucher('PAYMENT', id);
     if (target.status === 'PENDING_POSTING') {
       setVouchers(prev => prev.map(v => v.id === id ? { ...v, status: 'VOIDED' as const } : v));
@@ -1544,6 +1573,7 @@ function AppInner() {
       addAuditLog('PAYMENT_VOUCHERS', 'UPDATE', `رُفض تعديل سند الصرف غير المنتظر للترحيل ${current.voucherNumber} — استخدم سند استبدال`);
       return;
     }
+    if ((current && isClosedFinancialDate(current.date)) || isClosedFinancialDate(updated.date)) { rejectClosedFinancialCommand('PAYMENT_VOUCHERS', 'UPDATE', `تعديل سند الصرف ${current?.voucherNumber ?? updated.voucherNumber}`); return; }
     setVouchers(prev => prev.map(v => (v.id === id ? updated : v)));
     if (oldJournalEntryId && journalEntry && oldJournalEntryId !== journalEntry.id) {
       setJournals(prev => prev.map(j => (j.id === oldJournalEntryId ? { ...j, status: 'VOIDED' as const } : j)));
@@ -1553,6 +1583,7 @@ function AppInner() {
   };
 
   const handleAddReceiptVoucher = (receipt: ReceiptVoucher, journalEntry?: JournalEntry) => {
+    if (isClosedFinancialDate(receipt.date)) { rejectClosedFinancialCommand('RECEIPT_VOUCHERS', 'CREATE', `إصدار سند القبض ${receipt.receiptNumber}`); return; }
     setReceiptVouchers(prev => [receipt, ...prev]);
     if (journalEntry) setJournals(prev => [journalEntry, ...prev]);
     addAuditLog('RECEIPT_VOUCHERS', receipt.status === 'POSTED' ? 'POST' : 'CREATE', `إصدار سند قبض رقم ${receipt.receiptNumber}`);
@@ -1561,6 +1592,7 @@ function AppInner() {
   const handleVoidReceiptVoucher = (id: string, journalEntryId?: string) => {
     const target = receiptVouchers.find(r => r.id === id);
     if (!target) return false;
+    if (isClosedFinancialDate(target.date)) return rejectClosedFinancialCommand('RECEIPT_VOUCHERS', 'VOID', `إلغاء سند القبض ${target.receiptNumber}`);
     if (target.status === 'POSTED') return handleUnpostVoucher('RECEIPT', id);
     if (target.status === 'PENDING_POSTING') {
       setReceiptVouchers(prev => prev.map(r => r.id === id ? { ...r, status: 'VOIDED' as const } : r));
@@ -1582,6 +1614,7 @@ function AppInner() {
       addAuditLog('RECEIPT_VOUCHERS', 'UPDATE', `رُفض تعديل سند القبض غير المنتظر للترحيل ${current.receiptNumber} — استخدم سند استبدال`);
       return;
     }
+    if ((current && isClosedFinancialDate(current.date)) || isClosedFinancialDate(updated.date)) { rejectClosedFinancialCommand('RECEIPT_VOUCHERS', 'UPDATE', `تعديل سند القبض ${current?.receiptNumber ?? updated.receiptNumber}`); return; }
     setReceiptVouchers(prev => prev.map(r => (r.id === id ? updated : r)));
     if (oldJournalEntryId && journalEntry && oldJournalEntryId !== journalEntry.id) {
       setJournals(prev => prev.map(j => (j.id === oldJournalEntryId ? { ...j, status: 'VOIDED' as const } : j)));
@@ -1591,6 +1624,7 @@ function AppInner() {
   };
 
   const handlePostPendingReceipt = (receipt: ReceiptVoucher, journalEntry: JournalEntry) => {
+    if (isClosedFinancialDate(receipt.date)) { rejectClosedFinancialCommand('RECEIPT_VOUCHERS', 'POST', `ترحيل سند القبض ${receipt.receiptNumber}`); return false; }
     const current = receiptVouchers.find(r => r.id === receipt.id);
     const receiptToValidate = { ...receipt, status: 'PENDING_POSTING' as const };
     const receiptValidation = validateVoucherForPosting('RECEIPT', receiptToValidate, accounts, receiptVouchers, journals, currencies);

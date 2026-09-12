@@ -29,6 +29,12 @@ assert.match(app, /handleDailyBatchPost[\s\S]*?status === 'PENDING_POSTING'/);
 assert.match(app, /handleCloseYear[\s\S]*?status === 'PENDING_POSTING'/);
 assert.match(app, /handleCloseMonth[\s\S]*?status === 'PENDING_POSTING'/);
 assert.match(closing, /pendingRows[\s\S]*?status === 'PENDING_POSTING'/);
+assert.match(closing, /yearCloseStep.*1.*2.*3/);
+assert.match(closing, /exportBackup/);
+assert.match(closing, /desktop\?\.login/);
+assert.match(app, /isClosedFinancialDate/);
+assert.match(app, /custodyTouchesClosedPeriod/);
+assert.match(app, /trustTouchesClosedPeriod/);
 
 const sourceFiles = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
   const full = path.join(directory, entry.name);
