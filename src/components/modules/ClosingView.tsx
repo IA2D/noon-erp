@@ -45,14 +45,14 @@ interface Props {
   closedMonths: string[];
   periodStates: FinancialPeriodRecord[];
   currencies: Currency[];
-  onCloseYear: (year: string, closingEntry: JournalEntry | null) => boolean;
+  onCloseYear: (year: string, closingEntry: JournalEntry | null) => boolean | { ok: boolean; error?: string };
   onReopenYear: (year: string, request?: { reason?: string; approvedBy?: string }) => boolean;
   onCloseMonth: (month: string) => boolean;
   onReopenMonth: (month: string, request?: { reason?: string; approvedBy?: string }) => boolean;
   onBatchPost: (items: DailyPostingRequest[]) => DailyPostingBatchResult;
   onUnpostJournal: (id: string) => boolean;
   onUnpostVoucher: (kind: 'PAYMENT' | 'RECEIPT', id: string) => boolean;
-  onCreateOpeningEntry: (year: string) => boolean;
+  onCreateOpeningEntry: (year: string) => boolean | { ok: boolean; error?: string };
   currentUserName: string;
 }
 
@@ -1348,13 +1348,15 @@ export default function ClosingView({
                   type="button"
                   onClick={() => {
                     const entry = buildClosingEntry(selectedYearWizard);
-                    const done = onCloseYear(selectedYearWizard, entry);
+                    const result = onCloseYear(selectedYearWizard, entry);
+                    const done = typeof result === 'boolean' ? result : result.ok;
+                    const commandError = typeof result === 'boolean' ? '' : result.error;
                     if (done) setConfirmClose(false);
                     const reason = done ? '' : wizardNextStatus === null
                       ? 'الانتقال المطلوب غير مسموح من الحالة الحالية.'
                       : wizardYearJournals.some(j => j.status === 'PENDING_POSTING')
                         ? 'توجد مستندات غير مرحّلة داخل السنة.'
-                        : 'فشل حفظ انتقال الحالة في قاعدة البيانات؛ راجع سجل التدقيق.';
+                      : commandError || 'فشل حفظ انتقال الحالة في قاعدة البيانات.';
                     toast(done ? 'success' : 'error', done ? `تم نقل السنة ${selectedYearWizard} إلى ${wizardNextStatus ? periodStatusLabel[wizardNextStatus] : 'المرحلة التالية'}` : `تعذر تغيير حالة السنة ${selectedYearWizard}. السبب: ${reason}`);
                   }}
                   className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"
@@ -1462,7 +1464,9 @@ export default function ClosingView({
               <button
                 type="button"
                 onClick={() => {
-                  const done = onCreateOpeningEntry(selectedYearWizard);
+                  const result = onCreateOpeningEntry(selectedYearWizard);
+                  const done = typeof result === 'boolean' ? result : result.ok;
+                  const commandError = typeof result === 'boolean' ? '' : result.error;
                   if (done) setConfirmRollover(false);
                   const rolloverReason = done ? '' : !wizardFinalClosed
                     ? 'الإقفال النهائي للسنة المصدر غير مكتمل.'
@@ -1470,7 +1474,7 @@ export default function ClosingView({
                       ? `الميزانية غير متوازنة (مدين ${fmt(wizardDebit)} مقابل دائن ${fmt(wizardCredit)}).`
                       : wizardOpeningEntry
                         ? `يوجد قيد افتتاحي مرحّل للسنة ${Number(selectedYearWizard) + 1} بالفعل (${wizardOpeningEntry.entryNumber}).`
-                        : 'فشل حفظ قيد التدوير في قاعدة البيانات؛ راجع سجل التدقيق.';
+                        : commandError || 'فشل حفظ قيد التدوير في قاعدة البيانات.';
                   toast(done ? 'success' : 'error', done ? `تم توليد القيد الافتتاحي للسنة ${Number(selectedYearWizard) + 1}` : `تعذر التدوير للسنة ${Number(selectedYearWizard) + 1}. السبب: ${rolloverReason}`);
                 }}
                 className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"

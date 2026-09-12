@@ -902,7 +902,8 @@ function AppInner() {
     const audit = createAuditLog('GENERAL_LEDGER', 'POST', `تغيير حالة السنة ${year}: ${current.status} ← ${target}`);
     const changes: Array<{ key: string; value: unknown }> = [{ key: K.periodStates, value: nextPeriods }, { key: K.closedYears, value: nextClosedYears }];
     if (nextJournals !== journals) changes.push({ key: K.journals, value: nextJournals });
-    if (!commitAccountingState({ idempotencyKey: `PERIOD:YEAR:${year}:${target}:${transition.record.version}`, commandType: `PERIOD_${target}`, documentType: 'YEAR', documentNumber: year }, changes, audit)) return false;
+    const commit = commitAccountingStateResult({ idempotencyKey: `PERIOD:YEAR:${year}:${target}:${transition.record.version}`, commandType: `PERIOD_${target}`, documentType: 'YEAR', documentNumber: year }, changes, audit);
+    if (!commit.ok) return { ok: false, error: accountingCommandError(commit.error) };
     setPeriodStates(nextPeriods);
     setClosedYears(nextClosedYears);
     if (nextJournals !== journals) setJournals(nextJournals);
@@ -1371,7 +1372,8 @@ function AppInner() {
     const nextPeriods = [...periodStates.filter(item => !(item.key === year && item.scope === 'YEAR')), linkedPeriod];
     const nextJournals = [entry, ...journals];
     const audit = createAuditLog('GENERAL_LEDGER', 'POST', `توليد القيد الافتتاحي للسنة ${nextYear} من إقفال ${year}`);
-    if (!commitAccountingState({ idempotencyKey: `CARRY_FORWARD:${year}:${nextYear}`, commandType: 'CARRY_FORWARD', documentType: 'YEAR', documentNumber: nextYear }, [{ key: K.journals, value: nextJournals }, { key: K.periodStates, value: nextPeriods }], audit)) return false;
+    const commit = commitAccountingStateResult({ idempotencyKey: `CARRY_FORWARD:${year}:${nextYear}`, commandType: 'CARRY_FORWARD', documentType: 'YEAR', documentNumber: nextYear }, [{ key: K.journals, value: nextJournals }, { key: K.periodStates, value: nextPeriods }], audit);
+    if (!commit.ok) return { ok: false, error: accountingCommandError(commit.error) };
     setJournals(nextJournals);
     setPeriodStates(nextPeriods);
     setAuditLogs(prev => [audit, ...prev]);
