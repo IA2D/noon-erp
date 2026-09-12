@@ -990,6 +990,10 @@ function AppInner() {
   const buildVoucherJournal = (kind: 'PAYMENT' | 'RECEIPT', voucher: PaymentVoucher | ReceiptVoucher): JournalEntry => {
     const isPayment = kind === 'PAYMENT';
     const ts = Date.now();
+    // Journal line IDs are globally unique in SQLite. A batch can build several
+    // journals within the same millisecond, so include a random suffix in the
+    // journal identity and derive every line ID from it.
+    const journalId = `jv-${ts}-${Math.random().toString(36).slice(2, 10)}`;
     const docNo = isPayment ? (voucher as PaymentVoucher).voucherNumber : (voucher as ReceiptVoucher).receiptNumber;
     const party = isPayment ? (voucher as PaymentVoucher).payeeName : (voucher as ReceiptVoucher).payerName;
     const srcAcc = accounts.find(a => a.id === voucher.sourceAccountId);
@@ -1013,7 +1017,7 @@ function AppInner() {
     const label = isPayment ? 'سند صرف' : 'سند قبض';
     const lines: JournalLine[] = [
       {
-        id: `jline-${ts}-src`,
+        id: `${journalId}-src`,
         accountId: voucher.sourceAccountId,
         accountCode: srcAcc?.code ?? '',
         accountNameAr: voucher.sourceAccountNameAr,
@@ -1034,7 +1038,7 @@ function AppInner() {
         description: `${label} رقم ${docNo} - ${party}`
       },
       ...voucher.lines.map((l, idx) => ({
-        id: `jline-${ts}-d-${idx}`,
+        id: `${journalId}-d-${idx}`,
         accountId: l.accountId,
         accountCode: l.accountCode,
         accountNameAr: l.accountNameAr,
@@ -1058,7 +1062,7 @@ function AppInner() {
     ];
     const now = new Date().toISOString();
     return {
-      id: `jv-${ts}`,
+      id: journalId,
       entryNumber: nextJournalNumber(journals),
       date: voucher.date,
       reference: docNo,
@@ -1187,7 +1191,8 @@ function AppInner() {
         const validation = validateVoucherForPosting('PAYMENT', canonical, accounts, nextVouchers, nextJournals, currencies, configuredAttachmentRequirements());
         if (!validation.valid) { results.push({ ...item, ok: false, error: validation.errors.join(' | ') }); return; }
         const generated = buildVoucherJournal('PAYMENT', canonical);
-        generated.id = `jv-${Date.now()}-${index}`;
+        generated.id = `jv-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+        generated.lines = generated.lines.map((line, lineIndex) => ({ ...line, id: `${generated.id}-line-${lineIndex}` }));
         generated.entryNumber = nextJournalNumber(nextJournals);
         nextJournals = [generated, ...nextJournals];
         nextVouchers = nextVouchers.map(v => v.id === found.id ? { ...v, sourceAccountId: canonical.sourceAccountId, sourceAccountNameAr: canonical.sourceAccountNameAr, status: 'POSTED' as const, journalEntryId: generated.id, postedBy: currentUserName, postedAt: new Date().toISOString() } : v);
@@ -1207,7 +1212,8 @@ function AppInner() {
       const validation = validateVoucherForPosting('RECEIPT', canonical, accounts, nextReceipts, nextJournals, currencies, configuredAttachmentRequirements());
       if (!validation.valid) { results.push({ ...item, ok: false, error: validation.errors.join(' | ') }); return; }
       const generated = buildVoucherJournal('RECEIPT', canonical);
-      generated.id = `jv-${Date.now()}-${index}`;
+      generated.id = `jv-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+      generated.lines = generated.lines.map((line, lineIndex) => ({ ...line, id: `${generated.id}-line-${lineIndex}` }));
       generated.entryNumber = nextJournalNumber(nextJournals);
       nextJournals = [generated, ...nextJournals];
       nextReceipts = nextReceipts.map(r => r.id === found.id ? { ...r, sourceAccountId: canonical.sourceAccountId, sourceAccountNameAr: canonical.sourceAccountNameAr, status: 'POSTED' as const, journalEntryId: generated.id, postedBy: currentUserName, postedAt: new Date().toISOString() } : r);

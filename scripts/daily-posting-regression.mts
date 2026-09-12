@@ -13,6 +13,8 @@ assert.match(app, /commandType: 'POST_BATCH'/);
 assert.match(app, /setJournals\(nextJournals\)/);
 assert.match(app, /setVouchers\(nextVouchers\)/);
 assert.match(app, /setReceiptVouchers\(nextReceipts\)/);
+assert.match(app, /journalId = `jv-\$\{ts\}-\$\{Math\.random/);
+assert.match(app, /generated\.lines = generated\.lines\.map/);
 assert.match(app, /توجد مستندات غير مرحّلة/);
 assert.match(closing, /const result = onBatchPost/);
 assert.match(closing, /pendingRows\.length > 0[\s\S]*تم ترحيل جميع المستندات/);
