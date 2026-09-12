@@ -419,6 +419,10 @@ export function createRelationalStore(db) {
     }
 
     if (name === 'journals') {
+      // Legacy journals (and older daily batches) can contain repeated line IDs
+      // because IDs were timestamp-only. SQLite enforces global uniqueness, so
+      // repair duplicates deterministically while projecting the full collection.
+      const seenJournalLineIds = new Set();
       rows.forEach(journal => {
         insertJournal.run(
           text(journal.id), text(journal.entryNumber), text(journal.date), text(journal.reference), text(journal.narration) ?? '',
@@ -427,8 +431,13 @@ export function createRelationalStore(db) {
           text(journal.createdBy) ?? '', text(journal.createdAt) ?? '', text(journal.postedBy), text(journal.postedAt), json(journal),
         );
         (Array.isArray(journal.lines) ? journal.lines : []).forEach((line, index) => {
+          const originalLineId = text(line.id);
+          let lineId = originalLineId || `${text(journal.id)}-line-${index}`;
+          let suffix = 1;
+          while (seenJournalLineIds.has(lineId)) lineId = `${text(journal.id)}-line-${index}-${suffix++}`;
+          seenJournalLineIds.add(lineId);
           insertJournalLine.run(
-            text(line.id), text(journal.id), index, text(line.accountId), text(line.accountCode) ?? '', text(line.accountNameAr) ?? '',
+            lineId, text(journal.id), index, text(line.accountId), text(line.accountCode) ?? '', text(line.accountNameAr) ?? '',
             number(line.debit), number(line.credit), text(line.description) ?? '', text(line.costCenterId), text(line.subLedgerType),
             text(line.subLedgerId), text(line.subLedgerName), text(line.currency), number(line.exchangeRate || 1),
             number(line.debitForeign), number(line.creditForeign), text(line.referenceNumber), json(line),

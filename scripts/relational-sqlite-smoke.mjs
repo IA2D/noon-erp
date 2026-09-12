@@ -84,6 +84,19 @@ try {
   db.exec('ROLLBACK TO duplicate_test');
 }
 db.exec('RELEASE duplicate_test');
+let duplicateJournalLinesRepaired = false;
+db.exec('SAVEPOINT duplicate_journal_lines_test');
+try {
+  const duplicateLineJournal = { ...journals[0], id: 'J-2', entryNumber: 'JV-2', lines: journals[0].lines.map(line => ({ ...line, id: 'LEGACY-LINE' })) };
+  store.syncCollection(RELATIONAL_COLLECTION_KEYS.journals, JSON.stringify([journals[0], duplicateLineJournal]));
+  const ids = db.prepare('SELECT id FROM erp_journal_lines ORDER BY id').all().map(row => row.id);
+  duplicateJournalLinesRepaired = ids.length === 4 && new Set(ids).size === ids.length;
+} catch {
+  duplicateJournalLinesRepaired = false;
+} finally {
+  db.exec('ROLLBACK TO duplicate_journal_lines_test');
+  db.exec('RELEASE duplicate_journal_lines_test');
+}
 const integrity = db.prepare('PRAGMA integrity_check').get()?.integrity_check;
 db.close();
 fs.rmSync(file, { force: true });
@@ -94,11 +107,11 @@ const valid =
   initial.currencies === 1 && initial.costCenters === 2 && initial.masterEntities === 1 &&
   authoritativeDebit === 321 &&
   updatedDebit === 125 && updatedLines === 1 && afterDelete.paymentVouchers === 0 && afterDelete.paymentVoucherLines === 0 &&
-  restored.journalLines === 2 && restored.paymentVouchers === 1 && diagnostics.ok && missingAccountBlocked && referencedAccountDeleteBlocked && duplicateEntityBlocked && integrity === 'ok';
+  restored.journalLines === 2 && restored.paymentVouchers === 1 && diagnostics.ok && missingAccountBlocked && referencedAccountDeleteBlocked && duplicateEntityBlocked && duplicateJournalLinesRepaired && integrity === 'ok';
 
 if (!valid) {
   console.error({ initial, updatedDebit, updatedLines, afterDelete, restored, integrity });
   process.exit(1);
 }
 
-console.log(`RELATIONAL_SQLITE_SMOKE_OK accounts=${restored.accounts} journals=${restored.journals}/${restored.journalLines} payments=${restored.paymentVouchers}/${restored.paymentVoucherLines} receipts=${restored.receiptVouchers}/${restored.receiptVoucherLines} masters=${restored.masterEntities} authority=normalized authoritativeDebit=${authoritativeDebit} diagnostics=${diagnostics.ok} fkReferenceBlocked=${missingAccountBlocked} referencedDeleteBlocked=${referencedAccountDeleteBlocked} duplicateEntityBlocked=${duplicateEntityBlocked} updateDebit=${updatedDebit} deleteCascade=${afterDelete.paymentVoucherLines} integrity=${integrity}`);
+console.log(`RELATIONAL_SQLITE_SMOKE_OK accounts=${restored.accounts} journals=${restored.journals}/${restored.journalLines} payments=${restored.paymentVouchers}/${restored.paymentVoucherLines} receipts=${restored.receiptVouchers}/${restored.receiptVoucherLines} masters=${restored.masterEntities} authority=normalized authoritativeDebit=${authoritativeDebit} diagnostics=${diagnostics.ok} fkReferenceBlocked=${missingAccountBlocked} referencedDeleteBlocked=${referencedAccountDeleteBlocked} duplicateEntityBlocked=${duplicateEntityBlocked} duplicateJournalLinesRepaired=${duplicateJournalLinesRepaired} updateDebit=${updatedDebit} deleteCascade=${afterDelete.paymentVoucherLines} integrity=${integrity}`);
