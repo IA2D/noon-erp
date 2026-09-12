@@ -1279,8 +1279,8 @@ export default function ClosingView({
           <p className="text-sm text-slate-300 leading-relaxed">
             سيتم إعادة فتح الشهر المالي {confirmReopenMonth} والسماح بالترحيل عليه من جديد.
           </p>
-          <input value={reopenReason} onChange={e => setReopenReason(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-          <input value={reopenApprover} onChange={e => setReopenApprover(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <label className="block text-xs font-bold text-slate-300">سبب إعادة الفتح<input aria-label="سبب إعادة الفتح" value={reopenReason} onChange={e => setReopenReason(e.target.value)} className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" /></label>
+          <label className="block text-xs font-bold text-slate-300">المعتمد المستقل لإعادة الفتح<input aria-label="المعتمد المستقل لإعادة الفتح" value={reopenApprover} onChange={e => setReopenApprover(e.target.value)} className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" /></label>
         </ModalShell>
       )}
 
@@ -1436,8 +1436,8 @@ export default function ClosingView({
           <p className="text-sm text-slate-300 leading-relaxed">
             ستُعاد السنة المالية {selectedYearWizard} إلى الحالة المفتوحة، وسيبقى قيد الإقفال الأصلي مرحّلاً مع إنشاء قيد عكسي مرتبط عند وجوده.
           </p>
-          <input value={reopenReason} onChange={e => setReopenReason(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-          <input value={reopenApprover} onChange={e => setReopenApprover(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <label className="block text-xs font-bold text-slate-300">سبب إعادة الفتح<input aria-label="سبب إعادة فتح الشهر" value={reopenReason} onChange={e => setReopenReason(e.target.value)} className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" /></label>
+          <label className="block text-xs font-bold text-slate-300">المعتمد المستقل لإعادة الفتح<input aria-label="المعتمد المستقل لإعادة فتح الشهر" value={reopenApprover} onChange={e => setReopenApprover(e.target.value)} className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" /></label>
           <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-300">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>يُسجل هذا الإجراء في سجل التدقيق. تأكد من صحة الأرصدة قبل إعادة الفتح.</span>
