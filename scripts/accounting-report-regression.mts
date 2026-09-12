@@ -90,6 +90,17 @@ assert.equal(asOf.totalEquity, 150);
 assert.equal(asOf.totalLiabilitiesAndEquity, 150);
 assert.equal(asOf.isBalanced, true);
 
+// A loss is a negative period result and must reduce equity, never be added
+// as an absolute positive number on the liabilities-and-equity side.
+const lossAccounts = accounts.map(item => ({ ...item, openingBalance: item.id === 'sales' || item.id === 'rent' ? 0 : item.openingBalance }));
+const lossSheet = calculateBalanceSheet(lossAccounts, [journal('loss', '2026-01-20', [line('l1', 'rent', 30, 0), line('l2', 'cash', 0, 30)])]);
+assert.equal(lossSheet.netIncomeCurrentYear, -30, 'loss must remain signed');
+assert.equal(lossSheet.totalAssets, 70);
+assert.equal(lossSheet.equityBase, 100);
+assert.equal(lossSheet.totalEquity, 70, 'loss must reduce equity');
+assert.equal(lossSheet.totalLiabilitiesAndEquity, 70);
+assert.equal(lossSheet.isBalanced, true, 'loss case must balance assets with liabilities and equity');
+
 const cashFlow = calculateCashFlowStatement(periodAccounts, periodJournals);
 assert.equal(cashFlow.operating, 30);
 assert.equal(cashFlow.netChange, 30);

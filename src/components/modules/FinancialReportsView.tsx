@@ -748,12 +748,17 @@ export default function FinancialReportsView({
     return { rows, totals, count: rows.length };
   }, [reportAccounts, activity, periodMovement, currency, fromDate, toDate, isOriginalCurrencyReport, journals, showZeroAccounts]);
 
-  const bsCurrentDiff = round2(bsByAccount.totals.currentDebit - bsByAccount.totals.currentCredit);
-  const bsCumulativeDiff = round2(bsByAccount.totals.cumulativeDebit - bsByAccount.totals.cumulativeCredit);
   const bsDisplay = useMemo(() => {
     type DisplayRow = { kind: 'section' | 'group' | 'account' | 'total'; code: string; name: string; partial?: number; total?: number };
     const rows: DisplayRow[] = [];
-    const accountAmount = (r: typeof bsByAccount.rows[number]) => round2(r.cumulativeDebit - r.cumulativeCredit);
+    // The report presents every account in its natural accounting direction:
+    // debit-nature assets stay positive, while credit-nature liabilities/equity
+    // are reversed from their debit/credit storage representation.
+    const accountAmount = (r: typeof bsByAccount.rows[number]) => {
+      const account = reportAccounts.find(item => item.id === r.accountId);
+      const raw = round2(r.cumulativeDebit - r.cumulativeCredit);
+      return account?.nature === 'CREDIT' ? -raw : raw;
+    };
     const section = (root: '1' | '2', label: string) => {
       const sectionRows = bsByAccount.rows.filter(r => hasAncestorOrSelfCode(reportAccounts.find(a => a.id === r.accountId) || ({ code: r.code } as Account), reportAccounts, root));
       // إبقاء القسم ظاهرًا حتى عند عدم وجود أرصدة، مع إجمالي صفر.
@@ -770,14 +775,16 @@ export default function FinancialReportsView({
       for (const [code, group] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
         const groupTotal = round2(group.rows.reduce((sum, r) => sum + accountAmount(r), 0));
         sectionTotal += groupTotal;
-        rows.push({ kind: 'group', code, name: group.name, total: Math.abs(groupTotal) });
-        for (const r of [...group.rows].sort((a, b) => a.code.localeCompare(b.code))) rows.push({ kind: 'account', code: r.code, name: r.name, partial: Math.abs(accountAmount(r)) });
+        rows.push({ kind: 'group', code, name: group.name, total: round2(groupTotal) });
+        for (const r of [...group.rows].sort((a, b) => a.code.localeCompare(b.code))) rows.push({ kind: 'account', code: r.code, name: r.name, partial: accountAmount(r) });
       }
       if (root === '2' && Math.abs(balanceSheet.netIncomeCurrentYear) > 0.005) {
+        // Net income is signed. Profit raises equity; a loss is negative and
+        // therefore reduces equity instead of being added as an absolute value.
         sectionTotal += balanceSheet.netIncomeCurrentYear;
-        rows.push({ kind: 'account', code: 'NET-INCOME', name: balanceSheet.netIncomeCurrentYear >= 0 ? 'صافي أرباح الفترة — Net Profit' : 'صافي خسائر الفترة — Net Loss', partial: Math.abs(round2(balanceSheet.netIncomeCurrentYear)) });
+        rows.push({ kind: 'account', code: 'NET-INCOME', name: balanceSheet.netIncomeCurrentYear >= 0 ? 'صافي أرباح الفترة — Net Profit' : 'صافي خسائر الفترة — Net Loss', partial: round2(balanceSheet.netIncomeCurrentYear) });
       }
-      rows.push({ kind: 'total', code: `TOTAL-${root}`, name: root === '1' ? 'إجمالي الأصول' : 'إجمالي الالتزامات وحقوق الملكية', total: Math.abs(round2(sectionTotal)) });
+      rows.push({ kind: 'total', code: `TOTAL-${root}`, name: root === '1' ? 'إجمالي الأصول' : 'إجمالي الالتزامات وحقوق الملكية', total: round2(sectionTotal) });
     };
     section('1', 'الأصول — Assets');
     section('2', 'الالتزامات وحقوق الملكية — Liabilities & Equity');
@@ -3201,7 +3208,6 @@ export default function FinancialReportsView({
               <tfoot><tr className="bs-total"><td colSpan={3} className="text-right">الإجمالي العام</td><td className="num">{fmt(balanceSheet.totalAssets)} / {fmt(balanceSheet.totalLiabilitiesAndEquity)}</td></tr></tfoot>
             </table>
 
-            <PrintTafqeet label="الفارق بين المدين والدائن" amount={bsByAccount.totals.cumulativeDebitYER - bsByAccount.totals.cumulativeCreditYER} currencyName={baseCurrencyName} currencyCode={baseCode} />
             <PrintSignatures />
           </FinancialReportPrintLayout>
         ) : reportType === 'INCOME_STATEMENT' ? (
