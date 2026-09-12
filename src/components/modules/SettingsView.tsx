@@ -706,7 +706,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                     <p className="text-xs text-slate-500 mt-2">دقة عرض وتقريب المبالغ في النظام.</p>
                   </div>
 
-                  <div className="flex flex-col justify-center">
+                  <div className="md:col-span-2 flex flex-col justify-center">
                     <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-white">إلزامية مراكز التكلفة</p>
@@ -714,11 +714,6 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
                       </div>
                       <Switch checked={settings.costCenterMandatory} onChange={v => set('costCenterMandatory', v)} />
                     </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className={labelCls}>المستندات المؤيدة المطلوبة (JSON)</label>
-                    <textarea value={settings.attachmentRequirementsJson} onChange={e => set('attachmentRequirementsJson', e.target.value)} className={`${inputCls} min-h-24 font-mono text-xs`} dir="ltr" />
-                    <p className="text-xs text-slate-500 mt-2">مثال: [{`{\"documentType\":\"INVOICE\",\"label\":\"فاتورة\",\"required\":true}`}]. يمنع الترحيل النهائي حتى يتم إرفاق المستند والتحقق منه.</p>
                   </div>
                 </div>
               </SettingsWindow>
