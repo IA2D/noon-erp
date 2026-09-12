@@ -882,7 +882,14 @@ function AppInner() {
     const current = periodRecordFor(periodStates, year, 'YEAR');
     const target = nextCloseStatus(current.status);
     if (!target) return false;
-    const finalEntry = target === 'FINAL_CLOSED' ? closingEntry : null;
+    let finalEntry = target === 'FINAL_CLOSED' ? closingEntry : null;
+    // Re-opening a year leaves its reversed closing entry in history. Ensure
+    // the replacement closing entry always receives a fresh document number,
+    // even when the UI supplied a stale preview built before the reopen.
+    if (finalEntry && journals.some(j => j.id !== finalEntry!.id && j.entryNumber === finalEntry!.entryNumber)) {
+      const freshNumber = nextJournalNumber(journals);
+      finalEntry = { ...finalEntry, id: `close-${year}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, entryNumber: freshNumber };
+    }
     // A previously closed year may have been reopened. Its original closing
     // entry remains posted but is linked to a reversal; it must not block a
     // fresh closing entry after the reopened year is reviewed again.
