@@ -40,7 +40,8 @@ function validateJournal(
   accounts: Account[],
   journals: JournalEntry[],
   allowedStatus: 'PENDING_POSTING' | 'POSTED',
-  currencies: Currency[] = []
+  currencies: Currency[] = [],
+  allowAggregateAnalyticalLines = false
 ): PostingValidationResult {
   const errors: string[] = [];
   if (entry.status !== allowedStatus) errors.push(allowedStatus === 'PENDING_POSTING' ? 'يمكن ترحيل القيد المنتظر فقط.' : 'القيد الآلي يجب أن يكون مُرحّلاً.');
@@ -58,7 +59,7 @@ function validateJournal(
     if (debit < 0 || credit < 0) errors.push(`السطر ${index + 1}: المبالغ السالبة غير مسموحة.`);
     if (debit > 0 && credit > 0) errors.push(`السطر ${index + 1}: لا يمكن أن يكون مديناً ودائناً معاً.`);
     const account = accounts.find(item => item.id === line.accountId);
-    if (account && account.subLedgerType !== 'NONE' && (!line.subLedgerId || line.subLedgerType !== account.subLedgerType)) {
+    if (!allowAggregateAnalyticalLines && account && account.subLedgerType !== 'NONE' && (!line.subLedgerId || line.subLedgerType !== account.subLedgerType)) {
       errors.push(`السطر ${index + 1}: الحساب التحليلي ${account.subLedgerType} مطلوب.`);
     }
     const code = line.currency || entry.currency;
@@ -106,7 +107,7 @@ export function validateGeneratedJournalForPosting(
   currencies: Currency[] = [],
   requirements: AttachmentRequirement[] = []
 ): PostingValidationResult {
-  const result = validateJournal(entry, accounts, journals, 'POSTED', currencies);
+  const result = validateJournal(entry, accounts, journals, 'POSTED', currencies, entry.reference?.startsWith('OPEN-') === true);
   const errors = [...result.errors];
   if (entry.referenceCode && entry.sourceType && journals.some(item =>
     item.id !== entry.id && item.status === 'POSTED' && item.sourceType === entry.sourceType && item.referenceCode === entry.referenceCode
