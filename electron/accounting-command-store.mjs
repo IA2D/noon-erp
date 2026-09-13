@@ -110,6 +110,12 @@ export function createAccountingCommandStore(db, relationalStore) {
         relationalStore.syncCollection(key, change.value);
         versions[key] = bumpVersion(key);
       }
+      if (commandType === 'FISCAL_YEAR_CLONE') {
+        const targetYear = documentNumber.match(/->(\d{4})$/)?.[1];
+        if (!targetYear) throw new Error('FISCAL_YEAR_CLONE_TARGET_MISSING');
+        const validation = relationalStore.validateFiscalYearDataset(targetYear);
+        if (!validation.ok) throw new Error(`FISCAL_YEAR_GRAPH_INVALID:${JSON.stringify(validation.broken.slice(0, 20))}`);
+      }
       const result = { ok: true, replay: false, idempotencyKey, commandType, documentType, documentNumber, versions };
       insertReceipt.run(idempotencyKey, commandType, documentType, documentNumber, JSON.stringify(result));
       db.exec('COMMIT');

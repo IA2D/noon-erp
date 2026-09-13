@@ -2380,7 +2380,7 @@ function AppInner() {
       case 'AUDIT_SECURITY':
         return <AuditAndSecurityView auditLogs={auditLogs} />;
       case 'SETTINGS':
-        return <SettingsView currentUserName={currentUserName} currencies={currencies} onPasswordChanged={() => addAuditLog('SETTINGS', 'UPDATE', `تم تغيير كلمة مرور المستخدم: ${currentUserName}`)} />;
+        return <SettingsView currentUserName={currentUserName} currencies={currencies} fiscalYear={reportingYear} onPasswordChanged={() => addAuditLog('SETTINGS', 'UPDATE', `تم تغيير كلمة مرور المستخدم: ${currentUserName}`)} />;
       case 'ABOUT':
         return <AboutUs />;
       default:

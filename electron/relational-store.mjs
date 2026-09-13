@@ -631,6 +631,32 @@ export function createRelationalStore(db) {
     return db.prepare('SELECT * FROM erp_fiscal_years ORDER BY year_code').all();
   }
 
+  function validateFiscalYearDataset(yearCode) {
+    const fiscalId = `fy-${yearCode}`;
+    const records = db.prepare('SELECT collection_key,record_id,payload_json FROM erp_fiscal_records WHERE fiscal_year_id=?').all(fiscalId);
+    const ids = new Set();
+    const collectIds = value => {
+      if (Array.isArray(value)) { value.forEach(collectIds); return; }
+      if (!value || typeof value !== 'object') return;
+      if (value.id != null) ids.add(String(value.id));
+      Object.values(value).forEach(collectIds);
+    };
+    const parsed = records.map(row => ({ ...row, value: payload(row.payload_json) }));
+    parsed.forEach(row => collectIds(row.value));
+    const relationKeys = new Set(['parentId','linkedAccountId','sourceAccountId','sourceEntityId','journalEntryId','reversalJournalEntryId','reversalByEntryId','costCenterId','subLedgerId','accountId','employeeId','customerId','vendorId','cashBoxId','bankAccountId','custodyId','trustId']);
+    const broken = [];
+    const inspect = (value, owner, key = '') => {
+      if (Array.isArray(value)) { value.forEach(item => inspect(item, owner, key)); return; }
+      if (!value || typeof value !== 'object') {
+        if (relationKeys.has(key) && value != null && String(value) && !ids.has(String(value))) broken.push({ owner, key, target: String(value) });
+        return;
+      }
+      Object.entries(value).forEach(([childKey, child]) => inspect(child, owner, childKey));
+    };
+    parsed.forEach(row => inspect(row.value, `${row.collection_key}:${row.record_id}`));
+    return { ok: broken.length === 0, year: String(yearCode), records: records.length, ids: ids.size, broken };
+  }
+
   function readCollection(key) {
     const descriptor = collectionDescriptor(key);
     const { name } = descriptor;
@@ -689,5 +715,5 @@ export function createRelationalStore(db) {
     return { ok: issues === 0, issues, foreignKeyViolations, orphanJournalLines, orphanPaymentLines, orphanReceiptLines, duplicateDocumentNumbers, unbalancedPostedJournals, auditEvents: scalar('SELECT count(*) AS count FROM erp_audit_events') };
   }
 
-  return { ensureSchema, syncCollection, clearCollection, clearAll, ensureAccounts, rebuildAll, readCollection, diagnostics, info, ensureFiscalYear, listFiscalYears };
+  return { ensureSchema, syncCollection, clearCollection, clearAll, ensureAccounts, rebuildAll, readCollection, diagnostics, info, ensureFiscalYear, listFiscalYears, validateFiscalYearDataset };
 }

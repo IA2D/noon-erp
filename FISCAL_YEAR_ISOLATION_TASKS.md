@@ -63,3 +63,6 @@
 - [x] Normalize scoped collections into year-aware relational tables.
 
 - [x] Verify accounting-command transaction writes target year atomically, preserves source bytes, remaps links, and rolls back on conflict.
+
+- [x] Validate cloned target-year relationships inside the same SQLite transaction and roll back broken graphs.
+- [x] Make fiscal-year factory reset clear only the selected year's isolated datasets while preserving settings and other years.

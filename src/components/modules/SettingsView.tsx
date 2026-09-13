@@ -32,7 +32,6 @@ import { useTheme } from '../../utils/useTheme';
 import { Currency, CompanyBranch } from '../../types/erp';
 import ModalShell from '../ui/ModalShell';
 import { COMPANY_BRANCHES_KEY, DEFAULT_COMPANY_BRANCH, loadBranchesLocal, saveBranchesLocal } from '../../utils/companyStore';
-import { dateToIso } from '../../utils/dateInput';
 import {
   clearLegacyPersistentEntries,
   getPersistentEntries,
@@ -84,6 +83,7 @@ type SettingsTab = 'company' | 'financial' | 'security' | 'data' | 'appearance';
 interface Props {
   currentUserName?: string;
   currencies?: Currency[];
+  fiscalYear: string;
   onPasswordChanged?: () => void;
 }
 
@@ -207,7 +207,7 @@ function backupPayloadData(payload: Record<string, unknown>): Record<string, unk
   return payload;
 }
 
-export default function SettingsView({ currentUserName = 'مستخدم', onPasswordChanged }: Props) {
+export default function SettingsView({ currentUserName = 'مستخدم', fiscalYear, onPasswordChanged }: Props) {
   const [settings, setSettings] = useState<SettingsState>(loadSettings);
   const [identity, setIdentity] = useState<IdentityState>(loadIdentity);
   const [saved, setSaved] = useState(false);
@@ -432,40 +432,13 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
     try {
       const safety = window.desktopStore?.createBackup();
       if (safety && !safety.ok) throw new Error(safety.error || 'Safety backup failed');
-      const fiscalYear = loadBranchesLocal()[0]?.fiscalYear || String(new Date().getFullYear());
       const current = getPersistentEntries();
-      const fiscalDateKey: Record<string, string> = {
-        'elite-erp-journals-v6': 'date',
-        'elite-erp-vouchers-v1': 'date',
-        'elite-erp-receiptvouchers-v1': 'date',
-        'elite-erp-trusts-v1': 'date',
-        'elite-erp-custodies-v1': 'requestedDate',
-      };
-      const fiscalStateKeys = new Set([
-        'elite-erp-closed-years-v1',
-        'elite-erp-closed-months-v1',
-        'elite-erp-period-states-v1',
-      ]);
+      const scopeSuffix = `::fiscal-year::${fiscalYear}`;
       const entries = pendingFactoryReset === 'FULL_SYSTEM'
         ? [] as Array<[string, string]>
-        : current.map(([key, raw]) => {
-          const dateField = fiscalDateKey[key];
-          try {
-            const parsed = JSON.parse(raw);
-            if (fiscalStateKeys.has(key) && Array.isArray(parsed)) {
-              const kept = parsed.filter((record: unknown) => {
-                if (key === 'elite-erp-closed-years-v1') return String(record) !== fiscalYear;
-                if (key === 'elite-erp-closed-months-v1') return !String(record).startsWith(`${fiscalYear}-`);
-                return !(record && typeof record === 'object' && String((record as { key?: unknown }).key || '').startsWith(fiscalYear));
-              });
-              return [key, JSON.stringify(kept)] as [string, string];
-            }
-            if (!dateField) return [key, raw] as [string, string];
-            if (!Array.isArray(parsed)) return [key, raw] as [string, string];
-            const kept = parsed.filter((record: Record<string, unknown>) => !dateToIso(String(record[dateField] || '')).startsWith(`${fiscalYear}-`));
-            return [key, JSON.stringify(kept)] as [string, string];
-          } catch { return [key, raw] as [string, string]; }
-        });
+        : current.map(([key, raw]) => key.endsWith(scopeSuffix)
+          ? [key, key.startsWith('elite-erp-opening-balances-status-v1') ? JSON.stringify('NONE') : JSON.stringify([])] as [string, string]
+          : [key, raw] as [string, string]);
       const result = replacePersistentEntries(entries);
       if (!result.ok) throw new Error(result.error || 'Factory reset failed');
       // لا تسمح لنسخة localStorage القديمة بإعادة تعبئة SQLite بعد إعادة التحميل.
@@ -478,7 +451,10 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
         clearLegacyPersistentEntries();
         removeLocalKeys([COMPANY_BRANCHES_KEY, 'theme']);
       } else {
-        removeLocalKeys([...Object.keys(fiscalDateKey), ...fiscalStateKeys]);
+        try {
+          const scopedLocalKeys = Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index)).filter((key): key is string => Boolean(key?.endsWith(scopeSuffix)));
+          removeLocalKeys(scopedLocalKeys);
+        } catch { /* SQLite remains authoritative */ }
       }
       setPendingFactoryReset(null);
       setFactoryResetStep(1);
@@ -1113,7 +1089,6 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
       )}
 
       {pendingFactoryReset && (() => {
-        const fiscalYear = loadBranchesLocal()[0]?.fiscalYear || new Date().getFullYear();
         const full = pendingFactoryReset === 'FULL_SYSTEM';
         return <ModalShell id="settings-factory-reset" open title={full ? 'تأكيد ضبط مصنع كامل النظام' : 'تأكيد ضبط مصنع للسنة المالية'} icon={Trash2} size="sm" footer={null} onClose={() => setPendingFactoryReset(null)} closeOnBackdrop={false} bodyClassName="p-0">
           <div className="space-y-4 p-6">
@@ -1122,7 +1097,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
               <div className="flex justify-end gap-3"><button type="button" onClick={() => setPendingFactoryReset(null)} className="rounded-xl px-4 py-2 text-sm text-slate-400">إلغاء</button><button type="button" onClick={() => setFactoryResetStep(2)} className="rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white">نعم، متابعة</button></div>
             </>}
             {factoryResetStep === 2 && <>
-              <p className="text-sm leading-relaxed text-slate-300">{full ? 'سيتم حذف الحسابات والكيانات والقيود والسندات والعهد والإعدادات وبيانات المنشأة بالكامل.' : `سيتم حذف قيود وسندات وعهد وحالات إقفال السنة المالية ${fiscalYear} فقط، مع إبقاء الدليل والكيانات والإعدادات والأرصدة الافتتاحية.`}</p>
+              <p className="text-sm leading-relaxed text-slate-300">{full ? 'سيتم حذف الحسابات والكيانات والقيود والسندات والعهد والإعدادات وبيانات المنشأة بالكامل.' : `سيتم حذف جميع بيانات السنة المالية ${fiscalYear}، بما فيها الدليل والكيانات والأرصدة والقيود والسندات والعهد، مع إبقاء إعدادات النظام والسنوات الأخرى دون تغيير.`}</p>
               <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">هذه العملية غير قابلة للاستعادة بعد التنفيذ. صدّر نسخة كاملة من قاعدة البيانات قبل المتابعة.</p>
               <div className="flex flex-wrap justify-between gap-2"><button type="button" onClick={handleBackup} className="rounded-xl border border-emerald-500/40 px-4 py-2 text-sm font-bold text-emerald-400">تصدير كامل لقاعدة البيانات</button><div className="flex gap-3"><button type="button" onClick={() => setFactoryResetStep(1)} className="rounded-xl px-4 py-2 text-sm text-slate-400">رجوع</button><button type="button" onClick={() => setFactoryResetStep(3)} className="rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white">متابعة</button></div></div>
             </>}
