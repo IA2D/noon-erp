@@ -25,14 +25,16 @@ const HANDLE_CLASSES: Record<ResizeHandle, string> = {
   // Keep a generous hit target so resizing remains usable on small screens.
   // The previous 1.5px edge handles were effectively impossible to grab and
   // competed with scrollbars/sliders inside popup content.
-  tl: 'top-0 left-0 w-5 h-5',
-  t: 'top-0 left-0 right-0 h-3',
-  tr: 'top-0 right-0 w-5 h-5',
-  r: 'top-0 right-0 bottom-0 w-3',
-  br: 'bottom-0 right-0 w-5 h-5',
-  b: 'bottom-0 left-0 right-0 h-3',
-  bl: 'bottom-0 left-0 w-5 h-5',
-  l: 'top-0 left-0 bottom-0 w-3',
+  // Position the hit areas just outside the panel so native scrollbars at
+  // the inside edge always receive the pointer first.
+  tl: '-top-1 -left-1 w-5 h-5',
+  t: '-top-1 left-0 right-0 h-3',
+  tr: '-top-1 -right-1 w-5 h-5',
+  r: 'top-0 -right-1 bottom-0 w-3',
+  br: '-bottom-1 -right-1 w-5 h-5',
+  b: '-bottom-1 left-0 right-0 h-3',
+  bl: '-bottom-1 -left-1 w-5 h-5',
+  l: 'top-0 -left-1 bottom-0 w-3',
 };
 
 const HANDLE_CURSOR: Record<ResizeHandle, string> = {
@@ -455,7 +457,7 @@ export default function ModalShell({
             onPointerMove={handleResizeMove}
             onPointerUp={endResize}
             onPointerCancel={endResize}
-            className={`absolute z-20 touch-none ${HANDLE_CLASSES[handle]} ${HANDLE_CURSOR[handle]}`}
+            className={`absolute z-20 touch-none ${HANDLE_CLASSES[handle]} ${HANDLE_CURSOR[handle]} ${(handle === 'l' || handle === 'r') ? 'pointer-events-none' : ''}`}
           />
         ))}
     </div>
