@@ -219,6 +219,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   const [factoryResetStep, setFactoryResetStep] = useState<1 | 2 | 3>(1);
   const [factoryResetPassword, setFactoryResetPassword] = useState('');
   const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restorePassword, setRestorePassword] = useState('');
   const [storageReport, setStorageReport] = useState(getPersistentStorageReport);
   const [lastRestore, setLastRestore] = useState<PersistentRestoreResult | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -387,6 +388,9 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   const applyRestore = () => {
     if (!pendingRestore) return;
     try {
+      const session = JSON.parse(window.localStorage.getItem('elite-erp-session-v1') || '{}');
+      const username = String(session.username || '');
+      if (window.desktopStore && (!username || !restorePassword || !window.desktopStore.login(username, restorePassword).ok)) throw new Error('RESTORE_PASSWORD_REQUIRED');
       const data = backupPayloadData(pendingRestore);
       const entries: Array<[string, string]> = [];
       Object.entries(data).forEach(([key, value]) => {
@@ -403,11 +407,12 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
       if (typeof theme === 'string') window.localStorage.setItem('theme', theme);
       setLastRestore(result);
       setStorageReport(getPersistentStorageReport());
+      setRestorePassword('');
       setPendingRestore(null);
       toast('success', `تمت استعادة ${result.restored} سجل بنجاح، وفحص SQLite: ${result.integrity}. جاري إعادة التحميل...`);
       window.setTimeout(() => window.location.reload(), 900);
-    } catch {
-      toast('error', 'تعذر استعادة النسخة الاحتياطية — الملف غير صالح.');
+    } catch (error) {
+      toast('error', String(error).includes('RESTORE_PASSWORD_REQUIRED') ? 'كلمة المرور غير صحيحة؛ لم تتم استعادة النسخة.' : 'تعذر استعادة النسخة الاحتياطية — الملف غير صالح.');
       setPendingRestore(null);
     }
   };
@@ -1047,6 +1052,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
             <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
               لا يمكن التراجع عن هذه العملية. يُنصح بإنشاء نسخة احتياطية من الوضع الحالي أولاً.
             </p>
+            <label className="block text-xs font-bold text-slate-300">كلمة مرور المستخدم الحالي<input type="password" value={restorePassword} onChange={e => setRestorePassword(e.target.value)} className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" autoComplete="current-password" /></label>
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
