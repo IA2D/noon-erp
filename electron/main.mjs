@@ -420,7 +420,7 @@ function createWindow() {
   mainWindow = window;
   window.on('close', event => {
     // إغلاق النافذة الرئيسية يطلب تأكيداً قبل إنهاء التطبيق.
-    if (quitConfirmed || openVisibleWindowCount() <= 1) return;
+    if (quitConfirmed) return;
     event.preventDefault();
     if (confirmQuitWithOpenWindows(window)) app.quit();
   });

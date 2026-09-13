@@ -389,8 +389,9 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   const applyRestore = () => {
     if (!pendingRestore) return;
     try {
+      const desktopSession = window.desktopStore?.session('');
       const session = JSON.parse(window.localStorage.getItem('elite-erp-session-v1') || '{}');
-      const username = String(session.username || '');
+      const username = String(desktopSession?.user?.username || session.username || '');
       if (window.desktopStore && (!username || !restorePassword || !window.desktopStore.login(username, restorePassword).ok)) throw new Error('RESTORE_PASSWORD_REQUIRED');
       const data = backupPayloadData(pendingRestore);
       const entries: Array<[string, string]> = [];
@@ -499,8 +500,9 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
     }
     setRestoreBusy(true);
     try {
+      const desktopSession = window.desktopStore?.session('');
       const session = JSON.parse(window.localStorage.getItem('elite-erp-session-v1') || '{}');
-      const username = String(session.username || '');
+      const username = String(desktopSession?.user?.username || session.username || '');
       if (window.desktopStore && (!username || !databaseRestorePassword || !window.desktopStore.login(username, databaseRestorePassword).ok)) {
         toast('error', 'كلمة المرور غير صحيحة — لم تتم استعادة النسخة.');
         return;
