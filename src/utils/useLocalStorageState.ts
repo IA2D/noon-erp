@@ -91,6 +91,15 @@ export function useFiscalYearStorageState<T>(
   const skipWriteRef = useRef(false);
 
   useEffect(() => {
+    const syncVersion = (event: Event) => {
+      const versions = (event as CustomEvent<Record<string, number>>).detail;
+      if (versions && typeof versions[key] === 'number') versionRef.current = versions[key];
+    };
+    window.addEventListener('fullerp:versions-updated', syncVersion);
+    return () => window.removeEventListener('fullerp:versions-updated', syncVersion);
+  }, [key]);
+
+  useEffect(() => {
     skipWriteRef.current = true;
     loadedKeyRef.current = key;
     versionRef.current = window.desktopStore?.version(key) ?? 0;
