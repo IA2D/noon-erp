@@ -51,6 +51,7 @@ export type AccountCategory =
  * يدعم تعدد العملات: نفس الحساب/التحليلي يمكن أن يكون له سجلات بعدة عملات.
  */
 export interface OpeningBalanceRecord {
+  fiscalYear?: string;
   /** UUID فريد للسجل — المفتاح الأساسي لكل صف */
   id: string;
   /** معرف الحساب المرتبط (المستوى 5) */

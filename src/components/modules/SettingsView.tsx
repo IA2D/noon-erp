@@ -220,6 +220,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   const [factoryResetPassword, setFactoryResetPassword] = useState('');
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restorePassword, setRestorePassword] = useState('');
+  const [databaseRestorePassword, setDatabaseRestorePassword] = useState('');
   const [storageReport, setStorageReport] = useState(getPersistentStorageReport);
   const [lastRestore, setLastRestore] = useState<PersistentRestoreResult | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -498,6 +499,12 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
     }
     setRestoreBusy(true);
     try {
+      const session = JSON.parse(window.localStorage.getItem('elite-erp-session-v1') || '{}');
+      const username = String(session.username || '');
+      if (window.desktopStore && (!username || !databaseRestorePassword || !window.desktopStore.login(username, databaseRestorePassword).ok)) {
+        toast('error', 'كلمة المرور غير صحيحة — لم تتم استعادة النسخة.');
+        return;
+      }
       const result = await window.desktopStore.restoreBackup();
       if (result.canceled) return;
       if (!result.ok) {
@@ -505,6 +512,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
         return;
       }
       setPendingDatabaseRestore(false);
+      setDatabaseRestorePassword('');
       toast('success', 'تمت استعادة النسخة الكاملة والتحقق منها. سيُعاد تشغيل التطبيق الآن.');
     } finally {
       setRestoreBusy(false);
@@ -1100,7 +1108,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
         <ModalShell
           id="settings-database-restore"
           open={pendingDatabaseRestore}
-          onClose={() => !restoreBusy && setPendingDatabaseRestore(false)}
+          onClose={() => { if (!restoreBusy) { setPendingDatabaseRestore(false); setDatabaseRestorePassword(''); } }}
           title="استعادة قاعدة بيانات كاملة"
           icon={Database}
           size="sm"
@@ -1112,6 +1120,9 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
             <p className="text-sm text-slate-400 leading-relaxed">
               ستستبدل النسخة المحددة كامل بيانات NOON ERP، بما فيها المستخدمون والإعدادات وسجل العمليات. ينشئ النظام نسخة SQLite آمنة من الوضع الحالي أولاً، ثم يتحقق من النسخة المحددة قبل إعادة تشغيل التطبيق.
             </p>
+            <label className="block text-xs font-bold text-slate-300">كلمة مرور المستخدم الحالي
+              <input type="password" value={databaseRestorePassword} onChange={e => setDatabaseRestorePassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyDatabaseRestore(); }} className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" autoComplete="current-password" />
+            </label>
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" disabled={restoreBusy} onClick={() => setPendingDatabaseRestore(false)} className="px-4 py-2 text-slate-400 hover:bg-slate-900 rounded-xl text-sm font-medium cursor-pointer disabled:opacity-50">إلغاء</button>
               <button type="button" disabled={restoreBusy} onClick={applyDatabaseRestore} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-50">

@@ -87,6 +87,7 @@ export function buildLinkedEntities(input: LinkedEntitiesInput): LinkedEntity[] 
 }
 
 export interface BuildPayloadInput {
+  fiscalYear?: string;
   postingAccounts: Account[];
   subLedgerEntities: Array<{ kind: SubLedgerKind; id: string; linkedAccountId: string; row: RowState; rowId: string }>;
   baseCode: string;
@@ -97,7 +98,7 @@ export interface BuildPayloadInput {
 }
 
 export function buildOpeningBalancesPayload(input: BuildPayloadInput): SavePayload {
-  const { postingAccounts, subLedgerEntities, baseCode, rateOf, rowOfAccount, subLedgerTotals, isControl } = input;
+  const { postingAccounts, subLedgerEntities, baseCode, rateOf, rowOfAccount, subLedgerTotals, isControl, fiscalYear } = input;
 
   const accounts = postingAccounts.map(a => {
     const ctrl = isControl(a.id);
@@ -107,6 +108,7 @@ export function buildOpeningBalancesPayload(input: BuildPayloadInput): SavePaylo
     const foreignDebit = ctrl ? 0 : (r.debitForeign || 0);
     const foreignCredit = ctrl ? 0 : (r.creditForeign || 0);
     return {
+      fiscalYear,
       id: a.id,
       rowId: generateId(),
       openingBalance: round2(local.debit - local.credit),
@@ -126,6 +128,7 @@ export function buildOpeningBalancesPayload(input: BuildPayloadInput): SavePaylo
     const local = localOf(e.row, baseCode, rateOf);
     const rate = e.row.rate > 0 ? e.row.rate : rateOf(e.row.currency);
     return {
+      fiscalYear,
       kind: e.kind,
       id: e.id,
       rowId: e.rowId,
@@ -143,7 +146,7 @@ export function buildOpeningBalancesPayload(input: BuildPayloadInput): SavePaylo
     };
   });
 
-  return { accounts, subLedgers };
+  return { fiscalYear, accounts, subLedgers };
 }
 
 export interface BalanceCollections {

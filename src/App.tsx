@@ -1964,6 +1964,7 @@ function AppInner() {
         return (
           <OpeningBalancesView
             currentUserName={currentUserName}
+            fiscalYear={reportingYear}
             accounts={accounts}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}

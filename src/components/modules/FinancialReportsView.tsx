@@ -699,7 +699,11 @@ export default function FinancialReportsView({
       const periodAct = periodMovement[acc.id] || { debit: 0, credit: 0 };
       const currentDebit = round2(periodAct.debit);
       const currentCredit = round2(periodAct.credit);
-      const b = accountBalancesDC(acc, acc.openingBalance, act);
+      const yearOpeningRows = (acc.openingBalances || []).filter(row => !row.fiscalYear || row.fiscalYear === fiscalYear);
+      const openingForYear = yearOpeningRows.length > 0
+        ? yearOpeningRows.reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0)
+        : (acc.openingBalance || 0);
+      const b = accountBalancesDC(acc, openingForYear, act);
       const cumulativeDebit = round2(b.endingDebit);
       const cumulativeCredit = round2(b.endingCredit);
       let localCurrentDebit = currentDebit;
@@ -710,7 +714,7 @@ export default function FinancialReportsView({
         const matching = journals.filter(entry => entry.date <= toDate).flatMap(entry => entry.lines.filter(line => line.accountId === acc.id && (line.currency || entry.currency) === currency).map(line => ({ entry, line })));
         localCurrentDebit = round2(matching.filter(item => item.entry.date >= fromDate).reduce((sum, item) => sum + (item.line.debit || 0), 0));
         localCurrentCredit = round2(matching.filter(item => item.entry.date >= fromDate).reduce((sum, item) => sum + (item.line.credit || 0), 0));
-        const openingLocal = (acc.openingBalances || []).filter(row => row.currency === currency).reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
+        const openingLocal = (acc.openingBalances || []).filter(row => (!row.fiscalYear || row.fiscalYear === fiscalYear) && row.currency === currency).reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
         const signedLocal = round2(openingLocal + matching.reduce((sum, item) => sum + (item.line.debit || 0) - (item.line.credit || 0), 0));
         localCumulativeDebit = signedLocal > 0 ? signedLocal : 0;
         localCumulativeCredit = signedLocal < 0 ? Math.abs(signedLocal) : 0;

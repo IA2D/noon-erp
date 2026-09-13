@@ -24,6 +24,7 @@ import { openDesktopPrintPreview } from '../../utils/desktopPrintPreview';
 
 interface Props {
   currentUserName?: string;
+  fiscalYear?: string;
   accounts: Account[];
   cashBoxes: CashBox[];
   bankAccounts: BankAccount[];
@@ -38,7 +39,7 @@ interface Props {
   onPost: (payload: SavePayload) => void;
 }
 
-export default function OpeningBalancesView({ currentUserName = '—', accounts, cashBoxes, bankAccounts, employees, customers, vendors, currencies = [], status, attachments, onAttachmentsChange, onSaveDraft, onPost }: Props) {
+export default function OpeningBalancesView({ currentUserName = '—', fiscalYear, accounts, cashBoxes, bankAccounts, employees, customers, vendors, currencies = [], status, attachments, onAttachmentsChange, onSaveDraft, onPost }: Props) {
   const toast = useToast();
 
   const [lines, setLines] = useState<EntryLine[]>([]);
@@ -457,6 +458,7 @@ export default function OpeningBalancesView({ currentUserName = '—', accounts,
     const controlAccounts = controlAccountIds.map(id => accountById.get(id)!).filter(Boolean);
 
     const { subLedgers } = buildOpeningBalancesPayload({
+      fiscalYear,
       postingAccounts: controlAccounts,
       subLedgerEntities: controlLines.map(l => ({ kind: l.entity!.kind, id: l.entity!.id, linkedAccountId: l.account!.id, row: l.row, rowId: l.key })),
       baseCode,

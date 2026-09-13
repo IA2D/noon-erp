@@ -59,6 +59,7 @@ export const CATEGORY_TABS: Array<{id: CategoryTab; label: string}> = [
 ];
 
 export interface AccountSaveEntry {
+  fiscalYear?: string;
   id: string;
   /** UUID فريد للصف — يصبح معرّف OpeningBalanceRecord */
   rowId: string;
@@ -79,6 +80,7 @@ export interface AccountSaveEntry {
 }
 
 export interface SubLedgerSaveEntry {
+  fiscalYear?: string;
   kind: SubLedgerKind;
   id: string;
   /** UUID فريد للصف — يصبح معرّف OpeningBalanceRecord */
@@ -101,6 +103,7 @@ export interface SubLedgerSaveEntry {
 }
 
 export interface SavePayload {
+  fiscalYear?: string;
   accounts: AccountSaveEntry[];
   subLedgers: SubLedgerSaveEntry[];
   attachments?: SupportingDocument[];
