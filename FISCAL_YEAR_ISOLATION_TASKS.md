@@ -66,3 +66,5 @@
 
 - [x] Validate cloned target-year relationships inside the same SQLite transaction and roll back broken graphs.
 - [x] Make fiscal-year factory reset clear only the selected year's isolated datasets while preserving settings and other years.
+
+- [x] Rebuild and restore all scoped fiscal datasets without retaining stale year records.

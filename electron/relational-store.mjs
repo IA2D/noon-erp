@@ -587,11 +587,16 @@ export function createRelationalStore(db) {
 
   function rebuildAll(entries) {
     clearAll();
+    db.exec('DELETE FROM erp_fiscal_records; DELETE FROM erp_record_years;');
     const values = entries instanceof Map ? entries : new Map(entries);
     Object.values(RELATIONAL_COLLECTION_KEYS).forEach(key => {
       const value = values.get(key);
       if (value !== undefined && value !== null) syncCollection(key, value);
     });
+    for (const [key, value] of values.entries()) {
+      if (!SCOPED_KEY.test(String(key)) || value === undefined || value === null) continue;
+      syncCollection(String(key), value);
+    }
   }
 
   function info() {

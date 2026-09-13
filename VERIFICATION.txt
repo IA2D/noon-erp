@@ -16,3 +16,4 @@ Scoped relational repository: npm run relational:smoke = RELATIONAL_SQLITE_SMOKE
 Atomic integration: node scripts/fiscal-year-atomic-rollover-regression.mjs = FISCAL_YEAR_ATOMIC_ROLLOVER_OK sourceUnchanged=true targetIndependent=true linksRemapped=true conflictRollback=true.
 Legacy migration: node scripts/legacy-fiscal-migration-regression.mjs = LEGACY_FISCAL_MIGRATION_OK sourceUnchanged=true sourceYear=2026 futureRowsExcluded=true settingsGlobal=true idempotent=true.
 Graph validation: fiscal-year atomic regression = brokenGraphRollback=true. Fiscal reset now replaces selected-year scoped values with empty values and preserves all other keys/settings.
+Restore isolation: relational smoke passed with stale fiscalRecords cleared and 2026/2027 scoped records rebuilt; database recovery regression passed.

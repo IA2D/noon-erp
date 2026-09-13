@@ -78,6 +78,11 @@ db.exec('BEGIN IMMEDIATE');
 store.rebuildAll(snapshot);
 db.exec('COMMIT');
 const restored = store.info();
+db.exec('BEGIN IMMEDIATE');
+store.rebuildAll(new Map([...snapshot, [scopedAccounts2026, JSON.stringify([{ ...accounts[0], id: 'FY26-A1', fiscalYear: '2026' }])], [scopedAccounts2027, JSON.stringify([{ ...accounts[0], id: 'FY27-A1', fiscalYear: '2027' }])]]));
+db.exec('COMMIT');
+const scopedRebuilt26 = JSON.parse(store.readCollection(scopedAccounts2026));
+const scopedRebuilt27 = JSON.parse(store.readCollection(scopedAccounts2027));
 const diagnostics = store.diagnostics();
 let missingAccountBlocked = false;
 try {
@@ -118,10 +123,10 @@ const valid =
   scoped26.length === 1 && scoped27.length === 1 && scoped26[0].id === 'FY26-A1' && scoped27[0].id === 'FY27-A1' && scoped26[0].code === scoped27[0].code &&
   authoritativeDebit === 321 &&
   updatedDebit === 125 && updatedLines === 1 && afterDelete.paymentVouchers === 0 && afterDelete.paymentVoucherLines === 0 &&
-  restored.journalLines === 2 && restored.paymentVouchers === 1 && diagnostics.ok && missingAccountBlocked && referencedAccountDeleteBlocked && duplicateEntityBlocked && duplicateJournalLinesRepaired && integrity === 'ok';
+  restored.journalLines === 2 && restored.paymentVouchers === 1 && restored.fiscalRecords === 0 && scopedRebuilt26[0]?.id === 'FY26-A1' && scopedRebuilt27[0]?.id === 'FY27-A1' && diagnostics.ok && missingAccountBlocked && referencedAccountDeleteBlocked && duplicateEntityBlocked && duplicateJournalLinesRepaired && integrity === 'ok';
 
 if (!valid) {
-  console.error({ initial, fiscalYears, mappedJournalYear, scoped26, scoped27, updatedDebit, updatedLines, afterDelete, restored, integrity });
+  console.error({ initial, fiscalYears, mappedJournalYear, scoped26, scoped27, scopedRebuilt26, scopedRebuilt27, updatedDebit, updatedLines, afterDelete, restored, integrity });
   process.exit(1);
 }
 
