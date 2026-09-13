@@ -370,7 +370,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
       account: l.account,
       entity: l.entity,
       isControl: l.account ? isControl(l.account.id) : false,
-      row: l.account && (!isControl(l.account.id) || !!l.entity) ? l.row : null,
+      row: l.account && (!isControl(l.account.id) || !!l.entity || !!l.editKey) ? l.row : null,
     }));
   }, [lines, controlAccountIds, baseCode]);
 
@@ -439,7 +439,9 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
   const isPosted = status === 'POSTED';
 
   const buildPayload = (sourceLines: EntryLine[] = lines): SavePayload => {
-    const accountLines = sourceLines.filter(l => l.account && !isControl(l.account.id));
+    // الرصيد المدوّر المجمّع لحساب التحكم سطر محفوظ قابل للتعديل أيضاً؛
+    // أما الحساب المختار يدوياً بلا تحليلي فلا يملك صف مبلغ ولا يدخل هنا.
+    const accountLines = sourceLines.filter(l => l.account && (!isControl(l.account.id) || !l.entity));
     const controlLines = sourceLines.filter(l => l.account && isControl(l.account.id) && l.entity);
 
     const subLedgerTotals: Record<string, RowState> = {};
@@ -611,7 +613,6 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     });
 
     selectPostingAccounts(accounts).forEach(a => {
-      if (isControl(a.id)) return;
       const records = a.openingBalances && a.openingBalances.length > 0
         ? a.openingBalances.filter(openingRecordForYear)
         : [

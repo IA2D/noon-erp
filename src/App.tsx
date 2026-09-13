@@ -125,7 +125,24 @@ function repairCarriedControlOpenings(
     const nextYear = openingJournal.reference.slice(-4);
     const sourceYear = String(Number(nextYear) - 1);
     accounts.filter(account => account.subLedgerType && account.subLedgerType !== 'NONE').forEach(account => {
-      const generic = (account.openingBalances || []).find(record => record.id === `rollover-opening-${nextYear}-${account.id}` && record.fiscalYear === nextYear);
+      const carriedLine = openingJournal.lines.find(line => line.accountId === account.id);
+      let generic = (nextAccounts.find(candidate => candidate.id === account.id)?.openingBalances || [])
+        .find(record => record.id === `rollover-opening-${nextYear}-${account.id}` && record.fiscalYear === nextYear);
+      // الإصدارات السابقة قد حذفت صف حساب التحكم أثناء محاولة نقل التفصيل.
+      // أعد إنشاءه من قيد OPEN نفسه، فهو المصدر الثابت للرصيد الافتتاحي.
+      if (!generic && carriedLine) {
+        const debit = rounds(carriedLine.debit || 0);
+        const credit = rounds(carriedLine.credit || 0);
+        generic = {
+          id: `rollover-opening-${nextYear}-${account.id}`, fiscalYear: nextYear, accountId: account.id,
+          currency: 'YER', exchangeRate: 1, debit, credit, debitLocal: debit, creditLocal: credit,
+          amount: rounds(debit - credit), foreignAmount: rounds(debit - credit), rate: 1, documentRef: openingJournal.entryNumber,
+        };
+        nextAccounts = nextAccounts.map(candidate => candidate.id !== account.id ? candidate : {
+          ...candidate, openingBalances: [...(candidate.openingBalances || []).filter(record => record.fiscalYear !== nextYear), generic!],
+        });
+        changed = true;
+      }
       if (!generic) return;
       const accountEntities = allEntities.filter(entity => entity.linkedAccountId === account.id);
       if (!accountEntities.length) return;
@@ -144,10 +161,8 @@ function repairCarriedControlOpenings(
         : accountEntities.length === 1 ? [{ entity: accountEntities[0], amount: genericAmount }] : [];
       if (!allocations.length) return;
 
-      nextAccounts = nextAccounts.map(candidate => candidate.id !== account.id ? candidate : {
-        ...candidate,
-        openingBalances: (candidate.openingBalances || []).filter(record => record.id !== generic.id),
-      });
+      // يبقى السطر المجمّع كنسخة احتياطية قابلة للتعديل إذا لم تكن تفاصيل
+      // الحساب التحليلي التاريخية كافية لتوزيع الرصيد يقيناً.
       allocations.forEach(({ entity, amount }) => {
         const record: OpeningBalanceRecord = {
           id: `rollover-opening-${nextYear}-${account.id}-${entity.id}`,
