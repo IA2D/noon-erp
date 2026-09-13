@@ -672,8 +672,14 @@ body[data-theme="light"] {
   }
 
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 14px;
+    height: 14px;
+  }
+
+  /* A wider native thumb makes popup scrolling easy to grab, especially
+     when the resize affordance is close to the modal edge. */
+  .custom-scrollbar {
+    scrollbar-width: auto;
   }
 
   .no-scrollbar::-webkit-scrollbar {
