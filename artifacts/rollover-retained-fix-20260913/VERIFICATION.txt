@@ -1,0 +1,40 @@
+CURRENT_BRANCH: main
+CHANGED_FIELD: fiscal-year rollover retained-earnings residual, opening-balance consolidation, and legacy target-year repair
+BASE_COMMIT: a3c79df
+MODIFIED_COMMIT: ba298a3d49dc1b5c781cf61dc7f54102c71a7271
+
+ARTIFACT_PATHS:
+MODIFIED_FILE: D:\Dev env\@commando\FULLERP\artifacts\rollover-retained-fix-20260913\MODIFIED_FILE
+DIFF_FILE: D:\Dev env\@commando\FULLERP\artifacts\rollover-retained-fix-20260913\DIFF_FILE
+VERIFICATION.txt: D:\Dev env\@commando\FULLERP\artifacts\rollover-retained-fix-20260913\VERIFICATION.txt
+ROLLBACK.sh: D:\Dev env\@commando\FULLERP\artifacts\rollover-retained-fix-20260913\ROLLBACK.sh
+
+BASELINE:
+command: git show a3c79df:src/utils/fiscalYearClosing.ts | Select-String 'records.push'
+input: source snapshot at a3c79df
+literal output/result: records.push({ accountId: retained.id, currency: baseCurrency, local: -localNet, foreign: -localNet, lastRate: 1 });
+exit status: 0
+behavior/status: generated a second retained-earnings row for the same account/currency and older target years could remain unbalanced.
+
+MODIFIED:
+command: npm run lint; npm run fiscal-year:regression; npm run opening-interaction:regression; npm run accounting:regression
+input: working tree at ba298a3d49dc1b5c781cf61dc7f54102c71a7271
+literal output/result: ROLLOVER_OPENING_RESIDUAL_OK missingRetainedRepaired=true residual=60 balanced=true oneRow=true idempotent=true; FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true noJournal=true; OPENING_BALANCES_INTERACTION_OK focus=modal shortcuts=F9+F8 enterPreserves=true autosaveBrowse=true savedRows=primary-grid printSavedRows=true entityPriority=true lightButtons=true; ACCOUNTING_REPORT_REGRESSION_OK period=2026-01 openingCash=120 openingCapital=-120 movementCash=40/10 revenue=40 expense=10 netIncome=30 assets=150 liabilitiesEquity=150 cashFlowClosing=150 cashFlowReconciled=true equityClosing=150 equityReconciled=true balanced=true pendingExcluded=true
+exit status: 0
+behavior/status: future rollovers merge retained earnings into one row; existing rollover target years are repaired once and remain balanced.
+
+ROLLBACK:
+command: "C:\Program Files\Git\bin\bash.exe" ROLLBACK.sh <isolated-worktree>
+input: isolated checkout of ba298a3d49dc1b5c781cf61dc7f54102c71a7271
+literal output/result: ROLLBACK_OK base=a3c79df; ROLLBACK_DIFF_EXIT=0
+exit status: 0
+restored behavior/status: the isolated copy exactly restored the eight affected paths to a3c79df; the main workspace remains on the modified implementation.
+
+PACKAGE:
+command: npx electron-builder --win nsis portable --config.directories.output=release-20260913-rollover-retained-fix
+input: ba298a3d49dc1b5c781cf61dc7f54102c71a7271
+literal output/result: installer and portable created; PACKAGED_ROLLOVER_RESIDUAL_FIX=true; PACKAGED_MIGRATION_CALL=true
+exit status: 0
+
+INSTALLER_SHA256: D13F4397BFEF4C88901FD889F82997D671EAD4CECF23E93500FD6274F0EDA464
+PORTABLE_SHA256: C0F5F045F52A38763EB0FC003609EFE87D2EEB5DDAF4D9CB989CA18E185EC92E
