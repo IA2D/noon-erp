@@ -1,0 +1,40 @@
+CURRENT_BRANCH: main
+CHANGED_FIELD: exact closing-trial-balance to opening-balance rollover, single P&L close, pre-commit reconciliation
+BASE_COMMIT: b112b298eb9718c88b436fb01f733ceb9111c2af
+MODIFIED_COMMIT: a1b57ad09a8dbd46cfe78cd5befc1e4604304f5f
+
+ARTIFACT_PATHS:
+MODIFIED_FILE: D:\Dev env\@commando\FULLERP\artifacts\exact-closing-openings-20260913\MODIFIED_FILE
+DIFF_FILE: D:\Dev env\@commando\FULLERP\artifacts\exact-closing-openings-20260913\DIFF_FILE
+VERIFICATION.txt: D:\Dev env\@commando\FULLERP\artifacts\exact-closing-openings-20260913\VERIFICATION.txt
+ROLLBACK.sh: D:\Dev env\@commando\FULLERP\artifacts\exact-closing-openings-20260913\ROLLBACK.sh
+
+BASELINE:
+command: git show b112b29:src/utils/fiscalYearClosing.ts | Select-String 'const localNet'
+input: source snapshot b112b29
+literal output/result: const localNet = round(records.reduce((sum, record) => sum + record.local, 0));
+exit status: 0
+behavior/status: rollover balanced the filtered rows by residual and removed income-statement chart accounts from the target year, without proving one-to-one source/target closing equivalence.
+
+MODIFIED:
+command: npm run lint; npm run fiscal-year:regression; npm run opening-interaction:regression; npm run accounting:regression; npm run build
+input: commit a1b57ad09a8dbd46cfe78cd5befc1e4604304f5f
+literal output/result: FISCAL_YEAR_CLOSING_OK sourceTrialBalance=true exactKeys=4 analytical=true currencies=USD+YER foreign=75 local=116.25 pnlClosedOnce=-60 chartPreserved=true balanced=true atomicReject=true noJournal=true; OPENING_BALANCES_INTERACTION_OK focus=modal shortcuts=F9+F8 enterPreserves=true autosaveBrowse=true savedRows=primary-grid printSavedRows=true entityPriority=true lightButtons=true; ACCOUNTING_REPORT_REGRESSION_OK period=2026-01 openingCash=120 openingCapital=-120 movementCash=40/10 revenue=40 expense=10 netIncome=30 assets=150 liabilitiesEquity=150 cashFlowClosing=150 cashFlowReconciled=true equityClosing=150 equityReconciled=true balanced=true pendingExcluded=true; vite build completed.
+exit status: 0
+behavior/status: every balance-sheet closing key is reproduced exactly by account, analytical account, currency and cost center; roots 3/4 close once into retained earnings; any source or target difference aborts before database commit.
+
+ROLLBACK:
+command: "C:\Program Files\Git\bin\bash.exe" ROLLBACK.sh <isolated-worktree>
+input: isolated checkout a1b57ad09a8dbd46cfe78cd5befc1e4604304f5f
+literal output/result: ROLLBACK_OK base=b112b29; ROLLBACK_DIFF_EXIT=0
+exit status: 0
+restored behavior/status: isolated copy restored the three affected files to b112b29; main workspace remains modified.
+
+PACKAGE:
+command: npx electron-builder --win nsis portable --config.directories.output=release-20260913-exact-closing-openings
+input: commit a1b57ad09a8dbd46cfe78cd5befc1e4604304f5f
+literal output/result: installer and portable created; PACKAGED_EXACT_CLOSING_OPENINGS=\dist\assets\index-BuKyDgih.js; PACKAGED_VALIDATION=true
+exit status: 0
+INSTALLER_SHA256: E3B72D37C77FB2D8E00888FBA51EE150905FA1317E06F92DB27F0EEA26DB6EFD
+PORTABLE_SHA256: EB43F01F654CD0FD1A8F8F668C0A757ABA004F4852312D25061A5D1A7BD849FE
+

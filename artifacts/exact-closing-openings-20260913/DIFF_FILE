@@ -1,0 +1,221 @@
+diff --git a/scripts/fiscal-year-closing-regression.mts b/scripts/fiscal-year-closing-regression.mts
+index c4cbd8f..27d9c14 100644
+--- a/scripts/fiscal-year-closing-regression.mts
++++ b/scripts/fiscal-year-closing-regression.mts
+@@ -19,9 +19,9 @@ const accounts = [
+       debit: 37.5, credit: 0, debitLocal: 37.5, creditLocal: 0, amount: 37.5, foreignAmount: 37.5, rate: 1,
+     }],
+   },
+-  { ...posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'), openingBalance: 105, openingBalances: [{
++  { ...posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'), openingBalance: -37.5, openingBalances: [{
+     id: 'retained-opening', fiscalYear: '2026', accountId: 'equity', currency: 'YER', exchangeRate: 1,
+-    debit: 105, credit: 0, debitLocal: 105, creditLocal: 0, amount: 105, foreignAmount: 105, rate: 1,
++    debit: 0, credit: 37.5, debitLocal: 0, creditLocal: 37.5, amount: -37.5, foreignAmount: -37.5, rate: 1,
+   }] },
+   { ...posting('revenue', '3101010001', 'إيرادات تشغيلية', 'NONE'), nature: 'CREDIT' as const, category: 'INCOME_STATEMENT' as const },
+   { ...posting('expense', '4101010001', 'مصروفات تشغيلية', 'NONE'), nature: 'DEBIT' as const, category: 'INCOME_STATEMENT' as const },
+@@ -45,23 +45,38 @@ const journal: JournalEntry = {
+     { id: 'l2', accountId: 'equity', accountCode: '2202010001', accountNameAr: 'أرباح مبقاة', description: 'equity', debit: 0, credit: 18.75, currency: 'YER', exchangeRate: 1 },
+   ],
+ };
++const incomeJournal: JournalEntry = {
++  id: 'j2', entryNumber: 'JV-2', date: '2026-12-31', reference: 'YEAR-END', narration: 'income statement result', status: 'POSTED',
++  totalDebit: 100, totalCredit: 100, currency: 'YER', exchangeRate: 1, createdBy: 'test', createdAt: '2026-12-31', lines: [
++    { id: 'l3', accountId: 'cash', accountCode: '1101010001', accountNameAr: 'الصندوق', description: 'cash', debit: 60, credit: 0, currency: 'YER', exchangeRate: 1, subLedgerType: 'CASH_BOX', subLedgerId: 'box' },
++    { id: 'l4', accountId: 'expense', accountCode: '4101010001', accountNameAr: 'مصروفات تشغيلية', description: 'expense', debit: 40, credit: 0, currency: 'YER', exchangeRate: 1 },
++    { id: 'l5', accountId: 'revenue', accountCode: '3101010001', accountNameAr: 'إيرادات تشغيلية', description: 'revenue', debit: 0, credit: 100, currency: 'YER', exchangeRate: 1 },
++  ],
++};
+ const snapshot = buildFiscalYearOpeningSnapshot({
+-  accounts, journals: [journal], cashBoxes: [cashBox], bankAccounts: [], customers: [], vendors: [], employees: [],
++  accounts, journals: [journal, incomeJournal], cashBoxes: [cashBox], bankAccounts: [], customers: [], vendors: [], employees: [],
+   sourceYear: '2026', targetYear: '2027', baseCurrency: 'YER',
+ });
+ const box = snapshot.cashBoxes[0];
+-assert.equal(box.openingBalances?.length, 2);
+-assert.equal(box.openingBalances?.reduce((sum, row) => sum + (row.foreignAmount || 0), 0), 15);
+-assert.equal(box.openingBalances?.reduce((sum, row) => sum + (row.amount || 0), 0), 56.25);
++assert.equal(box.openingBalances?.length, 3);
++assert.equal(box.openingBalances?.reduce((sum, row) => sum + (row.foreignAmount || 0), 0), 75);
++assert.equal(box.openingBalances?.reduce((sum, row) => sum + (row.amount || 0), 0), 116.25);
+ assert.equal(box.openingBalances?.find(row => row.costCenterId === 'cc1')?.foreignAmount, 5);
+-assert.ok(box.openingBalances?.every(row => row.currency === 'USD' && row.fiscalYear === '2027'));
++assert.deepEqual(new Set(box.openingBalances?.map(row => row.currency)), new Set(['USD', 'YER']));
++assert.ok(box.openingBalances?.every(row => row.fiscalYear === '2027'));
+ const control = snapshot.accounts.find(account => account.id === 'cash')!;
+-assert.equal(control.openingBalance, 56.25);
+-assert.equal(control.openingBalances?.[0].foreignAmount, 15);
++assert.equal(control.openingBalance, 116.25);
++assert.equal(control.openingBalances?.reduce((sum, row) => sum + (row.foreignAmount || 0), 0), 75);
+ assert.equal(snapshot.openings.filter(row => row.accountId === 'equity' && row.currency === 'YER').length, 1);
+-assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.debitLocal || 0), 0), 56.25);
+-assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.creditLocal || 0), 0), 56.25);
++assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.debitLocal || 0), 0), 116.25);
++assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.creditLocal || 0), 0), 116.25);
+ assert.ok(snapshot.openings.every(row => row.documentRef === 'CARRY-2026-2027'));
+ assert.ok(snapshot.excludedAccountIds.has('revenue') && snapshot.excludedAccountIds.has('expense'));
+-assert.ok(!snapshot.accounts.some(account => account.id === 'revenue' || account.id === 'expense'));
+-console.log('FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true noJournal=true');
++assert.equal(snapshot.accounts.find(account => account.id === 'revenue')?.openingBalance, 0);
++assert.equal(snapshot.accounts.find(account => account.id === 'expense')?.openingBalance, 0);
++assert.deepEqual(snapshot.validation, { ok: true, sourceClosingLocal: 0, sourceIncomeStatementLocal: -60, targetOpeningLocal: 0, comparedKeys: 4, errors: [] });
++assert.throws(() => buildFiscalYearOpeningSnapshot({
++  accounts, journals: [{ ...journal, lines: journal.lines.slice(0, 1) }], cashBoxes: [cashBox], bankAccounts: [], customers: [], vendors: [], employees: [],
++  sourceYear: '2026', targetYear: '2027', baseCurrency: 'YER',
++}), /ROLLOVER_SOURCE_TRIAL_BALANCE_UNBALANCED/);
++console.log('FISCAL_YEAR_CLOSING_OK sourceTrialBalance=true exactKeys=4 analytical=true currencies=USD+YER foreign=75 local=116.25 pnlClosedOnce=-60 chartPreserved=true balanced=true atomicReject=true noJournal=true');
+diff --git a/src/App.tsx b/src/App.tsx
+index f7a4b57..086d6bc 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1520,15 +1520,28 @@ function AppInner() {
+     });
+     if (targetHasData) return { ok: false, error: `السنة المالية ${nextYear} تحتوي بيانات مستقلة بالفعل؛ لم تُستبدل.` };
+     const baseCurrency = currencies.find(c => c.isBase)?.code ?? 'YER';
+-    const openingSnapshot = buildFiscalYearOpeningSnapshot({
+-      accounts, journals, cashBoxes, bankAccounts, customers, vendors, employees,
+-      sourceYear: year, targetYear: nextYear, baseCurrency,
+-    });
++    let openingSnapshot: ReturnType<typeof buildFiscalYearOpeningSnapshot>;
++    try {
++      openingSnapshot = buildFiscalYearOpeningSnapshot({
++        accounts, journals, cashBoxes, bankAccounts, customers, vendors, employees,
++        sourceYear: year, targetYear: nextYear, baseCurrency,
++      });
++    } catch (error) {
++      const reason = error instanceof Error ? error.message : String(error);
++      const message = reason.startsWith('ROLLOVER_SOURCE_TRIAL_BALANCE_UNBALANCED:')
++        ? `ميزان المراجعة الختامي للسنة ${year} غير متوازن (الفرق ${reason.split(':')[1]} ${baseCurrency})؛ لم يُنشأ أي رصيد في ${nextYear}.`
++        : `تعذر إنشاء أرصدة ${nextYear} المطابقة للإقفال الختامي: ${reason}`;
++      addAuditLog('GENERAL_LEDGER', 'POST', `رُفض تدوير أرصدة ${year}: ${message}`);
++      return { ok: false, error: message };
++    }
++    if (!openingSnapshot.validation.ok) {
++      return { ok: false, error: `فشل تطابق الرصيد الختامي مع الافتتاحي: ${openingSnapshot.validation.errors.join(' | ')}` };
++    }
+     // التدوير يكتب أرصدة افتتاحية مستقلة مباشرةً في مساحة السنة الجديدة.
+     // لا ينشأ قيد يومية صوري لأن مصدر الحقيقة هو openingBalances نفسه.
+     const linkedPeriod = { ...sourcePeriod, openingEntryId: undefined };
+     const nextPeriods = [...periodStates.filter(item => !(item.key === year && item.scope === 'YEAR')), linkedPeriod];
+-    const audit = createAuditLog('GENERAL_LEDGER', 'POST', `تدوير الأرصدة الافتتاحية المستقلة للسنة ${nextYear} من إقفال ${year} دون إنشاء قيد يومية`);
++    const audit = createAuditLog('GENERAL_LEDGER', 'POST', `تدوير ${openingSnapshot.validation.comparedKeys} رصيد افتتاحي مستقل للسنة ${nextYear} من الإقفال الختامي ${year}؛ فرق المصدر ${openingSnapshot.validation.sourceClosingLocal.toFixed(2)} وفرق الهدف ${openingSnapshot.validation.targetOpeningLocal.toFixed(2)}؛ أُقفلت نتيجة حسابات 3/4 في الأرباح المبقاة بقيمة ${openingSnapshot.validation.sourceIncomeStatementLocal.toFixed(2)}`);
+     const clone = cloneFiscalYearCollections({
+       accounts: openingSnapshot.accounts, costCenters, currencies,
+       cashBoxes: openingSnapshot.cashBoxes, bankAccounts: openingSnapshot.bankAccounts,
+diff --git a/src/utils/fiscalYearClosing.ts b/src/utils/fiscalYearClosing.ts
+index 7d1dac1..c63811d 100644
+--- a/src/utils/fiscalYearClosing.ts
++++ b/src/utils/fiscalYearClosing.ts
+@@ -26,6 +26,15 @@ type Bucket = {
+   lastRate: number;
+ };
+ 
++export type FiscalYearOpeningValidation = {
++  ok: boolean;
++  sourceClosingLocal: number;
++  sourceIncomeStatementLocal: number;
++  targetOpeningLocal: number;
++  comparedKeys: number;
++  errors: string[];
++};
++
+ const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+ const keyOf = (accountId: string, subLedgerId: string | undefined, costCenterId: string | undefined, currency: string) =>
+   [accountId, subLedgerId || '', costCenterId || '', currency].join('\u001f');
+@@ -131,26 +140,62 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
+       add(line.accountId, line.subLedgerId, line.costCenterId, amount.currency, amount.local, amount.foreign, amount.rate);
+     }));
+ 
+-  let records = [...buckets.values()].filter(bucket => Math.abs(bucket.local) >= 0.005 || Math.abs(bucket.foreign) >= 0.005);
+-  records = records.filter(record => !excludedAccountIds.has(record.accountId));
+-  const localNet = round(records.reduce((sum, record) => sum + record.local, 0));
+-  if (Math.abs(localNet) >= 0.005) {
++  const sourceClosing = [...buckets.values()].filter(bucket => Math.abs(bucket.local) >= 0.005 || Math.abs(bucket.foreign) >= 0.005);
++  const sourceClosingLocal = round(sourceClosing.reduce((sum, record) => sum + record.local, 0));
++  if (Math.abs(sourceClosingLocal) >= 0.005) {
++    throw new Error(`ROLLOVER_SOURCE_TRIAL_BALANCE_UNBALANCED:${sourceClosingLocal}`);
++  }
++  const sourceIncomeStatementLocal = round(sourceClosing
++    .filter(record => excludedAccountIds.has(record.accountId))
++    .reduce((sum, record) => sum + record.local, 0));
++  let records = sourceClosing.filter(record => !excludedAccountIds.has(record.accountId)).map(record => ({ ...record }));
++  if (Math.abs(sourceIncomeStatementLocal) >= 0.005) {
+     const retained = input.accounts.find(account => account.code === '2202010001' && isPostingAccount(account))
+       || input.accounts.find(account => account.nameAr.includes('أرباح مبقاة') && isPostingAccount(account));
+-    if (!retained) throw new Error(`ROLLOVER_UNBALANCED_WITHOUT_RETAINED_ACCOUNT:${localNet}`);
+-    // Merge the closing result into an existing retained-earnings opening for
+-    // the same currency. Creating a second row with the same composite key made
+-    // the opening-balance browser show only the first row and appear unbalanced.
++    if (!retained) throw new Error(`ROLLOVER_UNBALANCED_WITHOUT_RETAINED_ACCOUNT:${sourceIncomeStatementLocal}`);
++    // The only permitted difference from the old year's closing balances is
++    // closing roots 3/4 exactly once into retained earnings.
+     const existing = records.find(record => record.accountId === retained.id && !record.subLedgerId && !record.costCenterId && record.currency === baseCurrency);
+     if (existing) {
+-      existing.local = round(existing.local - localNet);
+-      existing.foreign = round(existing.foreign - localNet);
++      existing.local = round(existing.local + sourceIncomeStatementLocal);
++      existing.foreign = round(existing.foreign + sourceIncomeStatementLocal);
+       existing.lastRate = 1;
+     } else {
+-      records.push({ accountId: retained.id, currency: baseCurrency, local: -localNet, foreign: -localNet, lastRate: 1 });
++      records.push({ accountId: retained.id, currency: baseCurrency, local: sourceIncomeStatementLocal, foreign: sourceIncomeStatementLocal, lastRate: 1 });
+     }
+   }
+ 
++  const validationErrors: string[] = [];
++  const expected = new Map<string, { local: number; foreign: number }>();
++  sourceClosing.filter(record => !excludedAccountIds.has(record.accountId)).forEach(record => {
++    expected.set(keyOf(record.accountId, record.subLedgerId, record.costCenterId, record.currency), { local: round(record.local), foreign: round(record.foreign) });
++  });
++  if (Math.abs(sourceIncomeStatementLocal) >= 0.005) {
++    const retained = input.accounts.find(account => account.code === '2202010001' && isPostingAccount(account))
++      || input.accounts.find(account => account.nameAr.includes('أرباح مبقاة') && isPostingAccount(account));
++    if (retained) {
++      const key = keyOf(retained.id, undefined, undefined, baseCurrency);
++      const current = expected.get(key) || { local: 0, foreign: 0 };
++      expected.set(key, { local: round(current.local + sourceIncomeStatementLocal), foreign: round(current.foreign + sourceIncomeStatementLocal) });
++    }
++  }
++  const actual = new Map<string, { local: number; foreign: number }>();
++  records.forEach(record => {
++    const key = keyOf(record.accountId, record.subLedgerId, record.costCenterId, record.currency);
++    if (actual.has(key)) validationErrors.push(`DUPLICATE_TARGET_OPENING:${key}`);
++    actual.set(key, { local: round(record.local), foreign: round(record.foreign) });
++  });
++  new Set([...expected.keys(), ...actual.keys()]).forEach(key => {
++    const before = expected.get(key) || { local: 0, foreign: 0 };
++    const after = actual.get(key) || { local: 0, foreign: 0 };
++    if (Math.abs(before.local - after.local) >= 0.005 || Math.abs(before.foreign - after.foreign) >= 0.005) {
++      validationErrors.push(`OPENING_MISMATCH:${key}:${before.local}/${before.foreign}->${after.local}/${after.foreign}`);
++    }
++  });
++  const targetOpeningLocal = round(records.reduce((sum, record) => sum + record.local, 0));
++  if (Math.abs(targetOpeningLocal) >= 0.005) validationErrors.push(`TARGET_OPENING_UNBALANCED:${targetOpeningLocal}`);
++  if (validationErrors.length) throw new Error(`ROLLOVER_OPENING_VALIDATION_FAILED:${validationErrors.join('|')}`);
++
+   const openings: OpeningBalanceRecord[] = records.map((bucket, index) => {
+     const local = round(bucket.local);
+     const foreign = round(bucket.foreign);
+@@ -196,10 +241,20 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
+     list.push(record);
+     ownByAccount.set(record.accountId, list);
+   });
+-  let accounts: Account[] = input.accounts.filter(account => !excludedAccountIds.has(account.id)).map(account => {
++  // Keep the whole chart of accounts as shared setup. Roots 3/4 and their
++  // children start at zero; only their balances and movements are excluded.
++  let accounts: Account[] = input.accounts.map(account => {
+     const own = ownByAccount.get(account.id) || [];
+     return { ...account, openingBalances: own, openingBalance: round(own.reduce((sum, record) => sum + Number(record.amount || 0), 0)), fiscalYear: targetYear };
+   });
+   accounts = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }, targetYear).accounts;
+-  return { accounts, cashBoxes, bankAccounts, customers, vendors, employees, openings, excludedAccountIds };
++  const validation: FiscalYearOpeningValidation = {
++    ok: true,
++    sourceClosingLocal,
++    sourceIncomeStatementLocal,
++    targetOpeningLocal,
++    comparedKeys: expected.size,
++    errors: [],
++  };
++  return { accounts, cashBoxes, bankAccounts, customers, vendors, employees, openings, excludedAccountIds, validation };
+ }
