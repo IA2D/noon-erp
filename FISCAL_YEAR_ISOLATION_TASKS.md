@@ -60,4 +60,4 @@
 - [x] Bind all financial/master collections in App.tsx to the selected fiscal-year namespace; settings remain global.
 - [x] Scope accounting command identity and document uniqueness by fiscal year.
 - [x] Write rollover destination masters/openings/OPEN audit entry to new-year keys atomically without mutating source-year React state.
-- [ ] Normalize scoped collections into year-aware relational tables.
+- [x] Normalize scoped collections into year-aware relational tables.

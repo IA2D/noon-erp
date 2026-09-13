@@ -16,6 +16,12 @@ export const RELATIONAL_COLLECTION_KEYS = Object.freeze({
 });
 
 const COLLECTION_NAMES = new Map(Object.entries(RELATIONAL_COLLECTION_KEYS).map(([name, key]) => [key, name]));
+const SCOPED_KEY = /^(.*)::fiscal-year::(\d{4})$/;
+const collectionDescriptor = key => {
+  const match = String(key).match(SCOPED_KEY);
+  const baseKey = match?.[1] ?? String(key);
+  return { key: String(key), baseKey, fiscalYear: match?.[2] ?? null, name: COLLECTION_NAMES.get(baseKey) };
+};
 
 const text = value => value === undefined || value === null ? null : String(value);
 const number = value => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -54,6 +60,18 @@ export function createRelationalStore(db) {
         FOREIGN KEY(fiscal_year_id) REFERENCES erp_fiscal_years(id) ON DELETE RESTRICT
       );
       CREATE INDEX IF NOT EXISTS idx_erp_record_years_year ON erp_record_years(fiscal_year_id);
+      CREATE TABLE IF NOT EXISTS erp_fiscal_records (
+        fiscal_year_id TEXT NOT NULL REFERENCES erp_fiscal_years(id) ON DELETE RESTRICT,
+        collection_key TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        record_code TEXT,
+        document_number TEXT,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY(fiscal_year_id, collection_key, record_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_erp_fiscal_records_collection ON erp_fiscal_records(fiscal_year_id, collection_key);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_erp_fiscal_records_code ON erp_fiscal_records(fiscal_year_id, collection_key, record_code) WHERE record_code IS NOT NULL AND record_code<>'';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_erp_fiscal_records_document ON erp_fiscal_records(fiscal_year_id, collection_key, document_number) WHERE document_number IS NOT NULL AND document_number<>'';
 
       CREATE TABLE IF NOT EXISTS erp_accounts (
         id TEXT PRIMARY KEY,
@@ -356,6 +374,23 @@ export function createRelationalStore(db) {
   const insertAudit = db.prepare(`INSERT OR IGNORE INTO erp_audit_events(id,timestamp,user_id,user_name,user_role,module,action,details,ip_address,before_json,after_json,payload_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
   const upsertRecordYear = db.prepare(`INSERT INTO erp_record_years(collection_key,record_id,fiscal_year_id,source)
     VALUES (?,?,?,?) ON CONFLICT(collection_key,record_id) DO UPDATE SET fiscal_year_id=excluded.fiscal_year_id,source=excluded.source`);
+  const insertFiscalRecord = db.prepare(`INSERT INTO erp_fiscal_records(fiscal_year_id,collection_key,record_id,record_code,document_number,payload_json) VALUES (?,?,?,?,?,?)`);
+
+  function syncFiscalCollection(descriptor, rows) {
+    const fiscalId = `fy-${descriptor.fiscalYear}`;
+    ensureFiscalYear(descriptor.fiscalYear);
+    db.prepare('DELETE FROM erp_fiscal_records WHERE fiscal_year_id=? AND collection_key=?').run(fiscalId, descriptor.baseKey);
+    db.prepare('DELETE FROM erp_record_years WHERE collection_key=?').run(descriptor.key);
+    rows.forEach((record, index) => {
+      const recordId = String(record?.id ?? `${descriptor.name || 'record'}-${index + 1}`);
+      const code = record?.code ?? null;
+      const documentNumber = record?.entryNumber ?? record?.voucherNumber ?? record?.receiptNumber ?? null;
+      insertFiscalRecord.run(fiscalId, descriptor.baseKey, recordId, text(code), text(documentNumber), json({ ...record, fiscalYear: descriptor.fiscalYear }));
+      upsertRecordYear.run(descriptor.key, recordId, fiscalId, 'scoped-key');
+    });
+    projectionStatus.run(descriptor.key, rows.length);
+    return true;
+  }
 
   function fiscalYearForRecord(record) {
     const year = recordFiscalYear(record);
@@ -363,8 +398,15 @@ export function createRelationalStore(db) {
   }
 
   function clearCollection(key) {
-    const name = COLLECTION_NAMES.get(key);
+    const descriptor = collectionDescriptor(key);
+    const { name } = descriptor;
     if (!name) return false;
+    if (descriptor.fiscalYear) {
+      db.prepare('DELETE FROM erp_fiscal_records WHERE fiscal_year_id=? AND collection_key=?').run(`fy-${descriptor.fiscalYear}`, descriptor.baseKey);
+      db.prepare('DELETE FROM erp_record_years WHERE collection_key=?').run(descriptor.key);
+      projectionStatus.run(descriptor.key, 0);
+      return true;
+    }
     if (name === 'accounts') db.exec('DELETE FROM erp_accounts');
     if (name === 'journals') db.exec('DELETE FROM erp_journal_entries');
     if (name === 'paymentVouchers') db.exec('DELETE FROM erp_payment_vouchers');
@@ -435,9 +477,11 @@ export function createRelationalStore(db) {
   }
 
   function syncCollection(key, value) {
-    const name = COLLECTION_NAMES.get(key);
+    const descriptor = collectionDescriptor(key);
+    const { name } = descriptor;
     if (!name) return false;
     const rows = parseRows(value, key);
+    if (descriptor.fiscalYear) return syncFiscalCollection(descriptor, rows);
     if (name === 'auditLogs') {
       rows.slice().reverse().forEach(item => insertAudit.run(text(item.id), text(item.timestamp) ?? '', text(item.userId) ?? '', text(item.userName) ?? '', text(item.userRole) ?? '', text(item.module) ?? '', text(item.action) ?? '', text(item.details) ?? '', text(item.ipAddress) ?? '', text(item.beforeJson), text(item.afterJson), json(item)));
       projectionStatus.run(key, db.prepare('SELECT count(*) AS count FROM erp_audit_events').get().count);
@@ -556,6 +600,7 @@ export function createRelationalStore(db) {
     return {
       schemaVersion: 4,
       fiscalYears: scalar('SELECT count(*) AS count FROM erp_fiscal_years'),
+      fiscalRecords: scalar('SELECT count(*) AS count FROM erp_fiscal_records'),
       accounts: scalar('SELECT count(*) AS count FROM erp_accounts'),
       accountCurrencies: scalar('SELECT count(*) AS count FROM erp_account_currencies'),
       journals: scalar('SELECT count(*) AS count FROM erp_journal_entries'),
@@ -587,8 +632,10 @@ export function createRelationalStore(db) {
   }
 
   function readCollection(key) {
-    const name = COLLECTION_NAMES.get(key);
+    const descriptor = collectionDescriptor(key);
+    const { name } = descriptor;
     if (!name) return null;
+    if (descriptor.fiscalYear) return JSON.stringify(db.prepare('SELECT payload_json FROM erp_fiscal_records WHERE fiscal_year_id=? AND collection_key=? ORDER BY rowid').all(`fy-${descriptor.fiscalYear}`, descriptor.baseKey).map(row => payload(row.payload_json)));
     if (name === 'accounts') {
       const currenciesByAccount = new Map();
       db.prepare('SELECT * FROM erp_account_currencies ORDER BY account_id,currency_code').all().forEach(row => {
