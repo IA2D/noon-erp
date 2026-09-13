@@ -466,9 +466,17 @@ export default function FinancialReportsView({
   );
 
   const currency = selectedCurrency === 'ALL' ? baseCode : selectedCurrency;
-  // سجلات النسخ السابقة لا تحمل fiscalYear؛ تُنسب فقط إلى سنة المنشأة
-  // المضبوطة، ولا تُورّث تلقائياً إلى أي سنة مالية لاحقة.
-  const legacyOpeningYear = loadBranchesLocal()[0]?.fiscalYear || fiscalYear;
+  // السجلات القديمة لا تحمل fiscalYear. بعد التدوير نحدد سنة المصدر من
+  // أقدم قيد OPEN الموجود (OPEN-2027 يعني أن السجلات القديمة تخص 2026)،
+  // حتى لا تختفي من تقرير السنة المصدر أو تُحتسب مرة أخرى في السنة الجديدة.
+  const legacyOpeningYear = useMemo(() => {
+    const rolloverYears = journals
+      .map(journal => /^OPEN-(\d{4})$/.exec(journal.reference || '')?.[1])
+      .filter((year): year is string => Boolean(year))
+      .map(Number)
+      .filter(Number.isFinite);
+    return rolloverYears.length ? String(Math.min(...rolloverYears) - 1) : fiscalYear;
+  }, [journals, fiscalYear]);
   const openingRecordBelongsToReportYear = (row: { fiscalYear?: string }) =>
     row.fiscalYear === fiscalYear || (!row.fiscalYear && fiscalYear === legacyOpeningYear);
 
