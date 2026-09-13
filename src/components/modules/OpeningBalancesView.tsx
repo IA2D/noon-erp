@@ -1008,6 +1008,17 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
         bodyClassName="p-0"
         footer={null}
       >
+        <div className="flex items-center justify-between gap-3 border-b border-slate-700 bg-slate-950/80 px-4 py-3">
+          <span className="text-xs text-slate-400">يمكنك فتح أي سطر منفردًا أو تحميل جميع الأرصدة إلى جدول الإدخال دفعة واحدة.</span>
+          <button
+            type="button"
+            onClick={() => { loadSavedIntoMainGrid(lines); setIsSavedBalancesOpen(false); }}
+            disabled={savedRows.length === 0}
+            className="shrink-0 rounded-lg border border-sky-500/70 bg-sky-600/20 px-4 py-2 text-xs font-bold text-sky-200 transition hover:bg-sky-600/40 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            تعديل الكل ({savedRows.length})
+          </button>
+        </div>
         <div className="max-h-[70vh] overflow-auto custom-scrollbar">
           {browseModalRows.length === 0 ? (
             <p className="p-8 text-center text-sm text-slate-400">لا توجد أرصدة مدخلة بعد.</p>
