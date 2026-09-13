@@ -345,7 +345,7 @@ export function reconcileControlAccountOpenings(current: BalanceCollections, fis
       });
     });
 
-    const openingBalances = Array.from(byCurrency.entries()).map(([currency, records]) => {
+    const scopedOpeningBalances = Array.from(byCurrency.entries()).map(([currency, records]) => {
       const debit = round2(records.reduce((sum, record) => sum + (record.debit || 0), 0));
       const credit = round2(records.reduce((sum, record) => sum + (record.credit || 0), 0));
       const debitLocal = round2(records.reduce((sum, record) => sum + (record.debitLocal ?? Math.max(0, record.amount || 0)), 0));
@@ -366,6 +366,13 @@ export function reconcileControlAccountOpenings(current: BalanceCollections, fis
         rate,
       } satisfies OpeningBalanceRecord;
     });
+    // Keep opening records belonging to other fiscal years.  Reconciliation runs
+    // whenever the active year changes; replacing the whole array here used to
+    // erase the source year's openings after rollover, making its reports empty.
+    const preservedOpeningBalances = fiscalYear
+      ? (account.openingBalances || []).filter(record => record.fiscalYear !== fiscalYear)
+      : [];
+    const openingBalances = [...preservedOpeningBalances, ...scopedOpeningBalances];
     const openingBalance = round2(openingBalances.reduce((sum, record) => sum + (record.amount || 0), 0));
     const foreign = openingBalances.find(record => record.currency !== (account.defaultCurrency || 'YER'));
     const next: Account = {
