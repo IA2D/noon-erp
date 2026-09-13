@@ -108,7 +108,7 @@ export default function SavedBalancesSearch({rows, onPick}: Props) {
       {open && filtered.length > 0 && (
         <div className="absolute z-30 mt-1.5 w-full max-h-80 overflow-y-auto custom-scrollbar rounded-xl border border-slate-800 bg-slate-950 shadow-xl">
           <div className="px-3 py-2 text-xs font-bold text-slate-400 border-b border-slate-800 bg-slate-900/70">
-            الأرصدة المحفوظة ({filtered.length}) — اختر سطراً لتحميله إلى ورقة العمل
+            حسابات وأرصدة السنة ({filtered.length}) — اختر سطراً لتحميله إلى ورقة العمل
           </div>
           <div className="divide-y divide-slate-800">
             {filtered.map((r, idx) => (
@@ -164,7 +164,7 @@ export default function SavedBalancesSearch({rows, onPick}: Props) {
       {open && query.trim() !== '' && filtered.length === 0 && (
         <div className="absolute z-30 mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 shadow-xl px-4 py-4 text-center text-xs text-slate-400">
           <Search className="w-5 h-5 mx-auto mb-1 opacity-40" />
-          لا توجد أرصدة محفوظة مطابقة لـ «{query.trim()}» — اضغط «عرض» لاستعراض الكل.
+          لا توجد حسابات أو أرصدة مطابقة لـ «{query.trim()}» — اضغط «عرض» لاستعراض الكل.
         </div>
       )}
     </div>

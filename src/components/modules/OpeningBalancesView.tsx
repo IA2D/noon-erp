@@ -82,9 +82,8 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     accounts.forEach(a => {
       if (a.openingBalances && a.openingBalances.length > 0) {
         a.openingBalances.filter(openingRecordForYear).forEach(rec => {
-          if (rec.amount && rec.amount !== 0) {
-            set.add(compositeKey(a.id, null, rec.currency));
-          }
+          // يشمل الرصيد الصفري المُولَّد بالتدوير، لأنه صف محفوظ قابل للتحرير.
+          set.add(compositeKey(a.id, null, rec.currency));
         });
       } else {
         if (a.openingBalance !== undefined && a.openingBalance !== 0) {
@@ -98,9 +97,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     linked.forEach(e => {
       if (e.openingBalances && e.openingBalances.length > 0) {
         e.openingBalances.filter(openingRecordForYear).forEach(rec => {
-          if (rec.amount && rec.amount !== 0) {
-            set.add(compositeKey(e.linkedAccountId, e.id, rec.currency));
-          }
+          set.add(compositeKey(e.linkedAccountId, e.id, rec.currency));
         });
       } else {
         if (e.openingBalance) {
@@ -593,7 +590,12 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     });
 
     selectPostingAccounts(accounts).forEach(a => {
-      if (isControl(a.id)) return;
+      // تُعرض حسابات التحكم المدوّرة أيضاً عندما لا توجد لها تفصيلات تحليلية
+      // في السنة الحالية؛ لا يجوز أن تختفي من صفحة الأرصدة الافتتاحية.
+      const hasCurrentAnalyticalRows = linked.some(entity =>
+        entity.linkedAccountId === a.id && (entity.openingBalances || []).some(openingRecordForYear)
+      );
+      if (isControl(a.id) && hasCurrentAnalyticalRows) return;
       const records = a.openingBalances && a.openingBalances.length > 0
         ? a.openingBalances.filter(openingRecordForYear)
         : [
@@ -601,7 +603,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
           ...(a.openingBalanceForeign && a.openingCurrency ? [{ currency: a.openingCurrency, amount: a.openingBalanceForeign, foreignAmount: a.openingBalanceForeign, rate: a.openingRate, documentRef: a.openingDocumentRef, dueDate: a.openingDueDate }] : []),
         ];
       records.forEach(rec => {
-        if (!rec.amount || rec.amount === 0) return;
+        // صفوف التدوير الصفرية تُعرض كي يظهر الدليل كاملاً في السنة المرحّل إليها.
         const k = compositeKey(a.id, null, rec.currency);
         if (seen.has(k) || deletedKeys.has(k)) return;
         seen.add(k);
@@ -666,10 +668,39 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
       });
     });
 
-    return out.sort((x, y) => x.accountCode.localeCompare(y.accountCode, 'en', { numeric: true }));
-  }, [lines, accounts, linked, accountById, baseCode, rateOf, controlAccountIds, deletedKeys]);
+    // حتى قبل إدخال مبلغ، تبقى جميع الحسابات التشغيلية ظاهرة وقابلة للوصول
+    // في السنة الجديدة. هذه صفوف عرض فقط وليست أرصدة محفوظة أو قابلة للتحميل الجماعي.
+    selectPostingAccounts(accounts).forEach(a => {
+      const hasVisibleAccountRow = out.some(row => row.accountId === a.id && !row.entity);
+      const hasCurrentAnalyticalRows = linked.some(entity =>
+        entity.linkedAccountId === a.id && (entity.openingBalances || []).some(openingRecordForYear)
+      );
+      if (hasVisibleAccountRow || (isControl(a.id) && hasCurrentAnalyticalRows)) return;
+      out.push({
+        key: `empty:${fiscalYear || 'current'}:${a.id}`,
+        kind: 'account',
+        accountId: a.id,
+        accountCode: a.code,
+        accountName: a.nameAr,
+        entity: null,
+        currency: a.defaultCurrency || baseCode,
+        rate: rateOf(a.defaultCurrency || baseCode) || 1,
+        debit: 0,
+        credit: 0,
+        debitForeign: 0,
+        creditForeign: 0,
+        saved: false,
+        onWorksheet: false,
+      });
+    });
 
+    return out.sort((x, y) => x.accountCode.localeCompare(y.accountCode, 'en', { numeric: true }));
+  }, [lines, accounts, linked, accountById, baseCode, rateOf, controlAccountIds, deletedKeys, fiscalYear]);
+
+  // التحميل الجماعي يقتصر على الأرصدة الفعلية؛ أما البحث فيعرض الدليل كاملاً
+  // بما فيه الحسابات الصفرية للسنة المرحّل إليها.
   const savedRows = useMemo<BrowseRow[]>(() => browseRows.filter(r => r.saved && !r.onWorksheet), [browseRows]);
+  const selectableRows = useMemo<BrowseRow[]>(() => browseRows.filter(r => !r.onWorksheet), [browseRows]);
 
   const browseTotals = useMemo(() => {
     let debit = 0;
@@ -780,6 +811,10 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     const acc = accountById.get(row.accountId);
     if (!acc) {
       toast('error', 'لم يتم العثور على الحساب المرتبط.');
+      return;
+    }
+    if (isControl(acc.id) && !row.entity) {
+      toast('info', 'هذا رصيد مجمّع مُرحّل لحساب تحكم. يظهر للعرض؛ عدّل تفصيل الحسابات التحليلية المرتبطة به عند توفرها.');
       return;
     }
     const key = row.recordId || uid();
@@ -919,7 +954,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
       />
 
       <OpeningBalancesToolbar
-        savedRows={savedRows}
+        savedRows={selectableRows}
         onPickSaved={handleEditFromBrowse}
         onLoadAll={handleBrowseWithAutoSave}
         onAddLine={addLine}

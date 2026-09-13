@@ -1392,10 +1392,12 @@ function AppInner() {
     const baseCurrency = currencies.find(c => c.isBase)?.code ?? 'YER';
     const openingByAccount = new Map(lines.map(line => [line.accountId, line]));
     const nextAccounts = accounts.map(account => {
+      // أنشئ صف افتتاحي لكل حساب تشغيلي، حتى الحسابات الصفرية. هذا يجعل
+      // صفحة الأرصدة الافتتاحية للسنة الجديدة تعرض الدليل كاملاً بعد التدوير.
+      if (!isPostingAccount(account)) return account;
       const carried = openingByAccount.get(account.id);
-      if (!carried) return account;
-      const debit = round2(carried.debit || 0);
-      const credit = round2(carried.credit || 0);
+      const debit = round2(carried?.debit || 0);
+      const credit = round2(carried?.credit || 0);
       const record: OpeningBalanceRecord = {
         id: `rollover-opening-${nextYear}-${account.id}`,
         fiscalYear: nextYear,
