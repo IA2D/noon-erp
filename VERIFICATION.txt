@@ -2,8 +2,8 @@ FISCAL-YEAR ISOLATION VERIFICATION
 
 Branch: main
 Baseline commit: a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
-Product-code commit packed in release: 52b6e2cb48e67e717e8ad9dd5db267bba46a1928
-Verification/rollback commit: ca13b7bf17de4109088a27e479b626637a44a654
+Product-code commit packed in release: dcc50ae7b78fd19db5083fffb8e30d4350f76be2
+Rollback-tested commit: dcc50ae7b78fd19db5083fffb8e30d4350f76be2
 Changed branches/fields: storage key suffix ::fiscal-year::YYYY; erp_fiscal_years; erp_record_years; erp_fiscal_records; fiscalYear; entryKind=OPENING_AUDIT; affectsLedger=false; readOnly=true; OpeningBalanceRecord.costCenterId.
 Restored behavior/status: every year reads and writes an independent dataset; shared settings remain global; a final-closed year is read-only; rollover IDs and relationships are independent; OPEN-YYYY is visible only as a read-only audit record and is excluded from balances; target openings are counted once.
 
@@ -53,35 +53,37 @@ Literal output/result: FINANCIAL_REPORTS_BACKGROUND_OK inheritedShell=true stand
 Exit status: 0
 
 PACKAGED RELEASE
-Command: npx electron-builder --win nsis portable --config.directories.output=release-20260913-154919-fiscal-year-isolation-52b6e2cb
-Input: production dist plus Electron sources at product-code commit 52b6e2cb48e67e717e8ad9dd5db267bba46a1928
-Literal output/result: target=nsis file=release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Setup-1.0.0-x64.exe
-Literal output/result: target=portable file=release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
+Command: npx electron-builder --win nsis portable --config.directories.output=release-20260913-160651-fiscal-year-isolation-dcc50ae7
+Input: production dist plus Electron sources at product-code commit dcc50ae7b78fd19db5083fffb8e30d4350f76be2
+Literal output/result: target=nsis file=release-20260913-160651-fiscal-year-isolation-dcc50ae7\NOON-ERP-Setup-1.0.0-x64.exe
+Literal output/result: target=portable file=release-20260913-160651-fiscal-year-isolation-dcc50ae7\NOON-ERP-Portable-1.0.0-x64.exe
 Exit status: 0
 
-Installer: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Setup-1.0.0-x64.exe
-Installer bytes: 112254780
-Installer SHA256: B182E02DD7F8147AE606E4728CC0648D1A36C24CB309C9DAE20983F20BD4126E
-Portable: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
-Portable bytes: 112063564
-Portable SHA256: 0D1F735FD07A4A06B48DB533446C5EDA2E97CA4A803B5D3F711B804F4A65733F
-Freshness result: NEW_TIME=2026-09-13T15:50:15.4635824+03:00; LATEST_PREVIOUS_TIME=2026-09-13T15:46:25.8722970+03:00; NEWER=True
+Installer: D:\Dev env\@commando\FULLERP\release-20260913-160651-fiscal-year-isolation-dcc50ae7\NOON-ERP-Setup-1.0.0-x64.exe
+Installer bytes: 112254811
+Installer SHA256: BC2A597A39C035A52499066D58E20F25BE9788C9CAA1001CF2416B3615D07F62
+Portable: D:\Dev env\@commando\FULLERP\release-20260913-160651-fiscal-year-isolation-dcc50ae7\NOON-ERP-Portable-1.0.0-x64.exe
+Portable bytes: 112063597
+Portable SHA256: A2C1EF74695253330C5B43C490ECAFB64979B1C6CBCCDB861D2F553E6001EABB
+Freshness result: NEW_TIME=2026-09-13T16:07:47.8552569+03:00; BUILD_COMMIT=dcc50ae7; NEWER_THAN_SUPERSEDED_BUILD=True
 Packed source result: electron/main.mjs PACKED_MATCH=True; legacy-fiscal-migration.mjs PACKED_MATCH=True; accounting-command-store.mjs PACKED_MATCH=True
 
 Command: packaged smoke (win-unpacked) with FULLERP_SMOKE_TEST=1 and isolated --user-data-dir
-Input: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\win-unpacked\NOON ERP.exe
+Input: D:\Dev env\@commando\FULLERP\release-20260913-160651-fiscal-year-isolation-dcc50ae7\win-unpacked\NOON ERP.exe
 Literal output/result: "ok": true; "brand": true; "loginForm": true; "fiscalYearSelector": true; "loginOk": true; "sqlite": true; "authority": "RELATIONAL_SQLITE"
 Exit status: 0
 
 Command: packaged smoke (portable) with FULLERP_SMOKE_TEST=1 and isolated --user-data-dir
-Input: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
+Input: D:\Dev env\@commando\FULLERP\release-20260913-160651-fiscal-year-isolation-dcc50ae7\NOON-ERP-Portable-1.0.0-x64.exe
 Literal output/result: "ok": true; "brand": true; "loginForm": true; "fiscalYearSelector": true; "loginOk": true; "sqlite": true; "authority": "RELATIONAL_SQLITE"
 Exit status: 0
 
 ROLLBACK
 Command: "C:\Program Files\Git\bin\bash.exe" ./ROLLBACK.sh
-Input: separate detached worktree at ca13b7bf17de4109088a27e479b626637a44a654; baseline a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
+Input: separate detached worktree at dcc50ae7b78fd19db5083fffb8e30d4350f76be2; baseline a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
 Literal output/result: ROLLBACK_OK base=a6fff06e5562a51d7622c9d6662ec3f4a2f8e529 restored_tree=d44062f47daaba3f6a5bd98e3e524b15e60084b0
 Literal output/result: ROLLBACK_TREE_MATCH=True
 Exit status: 0
 Restored behavior/status: the separate copy exactly matched the baseline commit tree; the primary worktree and MODIFIED_FILE remained changed.
+
+

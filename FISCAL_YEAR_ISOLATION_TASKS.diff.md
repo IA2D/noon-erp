@@ -1,128 +1,127 @@
 diff --git a/FISCAL_YEAR_ISOLATION_TASKS.copy.md b/FISCAL_YEAR_ISOLATION_TASKS.copy.md
 new file mode 100644
-index 0000000..a6d444a
+index 0000000..cc774a9
 --- /dev/null
 +++ b/FISCAL_YEAR_ISOLATION_TASKS.copy.md
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,56 @@
 +# Fiscal-year isolation implementation tasks
 +
 +## Phase 0 — Baseline and safety
-+- [x] Capture current branch and baseline TypeScript build.
-+- [ ] Export a full SQLite backup and record SHA-256.
-+- [ ] Create a legacy-data inventory grouped by table and year evidence.
++- [x] Capture the baseline commit and TypeScript build.
++- [x] Export an online SQLite backup and record SHA-256 plus `PRAGMA integrity_check`.
++- [x] Inventory legacy tables, scoped keys, and year evidence.
 +
 +## Phase 1 — Data model
-+- [ ] Add `fiscal_years` registry with lifecycle/status fields.
-+- [ ] Add mandatory `fiscal_year_id` to every financial/business table.
-+- [ ] Keep company identity, users, permissions, UI, and system settings global.
-+- [ ] Add composite uniqueness for codes and document numbers per year.
-+- [ ] Add `entry_kind`, `affects_ledger`, and `read_only` to opening audit entries.
++- [x] Add the fiscal-year registry and record/year ownership registry (schema v4).
++- [x] Store every annual collection in an isolated `::fiscal-year::YYYY` namespace and normalized fiscal-record projection.
++- [x] Keep settings, company identity, users, permissions, and UI preferences global.
++- [x] Scope record identity, document command identity, and uniqueness by year.
++- [x] Add `fiscalYear`, `entryKind`, `affectsLedger`, and `readOnly` to rollover audit journals.
 +
 +## Phase 2 — Repository isolation
-+- [ ] Introduce one year-scoped repository context for all reads/writes.
-+- [ ] Remove UI-only year filtering as the source of isolation.
-+- [ ] Enforce closed-year writes at the service/database boundary.
-+- [ ] Scope reports, searches, exports, attachments, and audit records.
++- [x] Bind all annual React persistence to the selected fiscal-year context.
++- [x] Bind SQLite read/write/projection to the same fiscal-year namespace.
++- [x] Enforce final-closed-year write rejection at the SQLite command boundary; allow an authorized reopen transition.
++- [x] Scope reports, searches, exports, attachments, audit logs, masters, operations, and opening-balance state.
++- [x] Discover all persisted fiscal years in the login/reporting selector.
 +
 +## Phase 3 — Atomic rollover
-+- [ ] Implement `BEGIN IMMEDIATE` rollover transaction.
-+- [ ] Clone year-owned master/input records with new IDs.
-+- [ ] Remap all internal foreign keys and parent/analytical links.
-+- [ ] Calculate source closing balances by account, analytical account, currency, and cost center.
-+- [ ] Insert destination opening balances exactly once.
-+- [ ] Insert a read-only `OPEN-YYYY` audit journal excluded from ledger/report calculations.
-+- [ ] Validate debit/credit and source/destination equality before `COMMIT`.
-+- [ ] Roll back the entire operation on any failure.
++- [x] Execute rollover under one `BEGIN IMMEDIATE` accounting command.
++- [x] Clone year-owned inputs/masters with new IDs.
++- [x] Remap internal parent, analytical, cost-center, account, entity, and journal relationships.
++- [x] Calculate closing/opening balances by account, analytical account, currency, and cost center.
++- [x] Insert destination opening balances exactly once.
++- [x] Insert `OPEN-YYYY` as a read-only audit journal with `affectsLedger=false`.
++- [x] Validate balance and target graph before `COMMIT`.
++- [x] Roll back every target write on conflict or broken relationship.
++- [x] Leave a new year without rollover empty and zeroed.
 +
 +## Phase 4 — Existing-data migration
-+- [ ] Assign the current legacy dataset to its source fiscal year.
-+- [ ] Rebuild any already-created destination year in a temporary workspace.
-+- [ ] Compare old-year reports before/after migration byte-for-byte at numeric level.
-+- [ ] Replace destination data only after reconciliation passes.
++- [x] Detect the dominant source year without choosing a stray historical date or generated OPEN journal.
++- [x] Partition legacy source and already-created destination-year records into independent namespaces.
++- [x] Clone destination IDs and remap their relationships.
++- [x] Preserve original legacy keys and shared settings byte-for-byte.
++- [x] Verify the real database copy: source 2026 trial-balance numeric output is identical before/after migration.
++- [x] Validate every migrated year graph inside the migration transaction.
 +
 +## Phase 5 — Verification and release
-+- [ ] Test year isolation for every CRUD module.
-+- [ ] Test multi-currency and analytical/control balances.
-+- [ ] Test closed-year read-only behavior.
-+- [ ] Test rollback by injecting failures at each transaction stage.
-+- [ ] Run full regression suite.
-+- [ ] Build installer and portable artifacts and verify hashes.
++- [x] Test namespace isolation, ID independence, relationship remapping, and stale-write conflicts.
++- [x] Test analytical, multi-currency, and cost-center carry-forward.
++- [x] Test closed-year database rejection and reopen exception.
++- [x] Test conflict and invalid-graph rollback.
++- [x] Run the full P1 regression/build gate.
++- [x] Run targeted financial report, opening-balance, statement, balance-sheet, and login-year tests.
++- [x] Build fresh NSIS installer and portable executables.
++- [x] Run the packaged smoke probe against unpacked and portable editions.
++- [x] Verify artifact timestamps, sizes, SHA-256 hashes, and packed source hash.
++- [x] Test `ROLLBACK.sh` on a separate detached worktree and match the exact baseline tree.
++
++## Final state
++- Source/base commit: `a6fff06e5562a51d7622c9d6662ec3f4a2f8e529`.
++- Product-code commit packed in release: `52b6e2cb48e67e717e8ad9dd5db267bba46a1928`.
++- Release folder: `D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb`.
 diff --git a/FISCAL_YEAR_ISOLATION_TASKS.md b/FISCAL_YEAR_ISOLATION_TASKS.md
 new file mode 100644
-index 0000000..18479cc
+index 0000000..cc774a9
 --- /dev/null
 +++ b/FISCAL_YEAR_ISOLATION_TASKS.md
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,56 @@
 +# Fiscal-year isolation implementation tasks
 +
 +## Phase 0 — Baseline and safety
-+- [x] Capture current branch and baseline TypeScript build.
-+- [ ] Export a full SQLite backup and record SHA-256.
-+- [ ] Create a legacy-data inventory grouped by table and year evidence.
++- [x] Capture the baseline commit and TypeScript build.
++- [x] Export an online SQLite backup and record SHA-256 plus `PRAGMA integrity_check`.
++- [x] Inventory legacy tables, scoped keys, and year evidence.
 +
 +## Phase 1 — Data model
-+- [x] Add `fiscal_years` registry with lifecycle/status fields.
-+- [ ] Add mandatory `fiscal_year_id` to every financial/business table.
-+- [ ] Keep company identity, users, permissions, UI, and system settings global.
-+- [ ] Add composite uniqueness for codes and document numbers per year.
-+- [ ] Add `entry_kind`, `affects_ledger`, and `read_only` to opening audit entries.
++- [x] Add the fiscal-year registry and record/year ownership registry (schema v4).
++- [x] Store every annual collection in an isolated `::fiscal-year::YYYY` namespace and normalized fiscal-record projection.
++- [x] Keep settings, company identity, users, permissions, and UI preferences global.
++- [x] Scope record identity, document command identity, and uniqueness by year.
++- [x] Add `fiscalYear`, `entryKind`, `affectsLedger`, and `readOnly` to rollover audit journals.
 +
 +## Phase 2 — Repository isolation
-+- [ ] Introduce one year-scoped repository context for all reads/writes.
-+- [ ] Remove UI-only year filtering as the source of isolation.
-+- [ ] Enforce closed-year writes at the service/database boundary.
-+- [ ] Scope reports, searches, exports, attachments, and audit records.
++- [x] Bind all annual React persistence to the selected fiscal-year context.
++- [x] Bind SQLite read/write/projection to the same fiscal-year namespace.
++- [x] Enforce final-closed-year write rejection at the SQLite command boundary; allow an authorized reopen transition.
++- [x] Scope reports, searches, exports, attachments, audit logs, masters, operations, and opening-balance state.
++- [x] Discover all persisted fiscal years in the login/reporting selector.
 +
 +## Phase 3 — Atomic rollover
-+- [ ] Implement `BEGIN IMMEDIATE` rollover transaction.
-+- [ ] Clone year-owned master/input records with new IDs.
-+- [ ] Remap all internal foreign keys and parent/analytical links.
-+- [ ] Calculate source closing balances by account, analytical account, currency, and cost center.
-+- [ ] Insert destination opening balances exactly once.
-+- [ ] Insert a read-only `OPEN-YYYY` audit journal excluded from ledger/report calculations.
-+- [ ] Validate debit/credit and source/destination equality before `COMMIT`.
-+- [ ] Roll back the entire operation on any failure.
++- [x] Execute rollover under one `BEGIN IMMEDIATE` accounting command.
++- [x] Clone year-owned inputs/masters with new IDs.
++- [x] Remap internal parent, analytical, cost-center, account, entity, and journal relationships.
++- [x] Calculate closing/opening balances by account, analytical account, currency, and cost center.
++- [x] Insert destination opening balances exactly once.
++- [x] Insert `OPEN-YYYY` as a read-only audit journal with `affectsLedger=false`.
++- [x] Validate balance and target graph before `COMMIT`.
++- [x] Roll back every target write on conflict or broken relationship.
++- [x] Leave a new year without rollover empty and zeroed.
 +
 +## Phase 4 — Existing-data migration
-+- [x] Assign the current legacy dataset to its source fiscal year.
-+- [ ] Rebuild any already-created destination year in a temporary workspace.
-+- [ ] Compare old-year reports before/after migration byte-for-byte at numeric level.
-+- [ ] Replace destination data only after reconciliation passes.
++- [x] Detect the dominant source year without choosing a stray historical date or generated OPEN journal.
++- [x] Partition legacy source and already-created destination-year records into independent namespaces.
++- [x] Clone destination IDs and remap their relationships.
++- [x] Preserve original legacy keys and shared settings byte-for-byte.
++- [x] Verify the real database copy: source 2026 trial-balance numeric output is identical before/after migration.
++- [x] Validate every migrated year graph inside the migration transaction.
 +
 +## Phase 5 — Verification and release
-+- [ ] Test year isolation for every CRUD module.
-+- [ ] Test multi-currency and analytical/control balances.
-+- [ ] Test closed-year read-only behavior.
-+- [ ] Test rollback by injecting failures at each transaction stage.
-+- [ ] Run full regression suite.
-+- [ ] Build installer and portable artifacts and verify hashes.
++- [x] Test namespace isolation, ID independence, relationship remapping, and stale-write conflicts.
++- [x] Test analytical, multi-currency, and cost-center carry-forward.
++- [x] Test closed-year database rejection and reopen exception.
++- [x] Test conflict and invalid-graph rollback.
++- [x] Run the full P1 regression/build gate.
++- [x] Run targeted financial report, opening-balance, statement, balance-sheet, and login-year tests.
++- [x] Build fresh NSIS installer and portable executables.
++- [x] Run the packaged smoke probe against unpacked and portable editions.
++- [x] Verify artifact timestamps, sizes, SHA-256 hashes, and packed source hash.
++- [x] Test `ROLLBACK.sh` on a separate detached worktree and match the exact baseline tree.
 +
-+### Progress 2026-09-13
-+- [x] Added rp_record_years mapping registry and automatic fiscal-year inference during relational projection (schema v4).
-+- [ ] Next: make repository queries and writes require the selected fiscal-year context.
-+
-+- [x] Verify record-year mapping with relational SQLite smoke test.
-+
-+- [x] Add shared fiscal-year normalization, record-year inference, and atomic transaction primitive.
-+
-+- [x] Implement reusable year-dataset graph cloning with new IDs, FK remapping, date shifting, and clone validation.
-+
-+- [x] Add renderer-side year-scoped dataset key, legacy partitioning, and fiscal-year stamping primitives.
-+
-+- [x] Add React persistence hook that reloads and writes an authoritative fiscal-year namespace when the selected year changes.
-+
-+### App integration
-+- [x] Bind all financial/master collections in App.tsx to the selected fiscal-year namespace; settings remain global.
-+- [x] Scope accounting command identity and document uniqueness by fiscal year.
-+- [x] Write rollover destination masters/openings/OPEN audit entry to new-year keys atomically without mutating source-year React state.
-+- [x] Normalize scoped collections into year-aware relational tables.
-+
-+- [x] Verify accounting-command transaction writes target year atomically, preserves source bytes, remaps links, and rolls back on conflict.
-+
-+- [x] Validate cloned target-year relationships inside the same SQLite transaction and roll back broken graphs.
-+- [x] Make fiscal-year factory reset clear only the selected year's isolated datasets while preserving settings and other years.
-+
-+- [x] Rebuild and restore all scoped fiscal datasets without retaining stale year records.
++## Final state
++- Source/base commit: `a6fff06e5562a51d7622c9d6662ec3f4a2f8e529`.
++- Product-code commit packed in release: `52b6e2cb48e67e717e8ad9dd5db267bba46a1928`.
++- Release folder: `D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb`.
 diff --git a/ROLLBACK.sh b/ROLLBACK.sh
 new file mode 100755
 index 0000000..f7901d9
@@ -146,29 +145,97 @@ index 0000000..f7901d9
 +echo "ROLLBACK_OK base=${BASE_COMMIT} restored_tree=${RESTORED_TREE}"
 diff --git a/VERIFICATION.txt b/VERIFICATION.txt
 new file mode 100644
-index 0000000..7dce24a
+index 0000000..9b72a21
 --- /dev/null
 +++ b/VERIFICATION.txt
-@@ -0,0 +1,19 @@
-+Baseline command: npm run lint
-+Baseline result: TypeScript compilation passed before fiscal-isolation changes.
-+Modified command: pending Phase 1 implementation.
-+Rollback command: git revert <fiscal-isolation-commit>
-+Status: task tracker created; implementation starts with schema and repository boundary.
-+Schema command: node --check electron/relational-store.mjs
-+Schema result: passed; fiscal-year registry added as schema v4.
-+Relational projection: node --check electron/relational-store.mjs = passed; npm run lint = passed; added erp_record_years registry.
-+Relational smoke: node scripts/relational-sqlite-smoke.mjs = RELATIONAL_SQLITE_SMOKE_OK; fiscalYears=2; mappedJournalYear=fy-2026; integrity=ok.
-+Context regression: node scripts/fiscal-year-context-regression.mjs = FISCAL_YEAR_CONTEXT_OK normalization=true explicitYear=true atomicRollback=true.
-+Rollover graph regression: node scripts/fiscal-year-rollover-regression.mjs = FISCAL_YEAR_ROLLOVER_OK rows=4 sourceIdsIndependent=true linksRemapped=true datesShifted=true.
-+Dataset regression: npx tsx scripts/fiscal-year-dataset-regression.mts = FISCAL_YEAR_DATASET_OK partition=true scopedKey=true stamp=true; npm run lint = passed.
-+Scoped React state: npm run lint = passed; useFiscalYearStorageState reload boundary and versioned persistence added.
-+App integration: npm run lint = passed; annual collections use useFiscalYearStorageState; accounting keys and command identities include fiscal year; rollover writes 19 source/destination changes atomically.
-+Scoped relational repository: npm run relational:smoke = RELATIONAL_SQLITE_SMOKE_OK scopedIsolation=true; same account code stored independently for 2026/2027.
-+Atomic integration: node scripts/fiscal-year-atomic-rollover-regression.mjs = FISCAL_YEAR_ATOMIC_ROLLOVER_OK sourceUnchanged=true targetIndependent=true linksRemapped=true conflictRollback=true.
-+Legacy migration: node scripts/legacy-fiscal-migration-regression.mjs = LEGACY_FISCAL_MIGRATION_OK sourceUnchanged=true sourceYear=2026 futureRowsExcluded=true settingsGlobal=true idempotent=true.
-+Graph validation: fiscal-year atomic regression = brokenGraphRollback=true. Fiscal reset now replaces selected-year scoped values with empty values and preserves all other keys/settings.
-+Restore isolation: relational smoke passed with stale fiscalRecords cleared and 2026/2027 scoped records rebuilt; database recovery regression passed.
+@@ -0,0 +1,87 @@
++FISCAL-YEAR ISOLATION VERIFICATION
++
++Branch: main
++Baseline commit: a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
++Product-code commit packed in release: 52b6e2cb48e67e717e8ad9dd5db267bba46a1928
++Verification/rollback commit: ca13b7bf17de4109088a27e479b626637a44a654
++Changed branches/fields: storage key suffix ::fiscal-year::YYYY; erp_fiscal_years; erp_record_years; erp_fiscal_records; fiscalYear; entryKind=OPENING_AUDIT; affectsLedger=false; readOnly=true; OpeningBalanceRecord.costCenterId.
++Restored behavior/status: every year reads and writes an independent dataset; shared settings remain global; a final-closed year is read-only; rollover IDs and relationships are independent; OPEN-YYYY is visible only as a read-only audit record and is excluded from balances; target openings are counted once.
++
++FOUR REQUIRED ARTIFACTS
++MODIFIED_FILE: D:\Dev env\@commando\FULLERP\artifacts\fiscal-year-isolation\migration-verified-FULLERP-20260913.sqlite
++DIFF_FILE: D:\Dev env\@commando\FULLERP\FISCAL_YEAR_ISOLATION_TASKS.diff.md
++VERIFICATION: D:\Dev env\@commando\FULLERP\VERIFICATION.txt
++ROLLBACK: D:\Dev env\@commando\FULLERP\ROLLBACK.sh (git mode 100755)
++PRESERVED_BASELINE: D:\Dev env\@commando\FULLERP\artifacts\fiscal-year-isolation\baseline-FULLERP-20260913.sqlite
++PRESERVED_BASELINE_SHA256: 6ED9A480B895940630736539A793F9285E276C8E8CF1E84A2429F4DB2881CBFE
++MODIFIED_FILE_SHA256: 5C198ECC4239AC68FDA020A966718C73088229BFFED62B272D4BEFE599D62F0E
++
++BASELINE
++Command: python SQLite online-backup fixture creation followed by PRAGMA integrity_check
++Input: C:\Users\ahmed\AppData\Roaming\FULLERP\FULLERP.sqlite
++Literal output/result: SQLITE_BACKUP_OK integrity=ok
++Exit status: 0
++
++Command: npm run lint
++Input: baseline worktree at a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
++Literal output/result: > fullerp-desktop@1.0.0 lint / > tsc --noEmit
++Exit status: 0
++
++MODIFIED
++Command: npx tsx scripts/verify-fiscal-migration-database.mts "artifacts\fiscal-year-isolation\baseline-FULLERP-20260913.sqlite" "artifacts\fiscal-year-isolation\migration-verified-FULLERP-20260913.sqlite"
++Input: preserved 11,452,416-byte database copy; legacy records for 2022, 2026, and 2027
++Literal output/result: FISCAL_MIGRATION_DATABASE_OK year=2026 years=2022,2026,2027 rows=7 debit=11646885.11 credit=11646885.11 sourceUnchanged=true settingsGlobal=true targetIndependent=true auditReadOnly=true integrity=ok output=artifacts\fiscal-year-isolation\migration-verified-FULLERP-20260913.sqlite
++Exit status: 0
++
++Command: npm run fiscal-year:regression
++Input: isolated 2026/2027 fixture, conflict fixture, broken-graph fixture, closed-year fixture, USD analytical/cost-center fixture
++Literal output/result: FISCAL_YEAR_ATOMIC_ROLLOVER_OK sourceUnchanged=true targetIndependent=true linksRemapped=true conflictRollback=true brokenGraphRollback=true closedWriteBlocked=true reopenAllowed=true
++Literal output/result: FISCAL_YEAR_REPORT_ISOLATION_OK sourceUnchanged=true openingOnce=true auditExcluded=true auditReadOnly=true
++Literal output/result: FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true
++Exit status: 0
++
++Command: npm run p1:verify
++Input: current full source tree and all P1 accounting, persistence, lifecycle, security, reports, printing, and production-build fixtures
++Literal output/result: ACCOUNTING_COMMAND_REGRESSION_OK accountProjectionRepaired=true atomic=true idempotentReplay=true duplicateDocumentBlocked=true optimisticConflictBlocked=true staleWindowWriteBlocked=true failedCommandRolledBack=true receiptDurable=true integrity=ok
++Literal output/result: RELATIONAL_SQLITE_SMOKE_OK accounts=2 journals=1/2 payments=1/1 receipts=1/1 masters=1 fiscalYears=2 scopedIsolation=true mappedJournalYear=fy-2026 authority=normalized authoritativeDebit=321 diagnostics=true fkReferenceBlocked=true referencedDeleteBlocked=true duplicateEntityBlocked=true duplicateJournalLinesRepaired=true updateDebit=125 deleteCascade=0 integrity=ok
++Literal output/result: ✓ built in 2m 33s
++Exit status: 0
++
++Command: npm run reports-ui:regression
++Input: financial report implementation including pending vouchers and affectsLedger/OPENING_AUDIT filtering
++Literal output/result: FINANCIAL_REPORTS_BACKGROUND_OK inheritedShell=true standaloneBackground=false matchesOtherModules=true entitySections=true currencySections=true combinedPrintJob=true summarySuppressesDetails=true pendingVouchersVisible=true analyticalProjection=true
++Exit status: 0
++
++PACKAGED RELEASE
++Command: npx electron-builder --win nsis portable --config.directories.output=release-20260913-154919-fiscal-year-isolation-52b6e2cb
++Input: production dist plus Electron sources at product-code commit 52b6e2cb48e67e717e8ad9dd5db267bba46a1928
++Literal output/result: target=nsis file=release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Setup-1.0.0-x64.exe
++Literal output/result: target=portable file=release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
++Exit status: 0
++
++Installer: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Setup-1.0.0-x64.exe
++Installer bytes: 112254780
++Installer SHA256: B182E02DD7F8147AE606E4728CC0648D1A36C24CB309C9DAE20983F20BD4126E
++Portable: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
++Portable bytes: 112063564
++Portable SHA256: 0D1F735FD07A4A06B48DB533446C5EDA2E97CA4A803B5D3F711B804F4A65733F
++Freshness result: NEW_TIME=2026-09-13T15:50:15.4635824+03:00; LATEST_PREVIOUS_TIME=2026-09-13T15:46:25.8722970+03:00; NEWER=True
++Packed source result: electron/main.mjs PACKED_MATCH=True; legacy-fiscal-migration.mjs PACKED_MATCH=True; accounting-command-store.mjs PACKED_MATCH=True
++
++Command: packaged smoke (win-unpacked) with FULLERP_SMOKE_TEST=1 and isolated --user-data-dir
++Input: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\win-unpacked\NOON ERP.exe
++Literal output/result: "ok": true; "brand": true; "loginForm": true; "fiscalYearSelector": true; "loginOk": true; "sqlite": true; "authority": "RELATIONAL_SQLITE"
++Exit status: 0
++
++Command: packaged smoke (portable) with FULLERP_SMOKE_TEST=1 and isolated --user-data-dir
++Input: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
++Literal output/result: "ok": true; "brand": true; "loginForm": true; "fiscalYearSelector": true; "loginOk": true; "sqlite": true; "authority": "RELATIONAL_SQLITE"
++Exit status: 0
++
++ROLLBACK
++Command: "C:\Program Files\Git\bin\bash.exe" ./ROLLBACK.sh
++Input: separate detached worktree at ca13b7bf17de4109088a27e479b626637a44a654; baseline a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
++Literal output/result: ROLLBACK_OK base=a6fff06e5562a51d7622c9d6662ec3f4a2f8e529 restored_tree=d44062f47daaba3f6a5bd98e3e524b15e60084b0
++Literal output/result: ROLLBACK_TREE_MATCH=True
++Exit status: 0
++Restored behavior/status: the separate copy exactly matched the baseline commit tree; the primary worktree and MODIFIED_FILE remained changed.
 diff --git a/electron/accounting-command-store.mjs b/electron/accounting-command-store.mjs
 index 52ee307..838af43 100644
 --- a/electron/accounting-command-store.mjs
@@ -2004,10 +2071,10 @@ index 0000000..55acd75
 +  return { collections: cloned, idMap: ids };
 +}
 diff --git a/src/utils/useLocalStorageState.ts b/src/utils/useLocalStorageState.ts
-index d51c638..7d8fa5a 100644
+index d51c638..ab4316b 100644
 --- a/src/utils/useLocalStorageState.ts
 +++ b/src/utils/useLocalStorageState.ts
-@@ -58,3 +58,63 @@ export function useLocalStorageState<T>(
+@@ -58,3 +58,72 @@ export function useLocalStorageState<T>(
  
    return [state, setState];
  }
@@ -2042,6 +2109,15 @@ index d51c638..7d8fa5a 100644
 +  const versionRef = useRef<number>(window.desktopStore?.version(key) ?? 0);
 +  const loadedKeyRef = useRef(key);
 +  const skipWriteRef = useRef(false);
++
++  useEffect(() => {
++    const syncVersion = (event: Event) => {
++      const versions = (event as CustomEvent<Record<string, number>>).detail;
++      if (versions && typeof versions[key] === 'number') versionRef.current = versions[key];
++    };
++    window.addEventListener('fullerp:versions-updated', syncVersion);
++    return () => window.removeEventListener('fullerp:versions-updated', syncVersion);
++  }, [key]);
 +
 +  useEffect(() => {
 +    skipWriteRef.current = true;

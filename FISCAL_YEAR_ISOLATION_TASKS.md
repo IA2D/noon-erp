@@ -52,5 +52,6 @@
 
 ## Final state
 - Source/base commit: `a6fff06e5562a51d7622c9d6662ec3f4a2f8e529`.
-- Product-code commit packed in release: `52b6e2cb48e67e717e8ad9dd5db267bba46a1928`.
-- Release folder: `D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb`.
+- Product-code commit packed in release: `dcc50ae7b78fd19db5083fffb8e30d4350f76be2`.
+- Release folder: `D:\Dev env\@commando\FULLERP\release-20260913-160651-fiscal-year-isolation-dcc50ae7`.
+
