@@ -604,10 +604,18 @@ export default function FinancialReportsView({
 
   const allJournals = useMemo(() => reportJournals, [reportJournals]);
 
-  const reconciledAccounts = useMemo(
-    () => reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }).accounts,
-    [accounts, cashBoxes, bankAccounts, customers, vendors, employees]
+  // عند تدوير السنة تُرحّل الأرصدة الافتتاحية إلى قيد OPEN-YYYY؛ إبقاء
+  // الحقول الافتتاحية القديمة مع القيد يضاعف الرصيد، لذلك نعتمد القيد وحده.
+  const hasCarryForwardOpening = useMemo(
+    () => reportingJournals.some(journal => journal.reference === `OPEN-${fiscalYear}` && journal.status === 'POSTED'),
+    [reportingJournals, fiscalYear]
   );
+
+  const reconciledAccounts = useMemo(() => {
+    const reconciled = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }).accounts;
+    if (!hasCarryForwardOpening) return reconciled;
+    return reconciled.map(account => ({ ...account, openingBalance: 0, openingBalanceForeign: 0, openingBalances: [] }));
+  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, hasCarryForwardOpening]);
   const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(reconciledAccounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [reconciledAccounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
   const reportAccounts = useMemo(
     () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1, true),
