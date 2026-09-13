@@ -49,3 +49,5 @@
 - [x] Verify record-year mapping with relational SQLite smoke test.
 
 - [x] Add shared fiscal-year normalization, record-year inference, and atomic transaction primitive.
+
+- [x] Implement reusable year-dataset graph cloning with new IDs, FK remapping, date shifting, and clone validation.
