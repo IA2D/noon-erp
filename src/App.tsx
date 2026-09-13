@@ -2179,6 +2179,7 @@ function AppInner() {
           theme={theme}
           toggleTheme={toggleTheme}
           showRefreshButton={(() => { try { const s = JSON.parse(getPersistentItem('elite-erp-settings-v6') || '{}'); return s.showRefreshButton !== false; } catch { return true; } })()}
+          fiscalYear={reportingYear}
           allowedModules={allowedModules}
           searchData={{
             accounts,
