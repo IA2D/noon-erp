@@ -615,7 +615,10 @@ export default function FinancialReportsView({
   );
 
   const carryForwardJournals = useMemo(
-    () => baseJournals.filter(journal => journal.status === 'POSTED' && journal.reference === `OPEN-${fiscalYear}` && !journal.reversedByEntryId),
+    () => baseJournals.filter(journal => journal.status === 'POSTED' &&
+      (/^OPEN-\d{4}$/.test(journal.reference || '') || /^OPEN-\d{4}$/.test(journal.entryNumber || '')) &&
+      (journal.reference === `OPEN-${fiscalYear}` || journal.entryNumber === `OPEN-${fiscalYear}`) &&
+      !journal.reversedByEntryId),
     [baseJournals, fiscalYear]
   );
   const carryForwardIds = useMemo(() => new Set(carryForwardJournals.map(journal => journal.id)), [carryForwardJournals]);
