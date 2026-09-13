@@ -29,7 +29,7 @@
 - [ ] Roll back the entire operation on any failure.
 
 ## Phase 4 — Existing-data migration
-- [ ] Assign the current legacy dataset to its source fiscal year.
+- [x] Assign the current legacy dataset to its source fiscal year.
 - [ ] Rebuild any already-created destination year in a temporary workspace.
 - [ ] Compare old-year reports before/after migration byte-for-byte at numeric level.
 - [ ] Replace destination data only after reconciliation passes.

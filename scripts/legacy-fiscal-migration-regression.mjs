@@ -1,0 +1,25 @@
+import { DatabaseSync } from 'node:sqlite';
+import { createRelationalStore } from '../electron/relational-store.mjs';
+import { createAccountingCommandStore } from '../electron/accounting-command-store.mjs';
+import { migrateLegacyFiscalDataset } from '../electron/legacy-fiscal-migration.mjs';
+
+const db = new DatabaseSync(':memory:');
+db.exec(`CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE kv_store(key TEXT PRIMARY KEY,value TEXT NOT NULL,entity_type TEXT NOT NULL DEFAULT 'app_state',updated_at TEXT);`);
+const relational = createRelationalStore(db);
+createAccountingCommandStore(db, relational);
+const put = db.prepare(`INSERT INTO kv_store(key,value,entity_type) VALUES(?,?,'erp_state')`);
+const accounts = [{ id: 'A1', code: '1101', nameAr: 'نقدية', nameEn: '', level: 5, accountType: 1, reportType: 1, nature: 'DEBIT', category: 'ASSET', subLedgerType: 'NONE', defaultCurrency: 'YER', openingBalances: [{ id: 'O26', amount: 10 }, { id: 'O27', fiscalYear: '2027', amount: 20 }] }];
+const journals = [{ id: 'J26', date: '2026-12-31' }, { id: 'J27', date: '2027-01-01' }];
+put.run('elite-erp-accounts-v9', JSON.stringify(accounts));
+put.run('elite-erp-journals-v6', JSON.stringify(journals));
+put.run('elite-erp-settings-v6', JSON.stringify({ shared: true }));
+const sourceBefore = db.prepare("SELECT value FROM kv_store WHERE key='elite-erp-accounts-v9'").get().value;
+const result = migrateLegacyFiscalDataset(db, relational, '2026');
+const sourceAfter = db.prepare("SELECT value FROM kv_store WHERE key='elite-erp-accounts-v9'").get().value;
+const migratedAccounts = JSON.parse(db.prepare("SELECT value FROM kv_store WHERE key='elite-erp-accounts-v9::fiscal-year::2026'").get().value);
+const migratedJournals = JSON.parse(db.prepare("SELECT value FROM kv_store WHERE key='elite-erp-journals-v6::fiscal-year::2026'").get().value);
+const settingsScoped = db.prepare("SELECT 1 AS found FROM kv_store WHERE key LIKE 'elite-erp-settings-v6::fiscal-year::%'").get();
+const again = migrateLegacyFiscalDataset(db, relational, '2026');
+db.close();
+if (!result.migrated || result.year !== '2026' || sourceBefore !== sourceAfter || migratedAccounts[0].fiscalYear !== '2026' || migratedAccounts[0].openingBalances.length !== 1 || migratedAccounts[0].openingBalances[0].fiscalYear !== '2026' || migratedJournals.length !== 1 || migratedJournals[0].id !== 'J26' || settingsScoped || again.migrated) throw new Error(JSON.stringify({ result, sourceUnchanged: sourceBefore === sourceAfter, migratedAccounts, migratedJournals, settingsScoped, again }));
+console.log('LEGACY_FISCAL_MIGRATION_OK sourceUnchanged=true sourceYear=2026 futureRowsExcluded=true settingsGlobal=true idempotent=true');

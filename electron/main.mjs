@@ -9,6 +9,7 @@ import { createAccountingCommandStore } from './accounting-command-store.mjs';
 import { assertSupportedDataPath, createVerifiedBackup, createVerifiedBackupAt, listVerifiedBackups, restoreLatestVerifiedBackup, restoreVerifiedBackup, verifyDatabaseFile, verifyFullerpBackupFile } from './database-recovery.mjs';
 import { createAuthStore } from './auth-store.mjs';
 import { bindConfiguredUiScale, normalizeUiScalePercent, uiScaleToZoomFactor } from './ui-scale.mjs';
+import { migrateLegacyFiscalDataset } from './legacy-fiscal-migration.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let db;
@@ -118,6 +119,7 @@ function openDatabase() {
   relationalStore = createRelationalStore(db);
   relationalStore.ensureSchema();
   accountingCommandStore = createAccountingCommandStore(db, relationalStore);
+  migrateLegacyFiscalDataset(db, relationalStore, String(Math.max(2026, new Date().getFullYear())));
   authStore = createAuthStore(db);
   try {
     const rawSettings = db.prepare("SELECT value FROM kv_store WHERE key='elite-erp-settings-v6'").get()?.value;
