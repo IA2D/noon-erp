@@ -47,7 +47,7 @@ interface Props {
   currencies: Currency[];
   onCloseYear: (year: string, closingEntry: JournalEntry | null) => boolean | { ok: boolean; error?: string };
   onReopenYear: (year: string, request?: { reason?: string; approvedBy?: string }) => boolean;
-  onCloseMonth: (month: string) => boolean;
+  onCloseMonth: (month: string) => boolean | { ok: boolean; error?: string };
   onReopenMonth: (month: string, request?: { reason?: string; approvedBy?: string }) => boolean;
   onBatchPost: (items: DailyPostingRequest[]) => DailyPostingBatchResult;
   onUnpostJournal: (id: string) => boolean;
@@ -1230,7 +1230,7 @@ export default function ClosingView({
               </button>
               <button
                 type="button"
-                onClick={() => { const done = onCloseMonth(confirmMonth!); setConfirmMonth(null); toast(done ? 'success' : 'error', done ? `تم اعتماد المرحلة التالية للشهر ${confirmMonth}` : `تعذر تغيير حالة الشهر ${confirmMonth}`); }}
+                onClick={() => { const result = onCloseMonth(confirmMonth!); const done = typeof result === 'boolean' ? result : result.ok; setConfirmMonth(null); toast(done ? 'success' : 'error', done ? `تم اعتماد المرحلة التالية للشهر ${confirmMonth}` : (typeof result === 'object' && result.error ? result.error : `تعذر تغيير حالة الشهر ${confirmMonth}`)); }}
                 className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"
               >
                 <Lock className="w-4 h-4" />

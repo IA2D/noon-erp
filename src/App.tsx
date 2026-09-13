@@ -870,6 +870,8 @@ function AppInner() {
   const handleAddJournalBoolean = (newEntry: JournalEntry): boolean => handleAddJournal(newEntry).ok;
 
   const handleCloseYear = (year: string, closingEntry: JournalEntry | null) => {
+    const unsettled = [...trusts.filter(t => t.date.startsWith(`${year}-`) && !['SETTLED', 'VOIDED'].includes(t.status)).map(t => `العهدة المالية ${t.trustNumber} (${t.status})`), ...custodies.filter(c => c.requestedDate.startsWith(`${year}-`) && !['FULL_SETTLED', 'CLOSED', 'VOIDED'].includes(c.status)).map(c => `العهدة ${c.custodyNumber} (${c.status})`)];
+    if (unsettled.length) return { ok: false, error: `تعذر إقفال السنة ${year}: توجد عهد غير مغلقة — ${unsettled.join('، ')}` };
     const pendingDocuments = [
       ...journals.filter(item => item.status === 'PENDING_POSTING' && item.date.startsWith(`${year}-`)).map(item => `قيد ${item.entryNumber}`),
       ...vouchers.filter(item => item.status === 'PENDING_POSTING' && item.date.startsWith(`${year}-`)).map(item => `سند صرف ${item.voucherNumber}`),
@@ -941,6 +943,8 @@ function AppInner() {
   };
 
   const handleCloseMonth = (month: string) => {
+    const unsettled = [...trusts.filter(t => t.date.startsWith(`${month}-`) && !['SETTLED', 'VOIDED'].includes(t.status)).map(t => `العهدة المالية ${t.trustNumber} (${t.status})`), ...custodies.filter(c => c.requestedDate.startsWith(`${month}-`) && !['FULL_SETTLED', 'CLOSED', 'VOIDED'].includes(c.status)).map(c => `العهدة ${c.custodyNumber} (${c.status})`)];
+    if (unsettled.length) return { ok: false, error: `تعذر إقفال الشهر ${month}: توجد عهد غير مغلقة — ${unsettled.join('، ')}` };
     const pendingDocuments = [
       ...journals.filter(item => item.status === 'PENDING_POSTING' && item.date.startsWith(`${month}-`)).map(item => `قيد ${item.entryNumber}`),
       ...vouchers.filter(item => item.status === 'PENDING_POSTING' && item.date.startsWith(`${month}-`)).map(item => `سند صرف ${item.voucherNumber}`),
