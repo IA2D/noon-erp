@@ -466,6 +466,11 @@ export default function FinancialReportsView({
   );
 
   const currency = selectedCurrency === 'ALL' ? baseCode : selectedCurrency;
+  // سجلات النسخ السابقة لا تحمل fiscalYear؛ تُنسب فقط إلى سنة المنشأة
+  // المضبوطة، ولا تُورّث تلقائياً إلى أي سنة مالية لاحقة.
+  const legacyOpeningYear = loadBranchesLocal()[0]?.fiscalYear || fiscalYear;
+  const openingRecordBelongsToReportYear = (row: { fiscalYear?: string }) =>
+    row.fiscalYear === fiscalYear || (!row.fiscalYear && fiscalYear === legacyOpeningYear);
 
   useEffect(() => {
     const period = configuredFiscalPeriod(fiscalYear);
@@ -607,12 +612,12 @@ export default function FinancialReportsView({
   const reconciledAccounts = useMemo(() => {
     const reconciled = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }).accounts;
     return reconciled.map(account => {
-      const rows = (account.openingBalances || []).filter(row => row.fiscalYear === fiscalYear);
+      const rows = (account.openingBalances || []).filter(openingRecordBelongsToReportYear);
       const openingBalance = rows.reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
       const openingBalanceForeign = rows.reduce((sum, row) => sum + (row.debit || 0) - (row.credit || 0), 0);
       return { ...account, openingBalance, openingBalanceForeign, openingBalances: rows };
     });
-  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear]);
+  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear, legacyOpeningYear]);
   const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(reconciledAccounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [reconciledAccounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
   const reportAccounts = useMemo(
     () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1, true),
@@ -706,7 +711,7 @@ export default function FinancialReportsView({
       const currentCredit = round2(periodAct.credit);
       // الأرصدة الافتتاحية مرتبطة بسنة إدخالها صراحةً؛ لا نرث سجلات قديمة
       // أو قيم legacy عامة إلى سنة مالية لاحقة.
-      const yearOpeningRows = (acc.openingBalances || []).filter(row => row.fiscalYear === fiscalYear);
+      const yearOpeningRows = (acc.openingBalances || []).filter(openingRecordBelongsToReportYear);
       const openingForYear = yearOpeningRows.reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
       const b = accountBalancesDC(acc, openingForYear, act);
       const cumulativeDebit = round2(b.endingDebit);
@@ -719,7 +724,7 @@ export default function FinancialReportsView({
         const matching = journals.filter(entry => entry.date <= toDate).flatMap(entry => entry.lines.filter(line => line.accountId === acc.id && (line.currency || entry.currency) === currency).map(line => ({ entry, line })));
         localCurrentDebit = round2(matching.filter(item => item.entry.date >= fromDate).reduce((sum, item) => sum + (item.line.debit || 0), 0));
         localCurrentCredit = round2(matching.filter(item => item.entry.date >= fromDate).reduce((sum, item) => sum + (item.line.credit || 0), 0));
-        const openingLocal = (acc.openingBalances || []).filter(row => row.fiscalYear === fiscalYear && row.currency === currency).reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
+        const openingLocal = (acc.openingBalances || []).filter(row => openingRecordBelongsToReportYear(row) && row.currency === currency).reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
         const signedLocal = round2(openingLocal + matching.reduce((sum, item) => sum + (item.line.debit || 0) - (item.line.credit || 0), 0));
         localCumulativeDebit = signedLocal > 0 ? signedLocal : 0;
         localCumulativeCredit = signedLocal < 0 ? Math.abs(signedLocal) : 0;
