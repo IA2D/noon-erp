@@ -113,7 +113,7 @@ function openDatabase() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_kv_store_entity_type ON kv_store(entity_type);
-    INSERT INTO app_metadata(key, value) VALUES ('schema_version', '2')
+    INSERT INTO app_metadata(key, value) VALUES ('schema_version', '4')
       ON CONFLICT(key) DO UPDATE SET value=excluded.value;
   `);
   relationalStore = createRelationalStore(db);
@@ -217,7 +217,7 @@ function registerStorageIpc() {
     }
   });
   ipcMain.on('desktop-store:info', event => {
-    event.returnValue = { databasePath, engine: 'SQLite', schemaVersion: 3, entries: entries.all().length, relational: relationalStore.info(), diagnostics: relationalStore.diagnostics(), authority: 'RELATIONAL_SQLITE', recovery: { dataPathPolicy: 'LOCAL_DISK_ONLY', backupRoot, verifiedBackups: listVerifiedBackups(backupRoot).length, lastBackup, startupRecovery } };
+    event.returnValue = { databasePath, engine: 'SQLite', schemaVersion: 4, entries: entries.all().length, relational: relationalStore.info(), diagnostics: relationalStore.diagnostics(), authority: 'RELATIONAL_SQLITE', recovery: { dataPathPolicy: 'LOCAL_DISK_ONLY', backupRoot, verifiedBackups: listVerifiedBackups(backupRoot).length, lastBackup, startupRecovery } };
   });
   ipcMain.on('desktop-store:create-backup', event => {
     try { event.returnValue = { ok: true, ...createInternalBackup('manual-safety') }; }

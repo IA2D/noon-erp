@@ -37,7 +37,7 @@ import TabKeepAliveContainer from './components/ui/TabKeepAliveContainer';
 import { TabsProvider, useTabs, tabIdFor } from './tabs/TabsContext';
 import { LanguageProvider, useI18n } from './i18n';
 import { useTheme } from './utils/useTheme';
-import { commitAccountingCommand, getPersistentItem, persistentVersion, removePersistentItem, type AccountingCommandResult } from './utils/desktopStorage';
+import { commitAccountingCommand, getPersistentEntries, getPersistentItem, persistentVersion, removePersistentItem, type AccountingCommandResult } from './utils/desktopStorage';
 import { accountingCommandError, type DailyPostingBatchResult, type DailyPostingRequest } from './utils/dailyPosting';
 
 import {
@@ -191,9 +191,15 @@ function repairCarriedControlOpenings(
 
 function reportingYearOptions(currentYear = new Date().getFullYear()): string[] {
   const effectiveCurrentYear = Math.max(MIN_REPORTING_YEAR, currentYear);
-  const years: string[] = [];
-  for (let year = MIN_REPORTING_YEAR; year <= effectiveCurrentYear + 1; year += 1) years.push(String(year));
-  return years.sort((a, b) => Number(b) - Number(a));
+  const years = new Set<string>();
+  for (let year = MIN_REPORTING_YEAR; year <= effectiveCurrentYear + 1; year += 1) years.add(String(year));
+  try {
+    getPersistentEntries().forEach(([key]) => {
+      const matched = key.match(/::fiscal-year::(\d{4})$/);
+      if (matched) years.add(matched[1]);
+    });
+  } catch {}
+  return [...years].sort((a, b) => Number(b) - Number(a));
 }
 
 const K = {
