@@ -49,6 +49,10 @@ db.exec('BEGIN IMMEDIATE');
 store.rebuildAll(snapshot);
 db.exec('COMMIT');
 const initial = store.info();
+store.ensureFiscalYear('2026', '2026-01-01', '2026-12-31');
+store.ensureFiscalYear('2027', '2027-01-01', '2027-12-31');
+const fiscalYears = store.listFiscalYears();
+const mappedJournalYear = db.prepare('SELECT fiscal_year_id FROM erp_record_years WHERE collection_key=? AND record_id=?').get(RELATIONAL_COLLECTION_KEYS.journals, 'J-1')?.fiscal_year_id;
 db.prepare('UPDATE erp_journal_lines SET debit=321 WHERE id=?').run('JL-1');
 const authoritativeRead = JSON.parse(store.readCollection(RELATIONAL_COLLECTION_KEYS.journals));
 const authoritativeDebit = authoritativeRead[0].lines.find(line => line.id === 'JL-1')?.debit;
@@ -104,14 +108,14 @@ fs.rmSync(file, { force: true });
 const valid =
   initial.accounts === 2 && initial.accountCurrencies === 1 && initial.journals === 1 && initial.journalLines === 2 &&
   initial.paymentVouchers === 1 && initial.paymentVoucherLines === 1 && initial.receiptVouchers === 1 && initial.receiptVoucherLines === 1 &&
-  initial.currencies === 1 && initial.costCenters === 2 && initial.masterEntities === 1 &&
+  initial.currencies === 1 && initial.costCenters === 2 && initial.masterEntities === 1 && fiscalYears.length === 2 && mappedJournalYear === 'fy-2026' &&
   authoritativeDebit === 321 &&
   updatedDebit === 125 && updatedLines === 1 && afterDelete.paymentVouchers === 0 && afterDelete.paymentVoucherLines === 0 &&
   restored.journalLines === 2 && restored.paymentVouchers === 1 && diagnostics.ok && missingAccountBlocked && referencedAccountDeleteBlocked && duplicateEntityBlocked && duplicateJournalLinesRepaired && integrity === 'ok';
 
 if (!valid) {
-  console.error({ initial, updatedDebit, updatedLines, afterDelete, restored, integrity });
+  console.error({ initial, fiscalYears, mappedJournalYear, updatedDebit, updatedLines, afterDelete, restored, integrity });
   process.exit(1);
 }
 
-console.log(`RELATIONAL_SQLITE_SMOKE_OK accounts=${restored.accounts} journals=${restored.journals}/${restored.journalLines} payments=${restored.paymentVouchers}/${restored.paymentVoucherLines} receipts=${restored.receiptVouchers}/${restored.receiptVoucherLines} masters=${restored.masterEntities} authority=normalized authoritativeDebit=${authoritativeDebit} diagnostics=${diagnostics.ok} fkReferenceBlocked=${missingAccountBlocked} referencedDeleteBlocked=${referencedAccountDeleteBlocked} duplicateEntityBlocked=${duplicateEntityBlocked} duplicateJournalLinesRepaired=${duplicateJournalLinesRepaired} updateDebit=${updatedDebit} deleteCascade=${afterDelete.paymentVoucherLines} integrity=${integrity}`);
+console.log(`RELATIONAL_SQLITE_SMOKE_OK accounts=${restored.accounts} journals=${restored.journals}/${restored.journalLines} payments=${restored.paymentVouchers}/${restored.paymentVoucherLines} receipts=${restored.receiptVouchers}/${restored.receiptVoucherLines} masters=${restored.masterEntities} fiscalYears=${fiscalYears.length} mappedJournalYear=${mappedJournalYear} authority=normalized authoritativeDebit=${authoritativeDebit} diagnostics=${diagnostics.ok} fkReferenceBlocked=${missingAccountBlocked} referencedDeleteBlocked=${referencedAccountDeleteBlocked} duplicateEntityBlocked=${duplicateEntityBlocked} duplicateJournalLinesRepaired=${duplicateJournalLinesRepaired} updateDebit=${updatedDebit} deleteCascade=${afterDelete.paymentVoucherLines} integrity=${integrity}`);

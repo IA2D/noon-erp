@@ -439,6 +439,12 @@ export function createRelationalStore(db) {
     const name = COLLECTION_NAMES.get(key);
     if (!name) return false;
     const rows = parseRows(value, key);
+    if (name === 'auditLogs') {
+      rows.slice().reverse().forEach(item => insertAudit.run(text(item.id), text(item.timestamp) ?? '', text(item.userId) ?? '', text(item.userName) ?? '', text(item.userRole) ?? '', text(item.module) ?? '', text(item.action) ?? '', text(item.details) ?? '', text(item.ipAddress) ?? '', text(item.beforeJson), text(item.afterJson), json(item)));
+      projectionStatus.run(key, db.prepare('SELECT count(*) AS count FROM erp_audit_events').get().count);
+      return true;
+    }
+    if (name !== 'accounts') clearCollection(key);
     rows.forEach(record => {
       const id = record?.id;
       if (id) {
@@ -450,12 +456,6 @@ export function createRelationalStore(db) {
         upsertRecordYear.run(key, String(id), fiscalYearId, 'payload');
       }
     });
-    if (name === 'auditLogs') {
-      rows.slice().reverse().forEach(item => insertAudit.run(text(item.id), text(item.timestamp) ?? '', text(item.userId) ?? '', text(item.userName) ?? '', text(item.userRole) ?? '', text(item.module) ?? '', text(item.action) ?? '', text(item.details) ?? '', text(item.ipAddress) ?? '', text(item.beforeJson), text(item.afterJson), json(item)));
-      projectionStatus.run(key, db.prepare('SELECT count(*) AS count FROM erp_audit_events').get().count);
-      return true;
-    }
-    if (name !== 'accounts') clearCollection(key);
 
     if (name === 'accounts') {
       syncAccounts(rows, { removeMissing: true, projectionKey: key });

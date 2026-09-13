@@ -45,3 +45,5 @@
 ### Progress 2026-09-13
 - [x] Added rp_record_years mapping registry and automatic fiscal-year inference during relational projection (schema v4).
 - [ ] Next: make repository queries and writes require the selected fiscal-year context.
+
+- [x] Verify record-year mapping with relational SQLite smoke test.

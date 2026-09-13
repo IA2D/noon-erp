@@ -6,3 +6,4 @@ Status: task tracker created; implementation starts with schema and repository b
 Schema command: node --check electron/relational-store.mjs
 Schema result: passed; fiscal-year registry added as schema v4.
 Relational projection: node --check electron/relational-store.mjs = passed; npm run lint = passed; added erp_record_years registry.
+Relational smoke: node scripts/relational-sqlite-smoke.mjs = RELATIONAL_SQLITE_SMOKE_OK; fiscalYears=2; mappedJournalYear=fy-2026; integrity=ok.
