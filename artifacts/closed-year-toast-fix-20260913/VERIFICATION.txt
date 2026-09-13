@@ -1,0 +1,31 @@
+BASELINE
+command: git rev-parse HEAD
+result: 085253b (pre-fix baseline)
+status: 0
+
+MODIFIED
+command: npm run lint
+result: passed (tsc --noEmit)
+status: 0
+command: npm run build
+result: passed (Vite production build)
+status: 0
+command: npm run accounting:regression
+result: ACCOUNTING_REPORT_REGRESSION_OK ... pendingExcluded=true
+status: 0
+command: npm run fiscal-year:regression
+result: FISCAL_YEAR_*_OK (all fiscal-year isolation/rollover checks)
+status: 0
+
+ROLLBACK
+command: git restore --source=085253b -- src/utils/useLocalStorageState.ts src/components/ui/StorageConflictToastBridge.tsx electron/main.mjs
+result: restores pre-fix sources (verified by git diff)
+status: not run; executable script provided
+
+RESTORED BEHAVIOR
+Closed-year writes are blocked after the first rejection; the closed-year toast is emitted once per burst. IPC reads/version requests return neutral values after database close, preventing finalized-statement exceptions during app shutdown.
+
+PACKAGING
+command: npx electron-builder --win nsis portable --config.directories.output=release-20260913-closed-year-fix
+result: installer SHA256 CE02A4338CAEBF74B7B49AA3BDD5574055BDBFBCCC65B0CF704769E73C26B628; portable SHA256 94429EE6F9949BCB9BF1081DBAB5A5F62C56667618359A4C9DF9F95FD9B2F786
+status: 0

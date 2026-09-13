@@ -1,0 +1,116 @@
+diff --git a/electron/main.mjs b/electron/main.mjs
+index 128b66e..1fe7c96 100644
+--- a/electron/main.mjs
++++ b/electron/main.mjs
+@@ -143,12 +143,18 @@ function registerStorageIpc() {
+   const detailedEntries = db.prepare('SELECT key, value, entity_type, updated_at FROM kv_store ORDER BY key');
+ 
+   ipcMain.on('desktop-store:get', (event, key) => {
++    if (!db || !relationalStore) { event.returnValue = null; return; }
+     const name = String(key);
+     const cached = get.get(name)?.value ?? null;
+     event.returnValue = cached === null ? null : (relationalStore.readCollection(name) ?? cached);
+   });
+   ipcMain.on('desktop-store:set-versioned', (event, key, value, expectedVersion) => {
+-    event.returnValue = accountingCommandStore.executeVersionedSet(String(key), String(value), expectedVersion);
++    if (!db || !accountingCommandStore) { event.returnValue = { ok: false, closed: true, error: 'DATABASE_CLOSED' }; return; }
++    try {
++      event.returnValue = accountingCommandStore.executeVersionedSet(String(key), String(value), expectedVersion);
++    } catch (error) {
++      event.returnValue = { ok: false, closed: true, error: String(error) };
++    }
+   });
+   ipcMain.on('desktop-store:set', (event, key, value) => {
+     const name = String(key);
+@@ -259,7 +265,9 @@ function registerStorageIpc() {
+     }
+   });
+   ipcMain.on('desktop-store:version', (event, key) => {
+-    event.returnValue = accountingCommandStore.versionOf(String(key));
++    if (!db || !accountingCommandStore) { event.returnValue = 0; return; }
++    try { event.returnValue = accountingCommandStore.versionOf(String(key)); }
++    catch { event.returnValue = 0; }
+   });
+   ipcMain.on('desktop-store:accounting-command', (event, payload) => {
+     const session = authStore?.session(activeSessionToken);
+diff --git a/src/components/ui/StorageConflictToastBridge.tsx b/src/components/ui/StorageConflictToastBridge.tsx
+index 9d064fe..80ca278 100644
+--- a/src/components/ui/StorageConflictToastBridge.tsx
++++ b/src/components/ui/StorageConflictToastBridge.tsx
+@@ -1,15 +1,26 @@
+-import { useEffect } from 'react';
++import { useEffect, useRef } from 'react';
+ import { useToast } from './Toast';
+ 
+ export default function StorageConflictToastBridge() {
+   const toast = useToast();
++  const lastClosedToastRef = useRef<{ at: number; key: string }>({ at: 0, key: '' });
+   useEffect(() => {
+     const onConflict = (event: Event) => {
+       const detail = (event as CustomEvent<{ key?: string }>).detail;
+       toast('error', `تم تحديث البيانات من نافذة أخرى، لذلك أُعيد تحميل أحدث نسخة دون الكتابة فوقها${detail?.key ? ` (${detail.key})` : ''}.`);
+     };
+     window.addEventListener('fullerp:storage-conflict', onConflict);
+-    const onClosed = () => toast('error', 'السنة المالية مقفلة نهائيًا — البيانات متاحة للاستعراض والتقارير فقط.');
++    const onClosed = (event: Event) => {
++      const key = String((event as CustomEvent<{ key?: string }>).detail?.key ?? '');
++      const now = Date.now();
++      const previous = lastClosedToastRef.current;
++      // Several fiscal-year state hooks can be rejected in the same render.
++      // One notification is enough; suppress the burst instead of stacking a
++      // toast for every persisted collection.
++      if (now - previous.at < 1200) return;
++      lastClosedToastRef.current = { at: now, key };
++      toast('error', 'السنة المالية مقفلة نهائيًا — البيانات متاحة للاستعراض والتقارير فقط.');
++    };
+     window.addEventListener('fullerp:closed-year-write', onClosed);
+     return () => {
+       window.removeEventListener('fullerp:storage-conflict', onConflict);
+diff --git a/src/utils/useLocalStorageState.ts b/src/utils/useLocalStorageState.ts
+index ab4316b..0c680f1 100644
+--- a/src/utils/useLocalStorageState.ts
++++ b/src/utils/useLocalStorageState.ts
+@@ -89,6 +89,10 @@ export function useFiscalYearStorageState<T>(
+   const versionRef = useRef<number>(window.desktopStore?.version(key) ?? 0);
+   const loadedKeyRef = useRef(key);
+   const skipWriteRef = useRef(false);
++  // A closed fiscal year is read-only.  Once the authoritative store rejects
++  // a write, stop retrying this key until the selected year changes; otherwise
++  // the state reconciliation effect can dispatch an identical toast forever.
++  const closedWriteRef = useRef(false);
+ 
+   useEffect(() => {
+     const syncVersion = (event: Event) => {
+@@ -103,6 +107,7 @@ export function useFiscalYearStorageState<T>(
+     skipWriteRef.current = true;
+     loadedKeyRef.current = key;
+     versionRef.current = window.desktopStore?.version(key) ?? 0;
++    closedWriteRef.current = false;
+     setState(read());
+   // initialValue is a fallback seed; a year switch is the reload boundary.
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+@@ -111,14 +116,23 @@ export function useFiscalYearStorageState<T>(
+   useEffect(() => {
+     if (loadedKeyRef.current !== key) return;
+     if (skipWriteRef.current) { skipWriteRef.current = false; return; }
++    if (closedWriteRef.current) return;
+     const serialized = JSON.stringify(state);
+     if (window.desktopStore) {
+       const result = window.desktopStore.setItemVersioned(key, serialized, versionRef.current);
+       if (result.ok) versionRef.current = result.version ?? versionRef.current + 1;
+       else {
+         versionRef.current = result.actualVersion ?? window.desktopStore.version(key);
++        if (result.closed) {
++          closedWriteRef.current = true;
++        }
+         const authoritative = window.desktopStore.getItem(key);
+-        if (authoritative !== null) setState(JSON.parse(authoritative) as T);
++        // Only reconcile when the store contains a different value.  Parsing
++        // the same JSON creates a new object and would otherwise retrigger the
++        // effect (and the closed-year notification) indefinitely.
++        if (authoritative !== null && authoritative !== serialized) {
++          setState(JSON.parse(authoritative) as T);
++        }
+         window.dispatchEvent(new CustomEvent(result.closed ? 'fullerp:closed-year-write' : 'fullerp:storage-conflict', { detail: { key, error: result.error } }));
+       }
+     } else localStorage.setItem(key, serialized);
