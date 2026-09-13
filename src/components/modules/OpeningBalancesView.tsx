@@ -1,7 +1,7 @@
 import BaseReportTemplate from '../ui/BaseReportTemplate';
 import {dateToDisplay} from '../../utils/dateInput';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Coins, Printer, Scale, AlertTriangle } from 'lucide-react';
+import { Coins, Printer, Scale, AlertTriangle, ClipboardList } from 'lucide-react';
 import type { Account, CashBox, BankAccount, Employee, Customer, Vendor, Currency } from '../../types/erp';
 import { useActiveCurrencies } from '../../hooks/useActiveCurrencies';
 import { useExchangeRateGuard } from '../../hooks/useExchangeRateGuard';
@@ -45,6 +45,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
   const [lines, setLines] = useState<EntryLine[]>([]);
   const [saving, setSaving] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
+  const [isSavedBalancesOpen, setIsSavedBalancesOpen] = useState(false);
   const [isPostConfirmOpen, setIsPostConfirmOpen] = useState(false);
   const [incompleteBrowseKeys, setIncompleteBrowseKeys] = useState<string[]>([]);
   const [autoFocusKey, setAutoFocusKey] = useState<string | null>(null);
@@ -700,6 +701,8 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
   // التحميل الجماعي يقتصر على الأرصدة الفعلية؛ أما البحث فيعرض الدليل كاملاً
   // بما فيه الحسابات الصفرية للسنة المرحّل إليها.
   const savedRows = useMemo<BrowseRow[]>(() => browseRows.filter(r => r.saved && !r.onWorksheet), [browseRows]);
+  // يضم أسطر المسودة في الورقة أيضاً، لأن الحفظ قد لا يعيد رسم الحالة قبل فتح نافذة الاستعراض.
+  const displayedSavedRows = useMemo<BrowseRow[]>(() => browseRows.filter(r => r.saved || r.onWorksheet), [browseRows]);
   const selectableRows = useMemo<BrowseRow[]>(() => browseRows.filter(r => !r.onWorksheet), [browseRows]);
 
   const browseTotals = useMemo(() => {
@@ -903,7 +906,9 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
       sourceLines = sourceLines.map(l => l.account ? { ...l, editKey: compositeKey(l.account.id, l.entity?.id || null, l.row.currency) } : l);
       toast('success', 'تم حفظ التغييرات تلقائياً قبل استعراض الأرصدة المدخلة.');
     }
-    loadSavedIntoMainGrid(sourceLines);
+    // الاستعراض يجب أن يعرض السطور حتى إن كانت موجودة بالفعل في ورقة الإدخال.
+    // لا تعِد تحميلها أو تخفي النتيجة برسالة "موجودة بالفعل".
+    setIsSavedBalancesOpen(true);
   };
 
   const handleBrowseWithAutoSave = () => {
@@ -1006,6 +1011,45 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
         onClearLine={clearLine}
         onEnterLastField={addLine}
       />
+
+      <ModalShell
+        id="opening-balances-saved-browser"
+        open={isSavedBalancesOpen}
+        onClose={() => setIsSavedBalancesOpen(false)}
+        title="استعراض الأرصدة المدخلة"
+        subtitle={`الأرصدة المسجلة في هذه السنة: ${displayedSavedRows.length}`}
+        icon={ClipboardList}
+        size="lg"
+        footer={null}
+      >
+        <div className="max-h-[60vh] overflow-y-auto p-1">
+          {displayedSavedRows.length === 0 ? (
+            <p className="p-8 text-center text-sm text-slate-400">لا توجد أرصدة مدخلة بعد.</p>
+          ) : (
+            <table className="w-full text-right text-xs">
+              <thead className="sticky top-0 bg-slate-900 text-slate-300">
+                <tr>
+                  <th className="p-3">رقم الحساب</th><th className="p-3">اسم الحساب / التحليلي</th><th className="p-3">العملة</th><th className="p-3">مدين</th><th className="p-3">دائن</th><th className="p-3">إجراء</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {displayedSavedRows.map(row => (
+                  <tr key={`${row.key}:${row.entity?.id || 'none'}`} className="hover:bg-slate-900/70">
+                    <td className="p-3 font-mono text-sky-300">{row.accountCode}</td>
+                    <td className="p-3 text-slate-100">{row.entity?.nameAr || row.accountName}</td>
+                    <td className="p-3 font-mono">{row.currency}</td>
+                    <td className="p-3 font-mono text-emerald-300">{row.debit ? fmtAmount(row.debitForeign || row.debit) : '—'}</td>
+                    <td className="p-3 font-mono text-amber-300">{row.credit ? fmtAmount(row.creditForeign || row.credit) : '—'}</td>
+                    <td className="p-3">
+                      <button type="button" onClick={() => { handleEditFromBrowse(row); setIsSavedBalancesOpen(false); }} className="rounded-lg border border-sky-600/60 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-950">فتح للتعديل</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </ModalShell>
 
       <ModalShell
         id="opening-balances-incomplete-rows"
@@ -1163,3 +1207,4 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     </div>
   );
 }
+

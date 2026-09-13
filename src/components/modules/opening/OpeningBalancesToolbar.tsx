@@ -45,7 +45,7 @@ export default function OpeningBalancesToolbar({
             type="button"
             onClick={onLoadAll}
             className={ghostBtn}
-            title="تحميل الأرصدة المحفوظة داخل جدول الإدخال الرئيسي"
+            title="عرض الأرصدة المدخلة وحفظ المسودة تلقائياً عند الحاجة"
           >
             <ClipboardList className="w-3.5 h-3.5 text-sky-600" />
             استعراض الأرصدة المدخلة
