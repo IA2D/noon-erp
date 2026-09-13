@@ -13,3 +13,4 @@ Dataset regression: npx tsx scripts/fiscal-year-dataset-regression.mts = FISCAL_
 Scoped React state: npm run lint = passed; useFiscalYearStorageState reload boundary and versioned persistence added.
 App integration: npm run lint = passed; annual collections use useFiscalYearStorageState; accounting keys and command identities include fiscal year; rollover writes 19 source/destination changes atomically.
 Scoped relational repository: npm run relational:smoke = RELATIONAL_SQLITE_SMOKE_OK scopedIsolation=true; same account code stored independently for 2026/2027.
+Atomic integration: node scripts/fiscal-year-atomic-rollover-regression.mjs = FISCAL_YEAR_ATOMIC_ROLLOVER_OK sourceUnchanged=true targetIndependent=true linksRemapped=true conflictRollback=true.

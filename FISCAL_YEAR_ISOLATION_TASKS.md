@@ -61,3 +61,5 @@
 - [x] Scope accounting command identity and document uniqueness by fiscal year.
 - [x] Write rollover destination masters/openings/OPEN audit entry to new-year keys atomically without mutating source-year React state.
 - [x] Normalize scoped collections into year-aware relational tables.
+
+- [x] Verify accounting-command transaction writes target year atomically, preserves source bytes, remaps links, and rolls back on conflict.
