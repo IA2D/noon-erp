@@ -594,30 +594,61 @@ export default function FinancialReportsView({
     [journals, pendingVoucherJournals, vouchers, receiptVouchers, baseCode, selectedDecimals]
   );
 
-  const baseJournals = useMemo(
-    () => projectJournalsToCurrency(reportingJournals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true, true),
-    [reportingJournals, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]
+  // لا تدخل حركات سنة أخرى في نموذج تقرير السنة المحددة. قيد OPEN-YYYY
+  // استثناء مقصود: مصدر الرصيد الافتتاحي للسنة، وليس حركة خلالها.
+  const fiscalReportingJournals = useMemo(
+    () => reportingJournals.filter(journal => journal.date.startsWith(`${fiscalYear}-`)),
+    [reportingJournals, fiscalYear]
   );
 
-  const reportJournals = useMemo(() => baseJournals, [baseJournals]);
+  const baseJournals = useMemo(
+    () => projectJournalsToCurrency(fiscalReportingJournals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true, true),
+    [fiscalReportingJournals, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]
+  );
+
+  const carryForwardJournals = useMemo(
+    () => baseJournals.filter(journal => journal.status === 'POSTED' && journal.reference === `OPEN-${fiscalYear}` && !journal.reversedByEntryId),
+    [baseJournals, fiscalYear]
+  );
+  const carryForwardIds = useMemo(() => new Set(carryForwardJournals.map(journal => journal.id)), [carryForwardJournals]);
+  const reportJournals = useMemo(() => baseJournals.filter(journal => !carryForwardIds.has(journal.id)), [baseJournals, carryForwardIds]);
 
   const journalsInRange = useMemo(() => reportDocuments(reportJournals, fromDate, toDate, true), [reportJournals, fromDate, toDate]);
   // تشمل التقارير القيود والسندات المنتظرة من دون وسم حالة إضافي داخل التقرير.
-  const documentJournals = useMemo(() => reportDocuments(
-    projectJournalsToCurrency(reportingJournals, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals, true, true), fromDate, toDate, true
-  ), [reportingJournals, fromDate, toDate, currency, baseCode, selectedDecimals, isOriginalCurrencyReport]);
+  const documentJournals = useMemo(() => reportDocuments(reportJournals, fromDate, toDate, true), [reportJournals, fromDate, toDate]);
 
   const allJournals = useMemo(() => reportJournals, [reportJournals]);
+
+  const carryForwardOpeningByAccount = useMemo(() => {
+    const byAccount = new Map<string, { debit: number; credit: number; currency: string }>();
+    carryForwardJournals.forEach(journal => journal.lines.forEach(line => {
+      const current = byAccount.get(line.accountId) || { debit: 0, credit: 0, currency: line.currency || journal.currency || baseCode };
+      current.debit = round2(current.debit + (line.debit || 0));
+      current.credit = round2(current.credit + (line.credit || 0));
+      byAccount.set(line.accountId, current);
+    }));
+    return byAccount;
+  }, [carryForwardJournals, baseCode]);
 
   const reconciledAccounts = useMemo(() => {
     const reconciled = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }).accounts;
     return reconciled.map(account => {
       const rows = (account.openingBalances || []).filter(openingRecordBelongsToReportYear);
+      const carry = carryForwardOpeningByAccount.get(account.id);
+      if (carry) {
+        const amount = round2(carry.debit - carry.credit);
+        return {
+          ...account,
+          openingBalance: amount,
+          openingBalanceForeign: amount,
+          openingBalances: [{ id: `carry-forward-${fiscalYear}-${account.id}-${currency}`, accountId: account.id, currency: carry.currency, exchangeRate: 1, debit: carry.debit, credit: carry.credit, debitLocal: carry.debit, creditLocal: carry.credit, amount, foreignAmount: amount, rate: 1 }],
+        };
+      }
       const openingBalance = rows.reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
       const openingBalanceForeign = rows.reduce((sum, row) => sum + (row.debit || 0) - (row.credit || 0), 0);
       return { ...account, openingBalance, openingBalanceForeign, openingBalances: rows };
     });
-  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear, legacyOpeningYear]);
+  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear, legacyOpeningYear, carryForwardOpeningByAccount, currency]);
   const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(reconciledAccounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [reconciledAccounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
   const reportAccounts = useMemo(
     () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1, true),
