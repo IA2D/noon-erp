@@ -41,3 +41,7 @@
 - [ ] Test rollback by injecting failures at each transaction stage.
 - [ ] Run full regression suite.
 - [ ] Build installer and portable artifacts and verify hashes.
+
+### Progress 2026-09-13
+- [x] Added rp_record_years mapping registry and automatic fiscal-year inference during relational projection (schema v4).
+- [ ] Next: make repository queries and writes require the selected fiscal-year context.

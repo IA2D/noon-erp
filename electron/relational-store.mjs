@@ -43,6 +43,15 @@ export function createRelationalStore(db) {
         payload_json TEXT NOT NULL DEFAULT '{}'
       );
       CREATE INDEX IF NOT EXISTS idx_erp_fiscal_years_status ON erp_fiscal_years(status);
+      CREATE TABLE IF NOT EXISTS erp_record_years (
+        collection_key TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        fiscal_year_id TEXT,
+        source TEXT NOT NULL DEFAULT 'payload',
+        PRIMARY KEY(collection_key, record_id),
+        FOREIGN KEY(fiscal_year_id) REFERENCES erp_fiscal_years(id) ON DELETE RESTRICT
+      );
+      CREATE INDEX IF NOT EXISTS idx_erp_record_years_year ON erp_record_years(fiscal_year_id);
 
       CREATE TABLE IF NOT EXISTS erp_accounts (
         id TEXT PRIMARY KEY,
@@ -343,6 +352,16 @@ export function createRelationalStore(db) {
   const insertCurrency = db.prepare(`INSERT INTO erp_currencies(id,code,name_ar,decimals,is_base,is_active,payload_json) VALUES (?,?,?,?,?,?,?)`);
   const insertEntity = db.prepare(`INSERT INTO erp_master_entities(entity_type,id,code,name_ar,normalized_name,linked_account_id,is_active,payload_json) VALUES (?,?,?,?,?,?,?,?)`);
   const insertAudit = db.prepare(`INSERT OR IGNORE INTO erp_audit_events(id,timestamp,user_id,user_name,user_role,module,action,details,ip_address,before_json,after_json,payload_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const upsertRecordYear = db.prepare(`INSERT INTO erp_record_years(collection_key,record_id,fiscal_year_id,source)
+    VALUES (?,?,?,?) ON CONFLICT(collection_key,record_id) DO UPDATE SET fiscal_year_id=excluded.fiscal_year_id,source=excluded.source`);
+
+  function fiscalYearForRecord(record) {
+    const explicit = record?.fiscalYear ?? record?.fiscal_year;
+    if (explicit && /^\d{4}$/.test(String(explicit))) return `fy-${explicit}`;
+    const date = record?.date ?? record?.voucherDate ?? record?.receiptDate ?? record?.createdAt;
+    const match = String(date || '').match(/^(\d{4})-/);
+    return match ? `fy-${match[1]}` : null;
+  }
 
   function clearCollection(key) {
     const name = COLLECTION_NAMES.get(key);
@@ -356,6 +375,7 @@ export function createRelationalStore(db) {
     if (name === 'costCenters') db.exec('UPDATE erp_cost_centers SET parent_id = NULL; DELETE FROM erp_cost_centers');
     if (name === 'currencies') db.exec('DELETE FROM erp_currencies');
     if (['cashBoxes','bankAccounts','employees','customers','vendors'].includes(name)) db.prepare('DELETE FROM erp_master_entities WHERE entity_type=?').run(name);
+    db.prepare('DELETE FROM erp_record_years WHERE collection_key=?').run(key);
     if (name === 'auditLogs') return true;
     projectionStatus.run(key, 0);
     return true;
@@ -419,6 +439,17 @@ export function createRelationalStore(db) {
     const name = COLLECTION_NAMES.get(key);
     if (!name) return false;
     const rows = parseRows(value, key);
+    rows.forEach(record => {
+      const id = record?.id;
+      if (id) {
+        const fiscalYearId = fiscalYearForRecord(record);
+        if (fiscalYearId) {
+          db.prepare(`INSERT OR IGNORE INTO erp_fiscal_years(id,year_code,start_date,end_date,status,payload_json)
+            VALUES (?,?,?||'-01-01',?||'-12-31','OPEN','{}')`).run(fiscalYearId, fiscalYearId.slice(3), fiscalYearId.slice(3), fiscalYearId.slice(3));
+        }
+        upsertRecordYear.run(key, String(id), fiscalYearId, 'payload');
+      }
+    });
     if (name === 'auditLogs') {
       rows.slice().reverse().forEach(item => insertAudit.run(text(item.id), text(item.timestamp) ?? '', text(item.userId) ?? '', text(item.userName) ?? '', text(item.userRole) ?? '', text(item.module) ?? '', text(item.action) ?? '', text(item.details) ?? '', text(item.ipAddress) ?? '', text(item.beforeJson), text(item.afterJson), json(item)));
       projectionStatus.run(key, db.prepare('SELECT count(*) AS count FROM erp_audit_events').get().count);

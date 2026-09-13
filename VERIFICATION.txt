@@ -5,3 +5,4 @@ Rollback command: git revert <fiscal-isolation-commit>
 Status: task tracker created; implementation starts with schema and repository boundary.
 Schema command: node --check electron/relational-store.mjs
 Schema result: passed; fiscal-year registry added as schema v4.
+Relational projection: node --check electron/relational-store.mjs = passed; npm run lint = passed; added erp_record_years registry.
