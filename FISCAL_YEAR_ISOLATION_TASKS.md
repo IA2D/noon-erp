@@ -6,7 +6,7 @@
 - [ ] Create a legacy-data inventory grouped by table and year evidence.
 
 ## Phase 1 — Data model
-- [ ] Add `fiscal_years` registry with lifecycle/status fields.
+- [x] Add `fiscal_years` registry with lifecycle/status fields.
 - [ ] Add mandatory `fiscal_year_id` to every financial/business table.
 - [ ] Keep company identity, users, permissions, UI, and system settings global.
 - [ ] Add composite uniqueness for codes and document numbers per year.

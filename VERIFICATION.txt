@@ -3,3 +3,5 @@ Baseline result: TypeScript compilation passed before fiscal-isolation changes.
 Modified command: pending Phase 1 implementation.
 Rollback command: git revert <fiscal-isolation-commit>
 Status: task tracker created; implementation starts with schema and repository boundary.
+Schema command: node --check electron/relational-store.mjs
+Schema result: passed; fiscal-year registry added as schema v4.

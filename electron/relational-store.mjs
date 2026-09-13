@@ -32,6 +32,18 @@ function parseRows(value, key) {
 export function createRelationalStore(db) {
   function ensureSchema() {
     db.exec(`
+      CREATE TABLE IF NOT EXISTS erp_fiscal_years (
+        id TEXT PRIMARY KEY,
+        year_code TEXT NOT NULL UNIQUE,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN','PARTIAL_CLOSED','FINAL_CLOSED')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        closed_at TEXT,
+        payload_json TEXT NOT NULL DEFAULT '{}'
+      );
+      CREATE INDEX IF NOT EXISTS idx_erp_fiscal_years_status ON erp_fiscal_years(status);
+
       CREATE TABLE IF NOT EXISTS erp_accounts (
         id TEXT PRIMARY KEY,
         code TEXT NOT NULL,
@@ -512,7 +524,8 @@ export function createRelationalStore(db) {
     const scalar = sql => Number(db.prepare(sql).get()?.count ?? 0);
     const lastSyncedAt = db.prepare('SELECT max(last_synced_at) AS value FROM relational_projection_status').get()?.value ?? null;
     return {
-      schemaVersion: 3,
+      schemaVersion: 4,
+      fiscalYears: scalar('SELECT count(*) AS count FROM erp_fiscal_years'),
       accounts: scalar('SELECT count(*) AS count FROM erp_accounts'),
       accountCurrencies: scalar('SELECT count(*) AS count FROM erp_account_currencies'),
       journals: scalar('SELECT count(*) AS count FROM erp_journal_entries'),
@@ -527,6 +540,20 @@ export function createRelationalStore(db) {
       auditEvents: scalar('SELECT count(*) AS count FROM erp_audit_events'),
       lastSyncedAt,
     };
+  }
+
+  function ensureFiscalYear(yearCode, startDate = `${yearCode}-01-01`, endDate = `${yearCode}-12-31`, status = 'OPEN', payloadValue = {}) {
+    const code = String(yearCode);
+    const id = `fy-${code}`;
+    db.prepare(`INSERT INTO erp_fiscal_years(id,year_code,start_date,end_date,status,payload_json)
+      VALUES (?,?,?,?,?,?) ON CONFLICT(year_code) DO UPDATE SET start_date=excluded.start_date,
+      end_date=excluded.end_date,status=excluded.status,payload_json=excluded.payload_json`)
+      .run(id, code, String(startDate), String(endDate), String(status), json(payloadValue));
+    return db.prepare('SELECT * FROM erp_fiscal_years WHERE year_code=?').get(code);
+  }
+
+  function listFiscalYears() {
+    return db.prepare('SELECT * FROM erp_fiscal_years ORDER BY year_code').all();
   }
 
   function readCollection(key) {
@@ -585,5 +612,5 @@ export function createRelationalStore(db) {
     return { ok: issues === 0, issues, foreignKeyViolations, orphanJournalLines, orphanPaymentLines, orphanReceiptLines, duplicateDocumentNumbers, unbalancedPostedJournals, auditEvents: scalar('SELECT count(*) AS count FROM erp_audit_events') };
   }
 
-  return { ensureSchema, syncCollection, clearCollection, clearAll, ensureAccounts, rebuildAll, readCollection, diagnostics, info };
+  return { ensureSchema, syncCollection, clearCollection, clearAll, ensureAccounts, rebuildAll, readCollection, diagnostics, info, ensureFiscalYear, listFiscalYears };
 }
