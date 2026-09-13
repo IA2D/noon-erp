@@ -82,6 +82,8 @@ export interface OpeningBalanceRecord {
   foreignAmount?: number;
   /** سعر التحويل عند الإدخال (مرادف exchangeRate — للتوافق) */
   rate?: number;
+  /** قيمة مشتقة للعرض على حساب التحكم؛ مصدرها أرصدة الحسابات التحليلية وليست رصيداً مستقلاً. */
+  derivedFromSubLedgers?: boolean;
 }
 
 /** عملة مرتبطة بحساب المستوى 5 (جدول account_currencies الفرعي) */

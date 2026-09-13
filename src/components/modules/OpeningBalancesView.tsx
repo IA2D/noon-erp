@@ -625,7 +625,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
         // Control-account totals are a denormalized cache of their analytical
         // rows. Show the analytical rows as the editable source of truth, not
         // the same amount again on the parent account.
-        if (controlAccountIds.has(a.id) && linked.some(entity => entity.linkedAccountId === a.id && entity.openingBalances?.some(row => openingRecordForYear(row) && row.currency === rec.currency && Math.abs(row.amount || 0) > 0))) return;
+        if (controlAccountIds.has(a.id) && linked.some(entity => entity.linkedAccountId === a.id && entity.openingBalances?.some(row => openingRecordForYear(row) && Math.abs(row.amount || 0) > 0))) return;
         if (seen.has(k) || deletedKeys.has(k)) return;
         seen.add(k);
         const ob = rec.amount;

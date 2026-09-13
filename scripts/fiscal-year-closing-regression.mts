@@ -9,7 +9,16 @@ const posting = (id: string, code: string, nameAr: string, subLedgerType: Accoun
   defaultCurrency: 'YER', openingBalance: 0, isActive: true, openingBalances: [],
 });
 const accounts = [
-  posting('cash', '1101010001', 'الصندوق', 'CASH_BOX'),
+  {
+    ...posting('cash', '1101010001', 'الصندوق', 'CASH_BOX'),
+    // Legacy restore fixture: the parent/control account stored the same total
+    // that is already owned by its analytical cash-box row.
+    openingBalance: 37.5,
+    openingBalances: [{
+      id: 'legacy-control-total', fiscalYear: '2026', accountId: 'cash', currency: 'YER', exchangeRate: 1,
+      debit: 37.5, credit: 0, debitLocal: 37.5, creditLocal: 0, amount: 37.5, foreignAmount: 37.5, rate: 1,
+    }],
+  },
   posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'),
   { ...posting('revenue', '3101010001', 'إيرادات تشغيلية', 'NONE'), nature: 'CREDIT' as const, category: 'INCOME_STATEMENT' as const },
   { ...posting('expense', '4101010001', 'مصروفات تشغيلية', 'NONE'), nature: 'DEBIT' as const, category: 'INCOME_STATEMENT' as const },

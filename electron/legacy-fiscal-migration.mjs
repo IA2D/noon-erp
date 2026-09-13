@@ -175,3 +175,108 @@ export function migrateRemoveRolloverJournals(db, relationalStore) {
     throw error;
   }
 }
+
+const CONTROL_ENTITY_KEYS = [
+  'elite-erp-cashboxes-v1', 'elite-erp-bankaccounts-v1', 'elite-erp-employees-v1',
+  'elite-erp-customers-v1', 'elite-erp-vendors-v1',
+];
+const round2 = value => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+const openingFingerprint = row => [
+  row?.fiscalYear || '', row?.accountId || '', row?.subAccountId || '', row?.costCenterId || '', row?.currency || '',
+  round2(row?.debit), round2(row?.credit), round2(row?.debitLocal), round2(row?.creditLocal),
+  round2(row?.amount), round2(row?.foreignAmount), Number(row?.rate || row?.exchangeRate || 1), row?.documentRef || '', row?.dueDate || '',
+].join('|');
+const uniqueOpenings = rows => [...new Map((Array.isArray(rows) ? rows : []).map(row => [openingFingerprint(row), row])).values()];
+
+/**
+ * Canonicalizes restored fiscal-year datasets. Analytical entities own their
+ * openings; a control account stores only one derived cache per currency.
+ * This migration is deliberately independent from the source backup marker so
+ * it also runs after restoring a database produced by an older application.
+ */
+export function migrateCanonicalControlOpenings(db, relationalStore) {
+  const markerKey = 'canonical_control_openings_v1';
+  if (db.prepare('SELECT value FROM app_metadata WHERE key=?').get(markerKey)?.value) return { migrated: false, years: 0, keys: 0, duplicatesRemoved: 0 };
+  const read = db.prepare('SELECT value FROM kv_store WHERE key=?');
+  const scopedAccounts = db.prepare("SELECT key,value FROM kv_store WHERE key GLOB 'elite-erp-accounts-v9::fiscal-year::*'").all();
+  const write = db.prepare("UPDATE kv_store SET value=?,updated_at=datetime('now') WHERE key=?");
+  const bump = db.prepare(`INSERT INTO kv_versions(key,version,updated_at) VALUES(?,1,datetime('now')) ON CONFLICT(key) DO UPDATE SET version=version+1,updated_at=datetime('now')`);
+  let keys = 0;
+  let duplicatesRemoved = 0;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const accountRow of scopedAccounts) {
+      const year = accountRow.key.match(/::fiscal-year::(\d{4})$/)?.[1];
+      if (!year) continue;
+      const accounts = parse(accountRow.value);
+      if (!Array.isArray(accounts)) continue;
+      const entityCollections = CONTROL_ENTITY_KEYS.map(baseKey => {
+        const key = `${baseKey}::fiscal-year::${year}`;
+        return { key, rows: parse(read.get(key)?.value) };
+      }).filter(collection => Array.isArray(collection.rows));
+      const entitiesByAccount = new Map();
+      for (const collection of entityCollections) {
+        let collectionChanged = false;
+        collection.rows = collection.rows.map(entity => {
+          if (!entity?.linkedAccountId) return entity;
+          let rows = uniqueOpenings((entity.openingBalances || []).filter(row => String(row?.fiscalYear || year) === year));
+          duplicatesRemoved += Math.max(0, (entity.openingBalances || []).filter(row => String(row?.fiscalYear || year) === year).length - rows.length);
+          if (!rows.length && Math.abs(Number(entity.openingBalance || 0)) >= 0.005) {
+            const local = round2(entity.openingBalance);
+            const currency = entity.openingCurrency || entity.defaultCurrency || 'YER';
+            const rate = Number(entity.openingRate || 1);
+            const foreign = currency === 'YER' ? local : round2(entity.openingBalanceForeign || (rate > 0 ? local / rate : 0));
+            rows = [{ id: `restored-opening-${year}-${entity.id}-${currency}`, fiscalYear: year, accountId: entity.linkedAccountId, subAccountId: entity.id, currency, exchangeRate: rate, rate, debit: foreign > 0 ? foreign : 0, credit: foreign < 0 ? Math.abs(foreign) : 0, debitLocal: local > 0 ? local : 0, creditLocal: local < 0 ? Math.abs(local) : 0, amount: local, foreignAmount: foreign }];
+          }
+          if (rows.length) {
+            const list = entitiesByAccount.get(entity.linkedAccountId) || [];
+            list.push(...rows);
+            entitiesByAccount.set(entity.linkedAccountId, list);
+          }
+          const preserved = (entity.openingBalances || []).filter(row => String(row?.fiscalYear || year) !== year);
+          const nextRows = [...preserved, ...rows];
+          if (JSON.stringify(nextRows) !== JSON.stringify(entity.openingBalances || [])) collectionChanged = true;
+          return { ...entity, openingBalances: nextRows, openingBalance: round2(rows.reduce((sum, row) => sum + Number(row.amount ?? (Number(row.debitLocal || 0) - Number(row.creditLocal || 0))), 0)) };
+        });
+        if (collectionChanged) {
+          const serialized = JSON.stringify(collection.rows);
+          write.run(serialized, collection.key); relationalStore.syncCollection(collection.key, serialized); bump.run(collection.key); keys += 1;
+        }
+      }
+      let accountsChanged = false;
+      const nextAccounts = accounts.map(account => {
+        const analytical = entitiesByAccount.get(account.id);
+        if (!analytical?.length) return account;
+        const byCurrency = new Map();
+        analytical.forEach(row => {
+          const currency = row.currency || account.defaultCurrency || 'YER';
+          const list = byCurrency.get(currency) || []; list.push(row); byCurrency.set(currency, list);
+        });
+        const derived = [...byCurrency].map(([currency, rows]) => {
+          const debit = round2(rows.reduce((s, row) => s + Number(row.debit || 0), 0));
+          const credit = round2(rows.reduce((s, row) => s + Number(row.credit || 0), 0));
+          const debitLocal = round2(rows.reduce((s, row) => s + Number(row.debitLocal ?? Math.max(0, row.amount || 0)), 0));
+          const creditLocal = round2(rows.reduce((s, row) => s + Number(row.creditLocal ?? Math.max(0, -(row.amount || 0))), 0));
+          const rate = Number(rows.find(row => Number(row.rate || row.exchangeRate || 0) > 0)?.rate || rows[0]?.exchangeRate || 1);
+          return { id: `control-opening-${account.id}-${currency}-${year}`, fiscalYear: year, accountId: account.id, currency, exchangeRate: rate, rate, debit, credit, debitLocal, creditLocal, amount: round2(debitLocal - creditLocal), foreignAmount: round2(debit - credit), derivedFromSubLedgers: true };
+        });
+        const preserved = (account.openingBalances || []).filter(row => String(row?.fiscalYear || year) !== year);
+        const openingBalances = [...preserved, ...derived];
+        const openingBalance = round2(derived.reduce((sum, row) => sum + row.amount, 0));
+        const next = { ...account, openingBalances, openingBalance };
+        if (JSON.stringify(next) !== JSON.stringify(account)) accountsChanged = true;
+        return next;
+      });
+      if (accountsChanged) {
+        const serialized = JSON.stringify(nextAccounts);
+        write.run(serialized, accountRow.key); relationalStore.syncCollection(accountRow.key, serialized); bump.run(accountRow.key); keys += 1;
+      }
+    }
+    db.prepare('INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(markerKey, new Date().toISOString());
+    db.exec('COMMIT');
+    return { migrated: true, years: scopedAccounts.length, keys, duplicatesRemoved };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}

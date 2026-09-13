@@ -171,9 +171,17 @@ export interface ApplyBalancesResult extends BalanceCollections {
 export function dedupeOpeningBalanceRecords(records: OpeningBalanceRecord[]): OpeningBalanceRecord[] {
   const byKey = new Map<string, OpeningBalanceRecord>();
   records.forEach(record => {
-    const key = [record.fiscalYear || '', record.currency || '', record.subAccountId || '', record.costCenterId || ''].join('|');
-    // Keep the last row: legacy imports append the corrected copy after the
-    // stale copy, and this avoids summing the same balance twice.
+    // Ignore record IDs because old restore/rollover code generated a fresh ID
+    // for an otherwise byte-equivalent balance. Do not collapse genuinely
+    // different amounts that happen to share the same dimensions.
+    const key = [
+      record.fiscalYear || '', record.accountId || '', record.subAccountId || '',
+      record.costCenterId || '', record.currency || '',
+      round2(record.debit || 0), round2(record.credit || 0),
+      round2(record.debitLocal || 0), round2(record.creditLocal || 0),
+      round2(record.amount || 0), round2(record.foreignAmount || 0),
+      Number(record.rate || record.exchangeRate || 1), record.documentRef || '', record.dueDate || '',
+    ].join('|');
     byKey.set(key, record);
   });
   return Array.from(byKey.values());
@@ -380,6 +388,7 @@ export function reconcileControlAccountOpenings(current: BalanceCollections, fis
         amount: round2(debitLocal - creditLocal),
         foreignAmount: round2(debit - credit),
         rate,
+        derivedFromSubLedgers: true,
       } satisfies OpeningBalanceRecord;
     });
     // Keep opening records belonging to other fiscal years.  Reconciliation runs
