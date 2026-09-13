@@ -1,3 +1,5 @@
+import { recordFiscalYear, fiscalYearId } from './fiscal-year-context.mjs';
+
 export const RELATIONAL_COLLECTION_KEYS = Object.freeze({
   accounts: 'elite-erp-accounts-v9',
   journals: 'elite-erp-journals-v6',
@@ -356,11 +358,8 @@ export function createRelationalStore(db) {
     VALUES (?,?,?,?) ON CONFLICT(collection_key,record_id) DO UPDATE SET fiscal_year_id=excluded.fiscal_year_id,source=excluded.source`);
 
   function fiscalYearForRecord(record) {
-    const explicit = record?.fiscalYear ?? record?.fiscal_year;
-    if (explicit && /^\d{4}$/.test(String(explicit))) return `fy-${explicit}`;
-    const date = record?.date ?? record?.voucherDate ?? record?.receiptDate ?? record?.createdAt;
-    const match = String(date || '').match(/^(\d{4})-/);
-    return match ? `fy-${match[1]}` : null;
+    const year = recordFiscalYear(record);
+    return year ? fiscalYearId(year) : null;
   }
 
   function clearCollection(key) {

@@ -47,3 +47,5 @@
 - [ ] Next: make repository queries and writes require the selected fiscal-year context.
 
 - [x] Verify record-year mapping with relational SQLite smoke test.
+
+- [x] Add shared fiscal-year normalization, record-year inference, and atomic transaction primitive.
