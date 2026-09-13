@@ -61,6 +61,9 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
 
   const { active: currencyOptions, baseCode: bagBaseCode, rateOf } = useActiveCurrencies(currencies);
   const baseCode = bagBaseCode || 'YER';
+  const legacyOpeningYear = loadBranchesLocal()[0]?.fiscalYear || fiscalYear;
+  const openingRecordForYear = (record: { fiscalYear?: string }) =>
+    record.fiscalYear === fiscalYear || (!record.fiscalYear && fiscalYear === legacyOpeningYear);
   const rateGuard = useExchangeRateGuard(currencies);
 
   const postingAccounts = useMemo(() => selectPostingAccounts(accounts), [accounts]);
@@ -78,7 +81,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     const set = new Set<string>();
     accounts.forEach(a => {
       if (a.openingBalances && a.openingBalances.length > 0) {
-        a.openingBalances.forEach(rec => {
+        a.openingBalances.filter(openingRecordForYear).forEach(rec => {
           if (rec.amount && rec.amount !== 0) {
             set.add(compositeKey(a.id, null, rec.currency));
           }
@@ -94,7 +97,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     });
     linked.forEach(e => {
       if (e.openingBalances && e.openingBalances.length > 0) {
-        e.openingBalances.forEach(rec => {
+        e.openingBalances.filter(openingRecordForYear).forEach(rec => {
           if (rec.amount && rec.amount !== 0) {
             set.add(compositeKey(e.linkedAccountId, e.id, rec.currency));
           }
@@ -592,7 +595,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     selectPostingAccounts(accounts).forEach(a => {
       if (isControl(a.id)) return;
       const records = a.openingBalances && a.openingBalances.length > 0
-        ? a.openingBalances
+        ? a.openingBalances.filter(openingRecordForYear)
         : [
           ...(a.openingBalance ? [{ currency: a.defaultCurrency || baseCode, amount: a.openingBalance, foreignAmount: a.openingBalanceForeign, rate: a.openingRate, documentRef: a.openingDocumentRef, dueDate: a.openingDueDate }] : []),
           ...(a.openingBalanceForeign && a.openingCurrency ? [{ currency: a.openingCurrency, amount: a.openingBalanceForeign, foreignAmount: a.openingBalanceForeign, rate: a.openingRate, documentRef: a.openingDocumentRef, dueDate: a.openingDueDate }] : []),
@@ -628,7 +631,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
 
     linked.forEach(ent => {
       const records = ent.openingBalances && ent.openingBalances.length > 0
-        ? ent.openingBalances
+        ? ent.openingBalances.filter(openingRecordForYear)
         : [
           ...(ent.openingBalance ? [{ currency: ent.openingCurrency || ent.defaultCurrency, amount: ent.openingBalance, foreignAmount: ent.openingBalanceForeign, rate: ent.openingRate, documentRef: ent.openingDocumentRef, dueDate: ent.openingDueDate }] : []),
           ...(ent.openingBalanceForeign && ent.openingCurrency ? [{ currency: ent.openingCurrency, amount: ent.openingBalanceForeign, foreignAmount: ent.openingBalanceForeign, rate: ent.openingRate, documentRef: ent.openingDocumentRef, dueDate: ent.openingDueDate }] : []),
@@ -706,6 +709,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
   const buildDeletePayload = (row: BrowseRow): SavePayload => {
     if (row.kind === 'account') {
       return {
+        fiscalYear,
         accounts: [{ id: row.accountId, rowId: row.recordId || crypto.randomUUID(), openingBalance: 0, openingBalanceForeign: 0, debit: 0, credit: 0, debitLocal: 0, creditLocal: 0, currency: row.currency, rate: row.rate }],
         subLedgers: [],
       };
@@ -713,18 +717,19 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     const others = linked.filter(e => e.linkedAccountId === row.accountId && e.id !== row.entity?.id);
     const remaining = others.reduce((s, e) => {
       if (e.openingBalances && e.openingBalances.length > 0) {
-        return s + e.openingBalances.reduce((sum, r) => sum + (r.amount || 0), 0);
+        return s + e.openingBalances.filter(openingRecordForYear).reduce((sum, r) => sum + (r.amount || 0), 0);
       }
       return s + (e.openingBalance || 0);
     }, 0);
     const remainingForeign = others.reduce((s, e) => {
       if (e.openingBalances && e.openingBalances.length > 0) {
-        return s + e.openingBalances.reduce((sum, r) => sum + (r.foreignAmount || 0), 0);
+        return s + e.openingBalances.filter(openingRecordForYear).reduce((sum, r) => sum + (r.foreignAmount || 0), 0);
       }
       return s + (e.openingBalanceForeign || 0);
     }, 0);
     const ent = row.entity!;
     return {
+      fiscalYear,
       accounts: [{
         id: row.accountId,
         rowId: crypto.randomUUID(),

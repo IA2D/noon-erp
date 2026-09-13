@@ -180,6 +180,7 @@ export function applyOpeningBalances(payload: SavePayload, current: BalanceColle
 
   const buildRec = (e: AccountSaveEntry, accountId: string, subAccountId?: string): OpeningBalanceRecord => ({
     id: e.rowId,
+    fiscalYear: e.fiscalYear ?? payload.fiscalYear,
     accountId,
     subAccountId,
     currency: e.currency,
@@ -287,7 +288,7 @@ export interface ReconciledControlOpenings {
  * يجمع أرصدة الكيانات التحليلية في حساب التحكم الرئيسي المرتبط بها.
  * لا تُعامل قيمة الحساب الرئيسي القديمة كمصدر مستقل حتى لا يُحتسب نفس الرصيد مرتين.
  */
-export function reconcileControlAccountOpenings(current: BalanceCollections): ReconciledControlOpenings {
+export function reconcileControlAccountOpenings(current: BalanceCollections, fiscalYear?: string): ReconciledControlOpenings {
   const allEntities: SubLedgerLike[] = [
     ...current.cashBoxes,
     ...current.bankAccounts,
@@ -310,9 +311,8 @@ export function reconcileControlAccountOpenings(current: BalanceCollections): Re
     if (!entities?.length) return account;
     // لا نمس رصيداً تاريخياً للحساب الرئيسي إن لم يبدأ إدخال أي رصيد تحليلي له بعد.
     const hasAnalyticalOpening = entities.some(entity =>
-      Math.abs(entity.openingBalance || 0) > 0 ||
-      Math.abs(entity.openingBalanceForeign || 0) > 0 ||
-      (entity.openingBalances || []).some(record =>
+      (!fiscalYear && (Math.abs(entity.openingBalance || 0) > 0 || Math.abs(entity.openingBalanceForeign || 0) > 0)) ||
+      (entity.openingBalances || []).filter(record => !fiscalYear || record.fiscalYear === fiscalYear).some(record =>
         Math.abs(record.amount || 0) > 0 || Math.abs(record.foreignAmount || 0) > 0 ||
         Math.abs(record.debit || 0) > 0 || Math.abs(record.credit || 0) > 0 ||
         Math.abs(record.debitLocal || 0) > 0 || Math.abs(record.creditLocal || 0) > 0
@@ -335,7 +335,8 @@ export function reconcileControlAccountOpenings(current: BalanceCollections): Re
         foreignAmount: round2(entity.openingBalanceForeign || 0),
         rate: entity.openingRate || 1,
       };
-      const records = entity.openingBalances?.length ? entity.openingBalances : [fallback];
+      const scoped = fiscalYear ? (entity.openingBalances || []).filter(record => record.fiscalYear === fiscalYear) : (entity.openingBalances || []);
+      const records = scoped.length ? scoped : fiscalYear ? [] : [fallback];
       records.forEach(record => {
         const currency = record.currency || account.defaultCurrency || 'YER';
         const list = byCurrency.get(currency) || [];

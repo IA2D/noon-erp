@@ -57,7 +57,7 @@ import {
   initialCurrencies
 } from './data/initialData';
 
-import { Account, AccountCurrency, JournalEntry, JournalLine, AuditLog, CostCenter, Trust, Custody, CashBox, BankAccount, PaymentVoucher, ReceiptVoucher, Employee, Customer, Vendor, Currency, SubLedgerType } from './types/erp';
+import { Account, AccountCurrency, JournalEntry, JournalLine, AuditLog, CostCenter, Trust, Custody, CashBox, BankAccount, PaymentVoucher, ReceiptVoucher, Employee, Customer, Vendor, Currency, SubLedgerType, OpeningBalanceRecord } from './types/erp';
 import type { SavePayload } from './components/modules/opening/types';
 import { applyOpeningBalances, cleanupOpeningBalanceDuplicates, reconcileControlAccountOpenings } from './services/openingBalancesService';
 import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
@@ -1263,6 +1263,10 @@ function AppInner() {
   };
 
   function reversePostedJournal(original: JournalEntry, reason: string, module: AuditLog['module'], extraStateChanges: Array<{ key: string; value: unknown }> = []): JournalEntry | null {
+    if (original.reference?.startsWith('OPEN-')) {
+      addAuditLog(module, 'VOID', `رُفض عكس القيد الافتتاحي ${original.entryNumber}: القيد سجل تدوير للعرض فقط، ومصدر الرصيد هو الأرصدة الافتتاحية للسنة.`);
+      return null;
+    }
     const reversalDate = new Date().toISOString().slice(0, 10);
     if (isPeriodClosed(reversalDate, closedYears, closedMonths)) {
       addAuditLog(module, 'VOID', `رُفض عكس القيد ${original.entryNumber}: فترة القيد العكسي مغلقة`);
@@ -1383,10 +1387,38 @@ function AppInner() {
     const linkedPeriod = { ...sourcePeriod, openingEntryId: entry.id };
     const nextPeriods = [...periodStates.filter(item => !(item.key === year && item.scope === 'YEAR')), linkedPeriod];
     const nextJournals = [entry, ...journals];
+    // قيد OPEN-YYYY سجل تدقيق للعرض فقط. مصدر الحقيقة للسنة الجديدة هو
+    // سجلات openingBalances المرتبطة بها، كي لا يدخل القيد كحركة بالتقارير.
+    const baseCurrency = currencies.find(c => c.isBase)?.code ?? 'YER';
+    const openingByAccount = new Map(lines.map(line => [line.accountId, line]));
+    const nextAccounts = accounts.map(account => {
+      const carried = openingByAccount.get(account.id);
+      if (!carried) return account;
+      const debit = round2(carried.debit || 0);
+      const credit = round2(carried.credit || 0);
+      const record: OpeningBalanceRecord = {
+        id: `rollover-opening-${nextYear}-${account.id}`,
+        fiscalYear: nextYear,
+        accountId: account.id,
+        currency: baseCurrency,
+        exchangeRate: 1,
+        debit,
+        credit,
+        debitLocal: debit,
+        creditLocal: credit,
+        amount: round2(debit - credit),
+        foreignAmount: round2(debit - credit),
+        rate: 1,
+        documentRef: entry.entryNumber,
+      };
+      const priorYears = (account.openingBalances || []).filter(item => item.fiscalYear !== nextYear);
+      return { ...account, openingBalances: [...priorYears, record] };
+    });
     const audit = createAuditLog('GENERAL_LEDGER', 'POST', `توليد القيد الافتتاحي للسنة ${nextYear} من إقفال ${year}`);
-    const commit = commitAccountingStateResult({ idempotencyKey: `CARRY_FORWARD:${year}:${nextYear}`, commandType: 'CARRY_FORWARD', documentType: 'YEAR', documentNumber: nextYear }, [{ key: K.journals, value: nextJournals }, { key: K.periodStates, value: nextPeriods }], audit);
+    const commit = commitAccountingStateResult({ idempotencyKey: `CARRY_FORWARD:${year}:${nextYear}`, commandType: 'CARRY_FORWARD', documentType: 'YEAR', documentNumber: nextYear }, [{ key: K.journals, value: nextJournals }, { key: K.accounts, value: nextAccounts }, { key: K.periodStates, value: nextPeriods }], audit);
     if (!commit.ok) return { ok: false, error: accountingCommandError(commit.error) };
     setJournals(nextJournals);
+    setAccounts(nextAccounts);
     setPeriodStates(nextPeriods);
     setAuditLogs(prev => [audit, ...prev]);
     return true;
