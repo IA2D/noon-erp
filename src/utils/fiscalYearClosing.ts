@@ -138,7 +138,17 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
     const retained = input.accounts.find(account => account.code === '2202010001' && isPostingAccount(account))
       || input.accounts.find(account => account.nameAr.includes('أرباح مبقاة') && isPostingAccount(account));
     if (!retained) throw new Error(`ROLLOVER_UNBALANCED_WITHOUT_RETAINED_ACCOUNT:${localNet}`);
-    records.push({ accountId: retained.id, currency: baseCurrency, local: -localNet, foreign: -localNet, lastRate: 1 });
+    // Merge the closing result into an existing retained-earnings opening for
+    // the same currency. Creating a second row with the same composite key made
+    // the opening-balance browser show only the first row and appear unbalanced.
+    const existing = records.find(record => record.accountId === retained.id && !record.subLedgerId && !record.costCenterId && record.currency === baseCurrency);
+    if (existing) {
+      existing.local = round(existing.local - localNet);
+      existing.foreign = round(existing.foreign - localNet);
+      existing.lastRate = 1;
+    } else {
+      records.push({ accountId: retained.id, currency: baseCurrency, local: -localNet, foreign: -localNet, lastRate: 1 });
+    }
   }
 
   const openings: OpeningBalanceRecord[] = records.map((bucket, index) => {

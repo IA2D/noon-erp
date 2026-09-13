@@ -19,7 +19,10 @@ const accounts = [
       debit: 37.5, credit: 0, debitLocal: 37.5, creditLocal: 0, amount: 37.5, foreignAmount: 37.5, rate: 1,
     }],
   },
-  posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'),
+  { ...posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'), openingBalance: 105, openingBalances: [{
+    id: 'retained-opening', fiscalYear: '2026', accountId: 'equity', currency: 'YER', exchangeRate: 1,
+    debit: 105, credit: 0, debitLocal: 105, creditLocal: 0, amount: 105, foreignAmount: 105, rate: 1,
+  }] },
   { ...posting('revenue', '3101010001', 'إيرادات تشغيلية', 'NONE'), nature: 'CREDIT' as const, category: 'INCOME_STATEMENT' as const },
   { ...posting('expense', '4101010001', 'مصروفات تشغيلية', 'NONE'), nature: 'DEBIT' as const, category: 'INCOME_STATEMENT' as const },
 ];
@@ -55,6 +58,7 @@ assert.ok(box.openingBalances?.every(row => row.currency === 'USD' && row.fiscal
 const control = snapshot.accounts.find(account => account.id === 'cash')!;
 assert.equal(control.openingBalance, 56.25);
 assert.equal(control.openingBalances?.[0].foreignAmount, 15);
+assert.equal(snapshot.openings.filter(row => row.accountId === 'equity' && row.currency === 'YER').length, 1);
 assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.debitLocal || 0), 0), 56.25);
 assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.creditLocal || 0), 0), 56.25);
 assert.ok(snapshot.openings.every(row => row.documentRef === 'CARRY-2026-2027'));

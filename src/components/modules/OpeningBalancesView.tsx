@@ -14,7 +14,7 @@ import OpeningBalancesToolbar from './opening/OpeningBalancesToolbar';
 import OpeningBalancesGrid, { type GridLine } from './opening/OpeningBalancesGrid';
 import ModalShell from '../ui/ModalShell';
 import { useTabDirty } from '../../tabs/TabsContext';
-import { selectPostingAccounts, buildLinkedEntities, buildOpeningBalancesPayload, dedupeOpeningBalanceRecords, type LinkedEntity } from '../../services/openingBalancesService';
+import { selectPostingAccounts, buildLinkedEntities, buildOpeningBalancesPayload, consolidateOpeningBalanceRecords, type LinkedEntity } from '../../services/openingBalancesService';
 import { loadBranchesLocal } from '../../utils/companyStore';
 import { buildXlsx, downloadBlob, type XlsxSheet } from '../../utils/xlsxWriter';
 import { handleCurrencyFieldChange } from '../../utils/currencyMath';
@@ -614,7 +614,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
 
     selectPostingAccounts(accounts).forEach(a => {
       const records = a.openingBalances && a.openingBalances.length > 0
-        ? dedupeOpeningBalanceRecords(a.openingBalances.filter(openingRecordForYear))
+        ? consolidateOpeningBalanceRecords(a.openingBalances.filter(openingRecordForYear))
         : [
           ...(a.openingBalance ? [{ currency: a.defaultCurrency || baseCode, amount: a.openingBalance, foreignAmount: a.openingBalanceForeign, rate: a.openingRate, documentRef: a.openingDocumentRef, dueDate: a.openingDueDate }] : []),
           ...(a.openingBalanceForeign && a.openingCurrency ? [{ currency: a.openingCurrency, amount: a.openingBalanceForeign, foreignAmount: a.openingBalanceForeign, rate: a.openingRate, documentRef: a.openingDocumentRef, dueDate: a.openingDueDate }] : []),
@@ -654,7 +654,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
 
     linked.forEach(ent => {
       const records = ent.openingBalances && ent.openingBalances.length > 0
-        ? dedupeOpeningBalanceRecords(ent.openingBalances.filter(openingRecordForYear))
+        ? consolidateOpeningBalanceRecords(ent.openingBalances.filter(openingRecordForYear))
         : [
           ...(ent.openingBalance ? [{ currency: ent.openingCurrency || ent.defaultCurrency, amount: ent.openingBalance, foreignAmount: ent.openingBalanceForeign, rate: ent.openingRate, documentRef: ent.openingDocumentRef, dueDate: ent.openingDueDate }] : []),
           ...(ent.openingBalanceForeign && ent.openingCurrency ? [{ currency: ent.openingCurrency, amount: ent.openingBalanceForeign, foreignAmount: ent.openingBalanceForeign, rate: ent.openingRate, documentRef: ent.openingDocumentRef, dueDate: ent.openingDueDate }] : []),

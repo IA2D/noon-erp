@@ -280,3 +280,81 @@ export function migrateCanonicalControlOpenings(db, relationalStore) {
     throw error;
   }
 }
+
+/** Repairs target years created by the legacy rollover that omitted (or hid)
+ * the retained-earnings residual. Only datasets carrying CARRY/OPEN provenance
+ * are touched; ordinary user-entered opening drafts are never auto-balanced. */
+export function migrateRolloverOpeningResiduals(db, relationalStore) {
+  const markerKey = 'rollover_opening_residuals_v1';
+  if (db.prepare('SELECT value FROM app_metadata WHERE key=?').get(markerKey)?.value) return { migrated: false, repairedYears: 0, keys: 0 };
+  const read = db.prepare('SELECT value FROM kv_store WHERE key=?');
+  const accountRows = db.prepare("SELECT key,value FROM kv_store WHERE key GLOB 'elite-erp-accounts-v9::fiscal-year::*'").all();
+  const write = db.prepare("UPDATE kv_store SET value=?,updated_at=datetime('now') WHERE key=?");
+  const bump = db.prepare(`INSERT INTO kv_versions(key,version,updated_at) VALUES(?,1,datetime('now')) ON CONFLICT(key) DO UPDATE SET version=version+1,updated_at=datetime('now')`);
+  let repairedYears = 0;
+  let keys = 0;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const accountRow of accountRows) {
+      const year = accountRow.key.match(/::fiscal-year::(\d{4})$/)?.[1];
+      if (!year) continue;
+      const status = parse(read.get(`elite-erp-opening-balances-status-v1::fiscal-year::${year}`)?.value, 'NONE');
+      if (status !== 'POSTED') continue;
+      const accounts = parse(accountRow.value);
+      if (!Array.isArray(accounts)) continue;
+      const entityRowsByAccount = new Map();
+      for (const baseKey of CONTROL_ENTITY_KEYS) {
+        const entities = parse(read.get(`${baseKey}::fiscal-year::${year}`)?.value);
+        if (!Array.isArray(entities)) continue;
+        entities.forEach(entity => {
+          if (!entity?.linkedAccountId) return;
+          const rows = uniqueOpenings((entity.openingBalances || []).filter(row => String(row?.fiscalYear || year) === year));
+          if (!rows.length) return;
+          const list = entityRowsByAccount.get(entity.linkedAccountId) || [];
+          list.push(...rows); entityRowsByAccount.set(entity.linkedAccountId, list);
+        });
+      }
+      const authoritative = [];
+      accounts.forEach(account => {
+        const analytical = entityRowsByAccount.get(account.id);
+        if (analytical?.length) authoritative.push(...analytical);
+        else authoritative.push(...uniqueOpenings((account.openingBalances || []).filter(row => String(row?.fiscalYear || year) === year)));
+      });
+      const hasRolloverProvenance = authoritative.some(row => /^(CARRY-|OPEN-)/.test(String(row?.documentRef || '')));
+      if (!hasRolloverProvenance) continue;
+      const residual = round2(authoritative.reduce((sum, row) => sum + Number(row?.amount ?? (Number(row?.debitLocal || 0) - Number(row?.creditLocal || 0))), 0));
+      if (Math.abs(residual) < 0.005) continue;
+      const retainedIndex = accounts.findIndex(account => String(account?.code || '') === '2202010001') >= 0
+        ? accounts.findIndex(account => String(account?.code || '') === '2202010001')
+        : accounts.findIndex(account => String(account?.nameAr || '').includes('أرباح مبقاة'));
+      if (retainedIndex < 0) continue;
+      const currencyRows = parse(read.get(`elite-erp-currencies-v1::fiscal-year::${year}`)?.value);
+      const baseCurrency = (Array.isArray(currencyRows) ? currencyRows.find(currency => currency?.isBase)?.code : null) || 'YER';
+      const retained = accounts[retainedIndex];
+      const otherYears = (retained.openingBalances || []).filter(row => String(row?.fiscalYear || year) !== year);
+      const currentRows = uniqueOpenings((retained.openingBalances || []).filter(row => String(row?.fiscalYear || year) === year));
+      let target = currentRows.find(row => !row?.subAccountId && !row?.costCenterId && (row?.currency || baseCurrency) === baseCurrency);
+      if (!target) {
+        target = { id: `rollover-retained-repair-${year}`, fiscalYear: year, accountId: retained.id, currency: baseCurrency, exchangeRate: 1, rate: 1, debit: 0, credit: 0, debitLocal: 0, creditLocal: 0, amount: 0, foreignAmount: 0, documentRef: `CARRY-REPAIR-${year}` };
+        currentRows.push(target);
+      }
+      const corrected = round2(Number(target.amount ?? (Number(target.debitLocal || 0) - Number(target.creditLocal || 0))) - residual);
+      Object.assign(target, {
+        debit: corrected > 0 ? corrected : 0, credit: corrected < 0 ? Math.abs(corrected) : 0,
+        debitLocal: corrected > 0 ? corrected : 0, creditLocal: corrected < 0 ? Math.abs(corrected) : 0,
+        amount: corrected, foreignAmount: corrected, exchangeRate: 1, rate: 1,
+      });
+      const openingBalances = [...otherYears, ...currentRows];
+      accounts[retainedIndex] = { ...retained, openingBalances, openingBalance: round2(currentRows.reduce((sum, row) => sum + Number(row.amount || 0), 0)) };
+      const serialized = JSON.stringify(accounts);
+      write.run(serialized, accountRow.key); relationalStore.syncCollection(accountRow.key, serialized); bump.run(accountRow.key);
+      repairedYears += 1; keys += 1;
+    }
+    db.prepare('INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(markerKey, new Date().toISOString());
+    db.exec('COMMIT');
+    return { migrated: true, repairedYears, keys };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}

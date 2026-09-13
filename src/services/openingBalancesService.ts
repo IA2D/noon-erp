@@ -187,6 +187,26 @@ export function dedupeOpeningBalanceRecords(records: OpeningBalanceRecord[]): Op
   return Array.from(byKey.values());
 }
 
+/** One editable opening row per account/analytical account/currency/dimension. */
+export function consolidateOpeningBalanceRecords(records: OpeningBalanceRecord[]): OpeningBalanceRecord[] {
+  const grouped = new Map<string, OpeningBalanceRecord>();
+  dedupeOpeningBalanceRecords(records).forEach(record => {
+    const key = [record.fiscalYear || '', record.accountId || '', record.subAccountId || '', record.costCenterId || '', record.currency || ''].join('|');
+    const current = grouped.get(key);
+    if (!current) { grouped.set(key, { ...record }); return; }
+    const debit = round2(Number(current.debit || 0) + Number(record.debit || 0));
+    const credit = round2(Number(current.credit || 0) + Number(record.credit || 0));
+    const debitLocal = round2(Number(current.debitLocal || 0) + Number(record.debitLocal || 0));
+    const creditLocal = round2(Number(current.creditLocal || 0) + Number(record.creditLocal || 0));
+    grouped.set(key, {
+      ...current, debit, credit, debitLocal, creditLocal,
+      amount: round2(debitLocal - creditLocal),
+      foreignAmount: round2(debit - credit),
+    });
+  });
+  return Array.from(grouped.values());
+}
+
 type SubLedgerLike = {
   id: string;
   defaultCurrency?: string;
@@ -359,7 +379,7 @@ export function reconcileControlAccountOpenings(current: BalanceCollections, fis
         foreignAmount: round2(entity.openingBalanceForeign || 0),
         rate: entity.openingRate || 1,
       };
-      const scoped = dedupeOpeningBalanceRecords(fiscalYear ? (entity.openingBalances || []).filter(record => record.fiscalYear === fiscalYear) : (entity.openingBalances || []));
+      const scoped = consolidateOpeningBalanceRecords(fiscalYear ? (entity.openingBalances || []).filter(record => record.fiscalYear === fiscalYear) : (entity.openingBalances || []));
       const records = scoped.length ? scoped : fiscalYear ? [] : [fallback];
       records.forEach(record => {
         const currency = record.currency || account.defaultCurrency || 'YER';
