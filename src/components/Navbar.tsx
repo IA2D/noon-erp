@@ -90,6 +90,8 @@ export default function Navbar({ user, onLogout, onNavigate, notificationCount, 
           <button
             type="button"
             onClick={() => {
+              // reload يعيد إنشاء React؛ خزّن السنة المرئية قبل التحديث.
+              if (fiscalYear) window.sessionStorage.setItem('fullerp-reporting-year', fiscalYear);
               setRefreshSpinning(true);
               window.setTimeout(() => window.location.reload(), 150);
             }}

@@ -85,6 +85,20 @@ function currentReportingYear(): string {
   return String(Math.max(MIN_REPORTING_YEAR, new Date().getFullYear()));
 }
 
+/** يحتفظ التحديث داخل الجلسة بالسنة التي اختارها المستخدم بدلاً من سنة تاريخ الجهاز. */
+function restoredReportingYear(): string {
+  const fallback = currentReportingYear();
+  try {
+    const remembered = window.sessionStorage.getItem(REPORTING_YEAR_SESSION_KEY);
+    const value = Number(remembered);
+    const maxAllowed = Math.max(MIN_REPORTING_YEAR, new Date().getFullYear()) + 1;
+    if (/^\d{4}$/.test(remembered || '') && value >= MIN_REPORTING_YEAR && value <= maxAllowed) return remembered!;
+  } catch {
+    // بيئات SSR أو المتصفح المقيد تستخدم السنة الافتراضية.
+  }
+  return fallback;
+}
+
 function reportingYearOptions(currentYear = new Date().getFullYear()): string[] {
   const effectiveCurrentYear = Math.max(MIN_REPORTING_YEAR, currentYear);
   const years: string[] = [];
@@ -194,7 +208,7 @@ function AppInner() {
   const { dir, t } = useI18n();
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => loadSession());
-  const [reportingYear, setReportingYear] = useState<string>(currentReportingYear);
+  const [reportingYear, setReportingYear] = useState<string>(restoredReportingYear);
   const { activeModule, openModule, resetTabs, requestCloseTab } = useTabs();
 
   const [accounts, setAccounts] = useLocalStorageState<Account[]>(K.accounts, initialAccounts);
