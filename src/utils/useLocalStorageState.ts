@@ -106,6 +106,12 @@ export function useFiscalYearStorageState<T>(
     if (window.desktopStore) {
       const result = window.desktopStore.setItemVersioned(key, serialized, versionRef.current);
       if (result.ok) versionRef.current = result.version ?? versionRef.current + 1;
+      else {
+        versionRef.current = result.actualVersion ?? window.desktopStore.version(key);
+        const authoritative = window.desktopStore.getItem(key);
+        if (authoritative !== null) setState(JSON.parse(authoritative) as T);
+        window.dispatchEvent(new CustomEvent(result.closed ? 'fullerp:closed-year-write' : 'fullerp:storage-conflict', { detail: { key, error: result.error } }));
+      }
     } else localStorage.setItem(key, serialized);
   }, [key, state]);
 

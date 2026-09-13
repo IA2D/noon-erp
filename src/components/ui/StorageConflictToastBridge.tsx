@@ -9,7 +9,12 @@ export default function StorageConflictToastBridge() {
       toast('error', `تم تحديث البيانات من نافذة أخرى، لذلك أُعيد تحميل أحدث نسخة دون الكتابة فوقها${detail?.key ? ` (${detail.key})` : ''}.`);
     };
     window.addEventListener('fullerp:storage-conflict', onConflict);
-    return () => window.removeEventListener('fullerp:storage-conflict', onConflict);
+    const onClosed = () => toast('error', 'السنة المالية مقفلة نهائيًا — البيانات متاحة للاستعراض والتقارير فقط.');
+    window.addEventListener('fullerp:closed-year-write', onClosed);
+    return () => {
+      window.removeEventListener('fullerp:storage-conflict', onConflict);
+      window.removeEventListener('fullerp:closed-year-write', onClosed);
+    };
   }, [toast]);
   return null;
 }

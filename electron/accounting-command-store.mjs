@@ -1,6 +1,10 @@
 const ERP_PREFIX = 'elite-erp-';
 const ACCOUNT_COLLECTION_KEY = 'elite-erp-accounts-v9';
 const JOURNAL_COLLECTION_KEY = 'elite-erp-journals-v6';
+const PERIOD_STATES_KEY = 'elite-erp-period-states-v1';
+const CLOSED_YEARS_KEY = 'elite-erp-closed-years-v1';
+const AUDIT_LOGS_KEY = 'elite-erp-auditlogs-v6';
+const SCOPED_KEY = /^(.*)::fiscal-year::(\d{4})$/;
 
 export function createAccountingCommandStore(db, relationalStore) {
   db.exec(`
@@ -30,6 +34,24 @@ export function createAccountingCommandStore(db, relationalStore) {
 
   const versionOf = key => Number(readVersion.get(String(key))?.version || 0);
   const bumpVersion = key => Number(bump.get(String(key))?.version || 0);
+
+  const scopedParts = key => String(key || '').match(SCOPED_KEY);
+  const isFiscalYearClosed = year => {
+    try {
+      const periodRaw = db.prepare('SELECT value FROM kv_store WHERE key=?').get(`${PERIOD_STATES_KEY}::fiscal-year::${year}`)?.value;
+      const periods = periodRaw ? JSON.parse(periodRaw) : [];
+      if (Array.isArray(periods) && periods.some(item => item?.scope === 'YEAR' && String(item?.key) === year && item?.status === 'FINAL_CLOSED')) return true;
+      const closedRaw = db.prepare('SELECT value FROM kv_store WHERE key=?').get(`${CLOSED_YEARS_KEY}::fiscal-year::${year}`)?.value;
+      const closedYears = closedRaw ? JSON.parse(closedRaw) : [];
+      return Array.isArray(closedYears) && closedYears.map(String).includes(year);
+    } catch { return true; }
+  };
+  const isClosedYearWriteAllowed = (key, commandType = '') => {
+    const matched = scopedParts(key);
+    if (!matched || !isFiscalYearClosed(matched[2])) return true;
+    if (commandType === 'PERIOD_OPEN' || commandType === 'FISCAL_YEAR_CLONE') return true;
+    return [PERIOD_STATES_KEY, CLOSED_YEARS_KEY, AUDIT_LOGS_KEY].includes(matched[1]);
+  };
 
   function execute(payload = {}) {
     const idempotencyKey = String(payload.idempotencyKey || '').trim();
@@ -81,6 +103,11 @@ export function createAccountingCommandStore(db, relationalStore) {
         deleteReceipt.run(existingDocument.idempotency_key);
       }
       const expected = payload.expectedVersions && typeof payload.expectedVersions === 'object' ? payload.expectedVersions : {};
+      const blocked = changes.find(change => !isClosedYearWriteAllowed(String(change.key), commandType));
+      if (blocked) {
+        db.exec('ROLLBACK');
+        return { ok: false, closed: true, key: String(blocked.key), error: 'FISCAL_YEAR_CLOSED' };
+      }
       for (const change of changes) {
         const key = String(change.key);
         if (Object.prototype.hasOwnProperty.call(expected, key) && Number(expected[key]) !== versionOf(key)) {
@@ -133,6 +160,10 @@ export function createAccountingCommandStore(db, relationalStore) {
     if (!key.startsWith(ERP_PREFIX) || typeof value !== 'string') return { ok: false, error: 'A serialized ERP state value is required.' };
     try {
       db.exec('BEGIN IMMEDIATE');
+      if (!isClosedYearWriteAllowed(key)) {
+        db.exec('ROLLBACK');
+        return { ok: false, closed: true, actualVersion: versionOf(key), error: 'FISCAL_YEAR_CLOSED' };
+      }
       const actual = versionOf(key);
       if (actual !== expected) {
         db.exec('ROLLBACK');

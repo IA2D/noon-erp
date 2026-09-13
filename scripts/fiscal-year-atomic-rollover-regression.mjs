@@ -41,6 +41,17 @@ const broken = commands.execute({
   ], expectedVersions: { [brokenAccountKey]: 0, [brokenJournalKey]: 0 },
 });
 const brokenRolledBack = !db.prepare('SELECT 1 AS found FROM kv_store WHERE key IN (?,?) LIMIT 1').get(brokenAccountKey, brokenJournalKey);
+const closedYear = '2030';
+const closedPeriodKey = key('elite-erp-period-states-v1', closedYear);
+commands.executeVersionedSet(closedPeriodKey, JSON.stringify([{ key: closedYear, scope: 'YEAR', status: 'FINAL_CLOSED' }]), 0);
+const closedAccountsKey = key(RELATIONAL_COLLECTION_KEYS.accounts, closedYear);
+const closedWrite = commands.executeVersionedSet(closedAccountsKey, JSON.stringify(source.accounts), 0);
+const closedWriteAbsent = !db.prepare('SELECT 1 AS found FROM kv_store WHERE key=?').get(closedAccountsKey);
+const reopen = commands.execute({
+  idempotencyKey: 'REOPEN-2030', commandType: 'PERIOD_OPEN', documentType: 'YEAR', documentNumber: '2030:2',
+  changes: [{ key: closedPeriodKey, value: JSON.stringify([{ key: closedYear, scope: 'YEAR', status: 'OPEN' }]) }],
+  expectedVersions: { [closedPeriodKey]: commands.versionOf(closedPeriodKey) },
+});
 db.close();
-if (!result.ok || sourceBefore !== sourceAfter || targetAccounts.length !== 1 || targetJournals.length !== 1 || targetAccounts[0].id === source.accounts[0].id || targetJournals[0].lines[0].accountId !== targetAccounts[0].id || !failed.conflict || !failedAbsent || broken.ok || !String(broken.error).includes('FISCAL_YEAR_GRAPH_INVALID') || !brokenRolledBack) throw new Error(JSON.stringify({ result, sourceUnchanged: sourceBefore === sourceAfter, targetAccounts, targetJournals, failed, failedAbsent, broken, brokenRolledBack }));
-console.log('FISCAL_YEAR_ATOMIC_ROLLOVER_OK sourceUnchanged=true targetIndependent=true linksRemapped=true conflictRollback=true brokenGraphRollback=true');
+if (!result.ok || sourceBefore !== sourceAfter || targetAccounts.length !== 1 || targetJournals.length !== 1 || targetAccounts[0].id === source.accounts[0].id || targetJournals[0].lines[0].accountId !== targetAccounts[0].id || !failed.conflict || !failedAbsent || broken.ok || !String(broken.error).includes('FISCAL_YEAR_GRAPH_INVALID') || !brokenRolledBack || !closedWrite.closed || !closedWriteAbsent || !reopen.ok) throw new Error(JSON.stringify({ result, sourceUnchanged: sourceBefore === sourceAfter, targetAccounts, targetJournals, failed, failedAbsent, broken, brokenRolledBack, closedWrite, closedWriteAbsent, reopen }));
+console.log('FISCAL_YEAR_ATOMIC_ROLLOVER_OK sourceUnchanged=true targetIndependent=true linksRemapped=true conflictRollback=true brokenGraphRollback=true closedWriteBlocked=true reopenAllowed=true');

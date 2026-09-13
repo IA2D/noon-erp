@@ -5,7 +5,7 @@ declare global {
     desktopStore?: {
       getItem(key: string): string | null;
       setItem(key: string, value: string): boolean;
-      setItemVersioned(key: string, value: string, expectedVersion: number): { ok: boolean; version?: number; conflict?: boolean; expectedVersion?: number; actualVersion?: number; error?: string };
+      setItemVersioned(key: string, value: string, expectedVersion: number): { ok: boolean; version?: number; conflict?: boolean; closed?: boolean; expectedVersion?: number; actualVersion?: number; error?: string };
       removeItem(key: string): boolean;
       entries(): Array<[string, string]>;
       replaceEntries(entries: Array<[string, string]>, clearPrefixes?: string[]): {
