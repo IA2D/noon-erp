@@ -19,9 +19,9 @@ const accounts = [
       debit: 37.5, credit: 0, debitLocal: 37.5, creditLocal: 0, amount: 37.5, foreignAmount: 37.5, rate: 1,
     }],
   },
-  { ...posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'), openingBalance: 105, openingBalances: [{
+  { ...posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'), openingBalance: -37.5, openingBalances: [{
     id: 'retained-opening', fiscalYear: '2026', accountId: 'equity', currency: 'YER', exchangeRate: 1,
-    debit: 105, credit: 0, debitLocal: 105, creditLocal: 0, amount: 105, foreignAmount: 105, rate: 1,
+    debit: 0, credit: 37.5, debitLocal: 0, creditLocal: 37.5, amount: -37.5, foreignAmount: -37.5, rate: 1,
   }] },
   { ...posting('revenue', '3101010001', 'إيرادات تشغيلية', 'NONE'), nature: 'CREDIT' as const, category: 'INCOME_STATEMENT' as const },
   { ...posting('expense', '4101010001', 'مصروفات تشغيلية', 'NONE'), nature: 'DEBIT' as const, category: 'INCOME_STATEMENT' as const },
@@ -45,23 +45,38 @@ const journal: JournalEntry = {
     { id: 'l2', accountId: 'equity', accountCode: '2202010001', accountNameAr: 'أرباح مبقاة', description: 'equity', debit: 0, credit: 18.75, currency: 'YER', exchangeRate: 1 },
   ],
 };
+const incomeJournal: JournalEntry = {
+  id: 'j2', entryNumber: 'JV-2', date: '2026-12-31', reference: 'YEAR-END', narration: 'income statement result', status: 'POSTED',
+  totalDebit: 100, totalCredit: 100, currency: 'YER', exchangeRate: 1, createdBy: 'test', createdAt: '2026-12-31', lines: [
+    { id: 'l3', accountId: 'cash', accountCode: '1101010001', accountNameAr: 'الصندوق', description: 'cash', debit: 60, credit: 0, currency: 'YER', exchangeRate: 1, subLedgerType: 'CASH_BOX', subLedgerId: 'box' },
+    { id: 'l4', accountId: 'expense', accountCode: '4101010001', accountNameAr: 'مصروفات تشغيلية', description: 'expense', debit: 40, credit: 0, currency: 'YER', exchangeRate: 1 },
+    { id: 'l5', accountId: 'revenue', accountCode: '3101010001', accountNameAr: 'إيرادات تشغيلية', description: 'revenue', debit: 0, credit: 100, currency: 'YER', exchangeRate: 1 },
+  ],
+};
 const snapshot = buildFiscalYearOpeningSnapshot({
-  accounts, journals: [journal], cashBoxes: [cashBox], bankAccounts: [], customers: [], vendors: [], employees: [],
+  accounts, journals: [journal, incomeJournal], cashBoxes: [cashBox], bankAccounts: [], customers: [], vendors: [], employees: [],
   sourceYear: '2026', targetYear: '2027', baseCurrency: 'YER',
 });
 const box = snapshot.cashBoxes[0];
-assert.equal(box.openingBalances?.length, 2);
-assert.equal(box.openingBalances?.reduce((sum, row) => sum + (row.foreignAmount || 0), 0), 15);
-assert.equal(box.openingBalances?.reduce((sum, row) => sum + (row.amount || 0), 0), 56.25);
+assert.equal(box.openingBalances?.length, 3);
+assert.equal(box.openingBalances?.reduce((sum, row) => sum + (row.foreignAmount || 0), 0), 75);
+assert.equal(box.openingBalances?.reduce((sum, row) => sum + (row.amount || 0), 0), 116.25);
 assert.equal(box.openingBalances?.find(row => row.costCenterId === 'cc1')?.foreignAmount, 5);
-assert.ok(box.openingBalances?.every(row => row.currency === 'USD' && row.fiscalYear === '2027'));
+assert.deepEqual(new Set(box.openingBalances?.map(row => row.currency)), new Set(['USD', 'YER']));
+assert.ok(box.openingBalances?.every(row => row.fiscalYear === '2027'));
 const control = snapshot.accounts.find(account => account.id === 'cash')!;
-assert.equal(control.openingBalance, 56.25);
-assert.equal(control.openingBalances?.[0].foreignAmount, 15);
+assert.equal(control.openingBalance, 116.25);
+assert.equal(control.openingBalances?.reduce((sum, row) => sum + (row.foreignAmount || 0), 0), 75);
 assert.equal(snapshot.openings.filter(row => row.accountId === 'equity' && row.currency === 'YER').length, 1);
-assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.debitLocal || 0), 0), 56.25);
-assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.creditLocal || 0), 0), 56.25);
+assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.debitLocal || 0), 0), 116.25);
+assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.creditLocal || 0), 0), 116.25);
 assert.ok(snapshot.openings.every(row => row.documentRef === 'CARRY-2026-2027'));
 assert.ok(snapshot.excludedAccountIds.has('revenue') && snapshot.excludedAccountIds.has('expense'));
-assert.ok(!snapshot.accounts.some(account => account.id === 'revenue' || account.id === 'expense'));
-console.log('FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true noJournal=true');
+assert.equal(snapshot.accounts.find(account => account.id === 'revenue')?.openingBalance, 0);
+assert.equal(snapshot.accounts.find(account => account.id === 'expense')?.openingBalance, 0);
+assert.deepEqual(snapshot.validation, { ok: true, sourceClosingLocal: 0, sourceIncomeStatementLocal: -60, targetOpeningLocal: 0, comparedKeys: 4, errors: [] });
+assert.throws(() => buildFiscalYearOpeningSnapshot({
+  accounts, journals: [{ ...journal, lines: journal.lines.slice(0, 1) }], cashBoxes: [cashBox], bankAccounts: [], customers: [], vendors: [], employees: [],
+  sourceYear: '2026', targetYear: '2027', baseCurrency: 'YER',
+}), /ROLLOVER_SOURCE_TRIAL_BALANCE_UNBALANCED/);
+console.log('FISCAL_YEAR_CLOSING_OK sourceTrialBalance=true exactKeys=4 analytical=true currencies=USD+YER foreign=75 local=116.25 pnlClosedOnce=-60 chartPreserved=true balanced=true atomicReject=true noJournal=true');

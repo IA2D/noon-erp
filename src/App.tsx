@@ -1520,15 +1520,28 @@ function AppInner() {
     });
     if (targetHasData) return { ok: false, error: `السنة المالية ${nextYear} تحتوي بيانات مستقلة بالفعل؛ لم تُستبدل.` };
     const baseCurrency = currencies.find(c => c.isBase)?.code ?? 'YER';
-    const openingSnapshot = buildFiscalYearOpeningSnapshot({
-      accounts, journals, cashBoxes, bankAccounts, customers, vendors, employees,
-      sourceYear: year, targetYear: nextYear, baseCurrency,
-    });
+    let openingSnapshot: ReturnType<typeof buildFiscalYearOpeningSnapshot>;
+    try {
+      openingSnapshot = buildFiscalYearOpeningSnapshot({
+        accounts, journals, cashBoxes, bankAccounts, customers, vendors, employees,
+        sourceYear: year, targetYear: nextYear, baseCurrency,
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      const message = reason.startsWith('ROLLOVER_SOURCE_TRIAL_BALANCE_UNBALANCED:')
+        ? `ميزان المراجعة الختامي للسنة ${year} غير متوازن (الفرق ${reason.split(':')[1]} ${baseCurrency})؛ لم يُنشأ أي رصيد في ${nextYear}.`
+        : `تعذر إنشاء أرصدة ${nextYear} المطابقة للإقفال الختامي: ${reason}`;
+      addAuditLog('GENERAL_LEDGER', 'POST', `رُفض تدوير أرصدة ${year}: ${message}`);
+      return { ok: false, error: message };
+    }
+    if (!openingSnapshot.validation.ok) {
+      return { ok: false, error: `فشل تطابق الرصيد الختامي مع الافتتاحي: ${openingSnapshot.validation.errors.join(' | ')}` };
+    }
     // التدوير يكتب أرصدة افتتاحية مستقلة مباشرةً في مساحة السنة الجديدة.
     // لا ينشأ قيد يومية صوري لأن مصدر الحقيقة هو openingBalances نفسه.
     const linkedPeriod = { ...sourcePeriod, openingEntryId: undefined };
     const nextPeriods = [...periodStates.filter(item => !(item.key === year && item.scope === 'YEAR')), linkedPeriod];
-    const audit = createAuditLog('GENERAL_LEDGER', 'POST', `تدوير الأرصدة الافتتاحية المستقلة للسنة ${nextYear} من إقفال ${year} دون إنشاء قيد يومية`);
+    const audit = createAuditLog('GENERAL_LEDGER', 'POST', `تدوير ${openingSnapshot.validation.comparedKeys} رصيد افتتاحي مستقل للسنة ${nextYear} من الإقفال الختامي ${year}؛ فرق المصدر ${openingSnapshot.validation.sourceClosingLocal.toFixed(2)} وفرق الهدف ${openingSnapshot.validation.targetOpeningLocal.toFixed(2)}؛ أُقفلت نتيجة حسابات 3/4 في الأرباح المبقاة بقيمة ${openingSnapshot.validation.sourceIncomeStatementLocal.toFixed(2)}`);
     const clone = cloneFiscalYearCollections({
       accounts: openingSnapshot.accounts, costCenters, currencies,
       cashBoxes: openingSnapshot.cashBoxes, bankAccounts: openingSnapshot.bankAccounts,

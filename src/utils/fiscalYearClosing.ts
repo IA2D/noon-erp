@@ -26,6 +26,15 @@ type Bucket = {
   lastRate: number;
 };
 
+export type FiscalYearOpeningValidation = {
+  ok: boolean;
+  sourceClosingLocal: number;
+  sourceIncomeStatementLocal: number;
+  targetOpeningLocal: number;
+  comparedKeys: number;
+  errors: string[];
+};
+
 const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const keyOf = (accountId: string, subLedgerId: string | undefined, costCenterId: string | undefined, currency: string) =>
   [accountId, subLedgerId || '', costCenterId || '', currency].join('\u001f');
@@ -131,25 +140,61 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
       add(line.accountId, line.subLedgerId, line.costCenterId, amount.currency, amount.local, amount.foreign, amount.rate);
     }));
 
-  let records = [...buckets.values()].filter(bucket => Math.abs(bucket.local) >= 0.005 || Math.abs(bucket.foreign) >= 0.005);
-  records = records.filter(record => !excludedAccountIds.has(record.accountId));
-  const localNet = round(records.reduce((sum, record) => sum + record.local, 0));
-  if (Math.abs(localNet) >= 0.005) {
+  const sourceClosing = [...buckets.values()].filter(bucket => Math.abs(bucket.local) >= 0.005 || Math.abs(bucket.foreign) >= 0.005);
+  const sourceClosingLocal = round(sourceClosing.reduce((sum, record) => sum + record.local, 0));
+  if (Math.abs(sourceClosingLocal) >= 0.005) {
+    throw new Error(`ROLLOVER_SOURCE_TRIAL_BALANCE_UNBALANCED:${sourceClosingLocal}`);
+  }
+  const sourceIncomeStatementLocal = round(sourceClosing
+    .filter(record => excludedAccountIds.has(record.accountId))
+    .reduce((sum, record) => sum + record.local, 0));
+  let records = sourceClosing.filter(record => !excludedAccountIds.has(record.accountId)).map(record => ({ ...record }));
+  if (Math.abs(sourceIncomeStatementLocal) >= 0.005) {
     const retained = input.accounts.find(account => account.code === '2202010001' && isPostingAccount(account))
       || input.accounts.find(account => account.nameAr.includes('أرباح مبقاة') && isPostingAccount(account));
-    if (!retained) throw new Error(`ROLLOVER_UNBALANCED_WITHOUT_RETAINED_ACCOUNT:${localNet}`);
-    // Merge the closing result into an existing retained-earnings opening for
-    // the same currency. Creating a second row with the same composite key made
-    // the opening-balance browser show only the first row and appear unbalanced.
+    if (!retained) throw new Error(`ROLLOVER_UNBALANCED_WITHOUT_RETAINED_ACCOUNT:${sourceIncomeStatementLocal}`);
+    // The only permitted difference from the old year's closing balances is
+    // closing roots 3/4 exactly once into retained earnings.
     const existing = records.find(record => record.accountId === retained.id && !record.subLedgerId && !record.costCenterId && record.currency === baseCurrency);
     if (existing) {
-      existing.local = round(existing.local - localNet);
-      existing.foreign = round(existing.foreign - localNet);
+      existing.local = round(existing.local + sourceIncomeStatementLocal);
+      existing.foreign = round(existing.foreign + sourceIncomeStatementLocal);
       existing.lastRate = 1;
     } else {
-      records.push({ accountId: retained.id, currency: baseCurrency, local: -localNet, foreign: -localNet, lastRate: 1 });
+      records.push({ accountId: retained.id, currency: baseCurrency, local: sourceIncomeStatementLocal, foreign: sourceIncomeStatementLocal, lastRate: 1 });
     }
   }
+
+  const validationErrors: string[] = [];
+  const expected = new Map<string, { local: number; foreign: number }>();
+  sourceClosing.filter(record => !excludedAccountIds.has(record.accountId)).forEach(record => {
+    expected.set(keyOf(record.accountId, record.subLedgerId, record.costCenterId, record.currency), { local: round(record.local), foreign: round(record.foreign) });
+  });
+  if (Math.abs(sourceIncomeStatementLocal) >= 0.005) {
+    const retained = input.accounts.find(account => account.code === '2202010001' && isPostingAccount(account))
+      || input.accounts.find(account => account.nameAr.includes('أرباح مبقاة') && isPostingAccount(account));
+    if (retained) {
+      const key = keyOf(retained.id, undefined, undefined, baseCurrency);
+      const current = expected.get(key) || { local: 0, foreign: 0 };
+      expected.set(key, { local: round(current.local + sourceIncomeStatementLocal), foreign: round(current.foreign + sourceIncomeStatementLocal) });
+    }
+  }
+  const actual = new Map<string, { local: number; foreign: number }>();
+  records.forEach(record => {
+    const key = keyOf(record.accountId, record.subLedgerId, record.costCenterId, record.currency);
+    if (actual.has(key)) validationErrors.push(`DUPLICATE_TARGET_OPENING:${key}`);
+    actual.set(key, { local: round(record.local), foreign: round(record.foreign) });
+  });
+  new Set([...expected.keys(), ...actual.keys()]).forEach(key => {
+    const before = expected.get(key) || { local: 0, foreign: 0 };
+    const after = actual.get(key) || { local: 0, foreign: 0 };
+    if (Math.abs(before.local - after.local) >= 0.005 || Math.abs(before.foreign - after.foreign) >= 0.005) {
+      validationErrors.push(`OPENING_MISMATCH:${key}:${before.local}/${before.foreign}->${after.local}/${after.foreign}`);
+    }
+  });
+  const targetOpeningLocal = round(records.reduce((sum, record) => sum + record.local, 0));
+  if (Math.abs(targetOpeningLocal) >= 0.005) validationErrors.push(`TARGET_OPENING_UNBALANCED:${targetOpeningLocal}`);
+  if (validationErrors.length) throw new Error(`ROLLOVER_OPENING_VALIDATION_FAILED:${validationErrors.join('|')}`);
 
   const openings: OpeningBalanceRecord[] = records.map((bucket, index) => {
     const local = round(bucket.local);
@@ -196,10 +241,20 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
     list.push(record);
     ownByAccount.set(record.accountId, list);
   });
-  let accounts: Account[] = input.accounts.filter(account => !excludedAccountIds.has(account.id)).map(account => {
+  // Keep the whole chart of accounts as shared setup. Roots 3/4 and their
+  // children start at zero; only their balances and movements are excluded.
+  let accounts: Account[] = input.accounts.map(account => {
     const own = ownByAccount.get(account.id) || [];
     return { ...account, openingBalances: own, openingBalance: round(own.reduce((sum, record) => sum + Number(record.amount || 0), 0)), fiscalYear: targetYear };
   });
   accounts = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }, targetYear).accounts;
-  return { accounts, cashBoxes, bankAccounts, customers, vendors, employees, openings, excludedAccountIds };
+  const validation: FiscalYearOpeningValidation = {
+    ok: true,
+    sourceClosingLocal,
+    sourceIncomeStatementLocal,
+    targetOpeningLocal,
+    comparedKeys: expected.size,
+    errors: [],
+  };
+  return { accounts, cashBoxes, bankAccounts, customers, vendors, employees, openings, excludedAccountIds, validation };
 }
