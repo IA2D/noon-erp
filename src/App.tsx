@@ -61,7 +61,9 @@ import { Account, AccountCurrency, JournalEntry, JournalLine, AuditLog, CostCent
 import type { SavePayload } from './components/modules/opening/types';
 import { applyOpeningBalances, cleanupOpeningBalanceDuplicates, reconcileControlAccountOpenings } from './services/openingBalancesService';
 import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
-import { useLocalStorageState } from './utils/useLocalStorageState';
+import { useFiscalYearStorageState } from './utils/useLocalStorageState';
+import { fiscalYearStorageKey } from './utils/fiscalYearDatasetStore';
+import { cloneFiscalYearCollections } from './utils/fiscalYearRollover';
 import { isPeriodClosed } from './utils/periodGuard';
 import { reindexAccountCodes, ensureEmployeeAdvanceGroup, ensureMonthlyEmployeeAdvancesGroup, employeeAdvanceGeneralAccount, monthlyEmployeeAdvancesAccount, nextJournalNumber, calculateAccountActivity, netAccountBalance, isPostingAccount, accountFinancialType } from './utils/accountingEngine';
 import { CUSTODY_TYPE_LABEL, CUSTODY_STATUS_LABEL } from './utils/custodyEngine';
@@ -217,6 +219,15 @@ const K = {
   periodStates: 'elite-erp-period-states-v1'
 };
 
+function legacyDatasetYear(fallback: string): string {
+  try {
+    const rows = JSON.parse(getPersistentItem(K.journals) || '[]') as Array<{ date?: string }>;
+    const years = rows.map(row => String(row.date || '').slice(0, 4)).filter(year => /^\d{4}$/.test(year)).sort();
+    if (years.length) return years[0];
+  } catch {}
+  return fallback;
+}
+
 const REMOVED_MODULE_KEYS = [
   'elite-erp-customers-v6', 'elite-erp-vendors-v6', 'elite-erp-employees-v6',
   'elite-erp-invoices-v6', 'elite-erp-contracts-v1',
@@ -297,25 +308,27 @@ function AppInner() {
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => loadSession());
   const [reportingYear, setReportingYear] = useState<string>(restoredReportingYear);
+  const legacyFiscalYear = useMemo(() => legacyDatasetYear(reportingYear), []);
   const { activeModule, openModule, resetTabs, requestCloseTab } = useTabs();
 
-  const [accounts, setAccounts] = useLocalStorageState<Account[]>(K.accounts, initialAccounts);
-  const [costCenters, setCostCenters] = useLocalStorageState<CostCenter[]>(K.costCenters, initialCostCenters);
-  const [journals, setJournals] = useLocalStorageState<JournalEntry[]>(K.journals, initialJournalEntries);
-  const [auditLogs, setAuditLogs] = useLocalStorageState<AuditLog[]>(K.auditLogs, initialAuditLogs);
-  const [trusts, setTrusts] = useLocalStorageState<Trust[]>(K.trusts, initialTrusts);
-  const [custodies, setCustodies] = useLocalStorageState<Custody[]>(K.custodies, initialCustodies);
-  const [cashBoxes, setCashBoxes] = useLocalStorageState<CashBox[]>(K.cashBoxes, initialCashBoxes);
-  const [bankAccounts, setBankAccounts] = useLocalStorageState<BankAccount[]>(K.bankAccounts, initialBankAccounts);
-  const [vouchers, setVouchers] = useLocalStorageState<PaymentVoucher[]>(K.vouchers, initialPaymentVouchers);
-  const [receiptVouchers, setReceiptVouchers] = useLocalStorageState<ReceiptVoucher[]>(K.receipts, initialReceiptVouchers);
-  const [employees, setEmployees] = useLocalStorageState<Employee[]>(K.employees, initialEmployees);
-  const [customers, setCustomers] = useLocalStorageState<Customer[]>(K.customers, initialCustomers);
-  const [vendors, setVendors] = useLocalStorageState<Vendor[]>(K.vendors, initialVendors);
-  const [currencies, setCurrencies] = useLocalStorageState<Currency[]>(K.currencies, initialCurrencies);
-  const [closedYears, setClosedYears] = useLocalStorageState<string[]>(K.closedYears, []);
-  const [closedMonths, setClosedMonths] = useLocalStorageState<string[]>(K.closedMonths, []);
-  const [periodStates, setPeriodStates] = useLocalStorageState<FinancialPeriodRecord[]>(K.periodStates, []);
+  const annualSeed = <T,>(legacy: T, empty: T) => reportingYear === legacyFiscalYear ? legacy : empty;
+  const [accounts, setAccounts] = useFiscalYearStorageState<Account[]>(K.accounts, reportingYear, annualSeed(initialAccounts, []), legacyFiscalYear);
+  const [costCenters, setCostCenters] = useFiscalYearStorageState<CostCenter[]>(K.costCenters, reportingYear, annualSeed(initialCostCenters, []), legacyFiscalYear);
+  const [journals, setJournals] = useFiscalYearStorageState<JournalEntry[]>(K.journals, reportingYear, annualSeed(initialJournalEntries, []), legacyFiscalYear);
+  const [auditLogs, setAuditLogs] = useFiscalYearStorageState<AuditLog[]>(K.auditLogs, reportingYear, annualSeed(initialAuditLogs, []), legacyFiscalYear);
+  const [trusts, setTrusts] = useFiscalYearStorageState<Trust[]>(K.trusts, reportingYear, annualSeed(initialTrusts, []), legacyFiscalYear);
+  const [custodies, setCustodies] = useFiscalYearStorageState<Custody[]>(K.custodies, reportingYear, annualSeed(initialCustodies, []), legacyFiscalYear);
+  const [cashBoxes, setCashBoxes] = useFiscalYearStorageState<CashBox[]>(K.cashBoxes, reportingYear, annualSeed(initialCashBoxes, []), legacyFiscalYear);
+  const [bankAccounts, setBankAccounts] = useFiscalYearStorageState<BankAccount[]>(K.bankAccounts, reportingYear, annualSeed(initialBankAccounts, []), legacyFiscalYear);
+  const [vouchers, setVouchers] = useFiscalYearStorageState<PaymentVoucher[]>(K.vouchers, reportingYear, annualSeed(initialPaymentVouchers, []), legacyFiscalYear);
+  const [receiptVouchers, setReceiptVouchers] = useFiscalYearStorageState<ReceiptVoucher[]>(K.receipts, reportingYear, annualSeed(initialReceiptVouchers, []), legacyFiscalYear);
+  const [employees, setEmployees] = useFiscalYearStorageState<Employee[]>(K.employees, reportingYear, annualSeed(initialEmployees, []), legacyFiscalYear);
+  const [customers, setCustomers] = useFiscalYearStorageState<Customer[]>(K.customers, reportingYear, annualSeed(initialCustomers, []), legacyFiscalYear);
+  const [vendors, setVendors] = useFiscalYearStorageState<Vendor[]>(K.vendors, reportingYear, annualSeed(initialVendors, []), legacyFiscalYear);
+  const [currencies, setCurrencies] = useFiscalYearStorageState<Currency[]>(K.currencies, reportingYear, annualSeed(initialCurrencies, []), legacyFiscalYear);
+  const [closedYears, setClosedYears] = useFiscalYearStorageState<string[]>(K.closedYears, reportingYear, [], legacyFiscalYear);
+  const [closedMonths, setClosedMonths] = useFiscalYearStorageState<string[]>(K.closedMonths, reportingYear, [], legacyFiscalYear);
+  const [periodStates, setPeriodStates] = useFiscalYearStorageState<FinancialPeriodRecord[]>(K.periodStates, reportingYear, [], legacyFiscalYear);
   const availableReportingYears = useMemo(reportingYearOptions, []);
 
   useEffect(() => {
@@ -332,10 +345,10 @@ function AppInner() {
       return changed ? next : previous;
     });
   }, [closedYears, closedMonths, setPeriodStates]);
-  const [openingBalancesStatus, setOpeningBalancesStatus] = useLocalStorageState<'NONE' | 'DRAFT' | 'POSTED'>(K.openingBalancesStatus, 'NONE');
+  const [openingBalancesStatus, setOpeningBalancesStatus] = useFiscalYearStorageState<'NONE' | 'DRAFT' | 'POSTED'>(K.openingBalancesStatus, reportingYear, 'NONE', legacyFiscalYear);
   // Opening balances are a document in their own right; retain their supporting
   // documents independently from the per-account balance rows.
-  const [openingBalanceAttachments, setOpeningBalanceAttachments] = useLocalStorageState<SupportingDocument[]>(K.openingBalanceAttachments, []);
+  const [openingBalanceAttachments, setOpeningBalanceAttachments] = useFiscalYearStorageState<SupportingDocument[]>(K.openingBalanceAttachments, reportingYear, [], legacyFiscalYear);
 
   const [statementNavParams, setStatementNavParams] = useState<{ kind: string; id: string } | null>(null);
 
@@ -838,9 +851,16 @@ function AppInner() {
     audit: AuditLog
   ): AccountingCommandResult => {
     if (typeof window === 'undefined' || !window.desktopStore) return { ok: true };
-    const changes = [...stateChanges, { key: K.auditLogs, value: [audit, ...auditLogs] }].map(change => ({ key: change.key, value: JSON.stringify(change.value) }));
+    const scoped = (key: string) => key === K.settings ? key : fiscalYearStorageKey(key, reportingYear);
+    const changes = [...stateChanges, { key: K.auditLogs, value: [audit, ...auditLogs] }].map(change => ({ key: scoped(change.key), value: JSON.stringify(change.value) }));
     const expectedVersions = Object.fromEntries(changes.map(change => [change.key, persistentVersion(change.key)]));
-    return commitAccountingCommand({ ...identity, changes, expectedVersions });
+    return commitAccountingCommand({
+      ...identity,
+      idempotencyKey: `${reportingYear}:${identity.idempotencyKey}`,
+      documentNumber: `${reportingYear}:${identity.documentNumber}`,
+      changes,
+      expectedVersions,
+    });
   };
 
   const commitAccountingState = (
@@ -1440,12 +1460,18 @@ function AppInner() {
 
   const handleCreateOpeningEntry = (year: string) => {
     const nextYear = String(Number(year) + 1);
+    if (year !== reportingYear) return { ok: false, error: `السنة النشطة ${reportingYear} لا تطابق سنة التدوير ${year}.` };
     const sourcePeriod = periodRecordFor(periodStates, year, 'YEAR');
     if (sourcePeriod.status !== 'FINAL_CLOSED') {
       addAuditLog('GENERAL_LEDGER', 'POST', `رُفض تدوير أرصدة ${year}: الإقفال النهائي مطلوب`);
       return false;
     }
-    if (journals.some(j => j.reference === `OPEN-${nextYear}` && j.status === 'POSTED') || sourcePeriod.openingEntryId) return false;
+    const targetAccountSnapshot = getPersistentItem(fiscalYearStorageKey(K.accounts, nextYear));
+    const targetJournalSnapshot = getPersistentItem(fiscalYearStorageKey(K.journals, nextYear));
+    const targetHasData = [targetAccountSnapshot, targetJournalSnapshot].some(raw => {
+      try { return Array.isArray(JSON.parse(raw || '[]')) && JSON.parse(raw || '[]').length > 0; } catch { return true; }
+    });
+    if (targetHasData) return { ok: false, error: `السنة المالية ${nextYear} تحتوي بيانات مستقلة بالفعل؛ لم تُستبدل.` };
     const retained = accounts.find(a => a.code === '2202010001' && a.level === 5) ?? accounts.find(a => a.nameAr.includes('أرباح مبقاة') && a.level === 5);
     const upToYear = journals.filter(j => j.status === 'POSTED' && yearOf(j.date) <= year);
     const activity = calculateAccountActivity(accounts, upToYear);
@@ -1500,7 +1526,7 @@ function AppInner() {
       addAuditLog('GENERAL_LEDGER', 'POST', `رُفض القيد الافتتاحي ${nextYear}: ${validation.errors.join(' | ')}`);
       return false;
     }
-    const linkedPeriod = { ...sourcePeriod, openingEntryId: entry.id };
+    const linkedPeriod = { ...sourcePeriod, openingEntryId: `OPEN-${nextYear}` };
     const nextPeriods = [...periodStates.filter(item => !(item.key === year && item.scope === 'YEAR')), linkedPeriod];
     const nextJournals = [entry, ...journals];
     // قيد OPEN-YYYY سجل تدقيق للعرض فقط. مصدر الحقيقة للسنة الجديدة هو
@@ -1534,20 +1560,44 @@ function AppInner() {
     // وبذلك لا يظهر للمستخدم رصيد مجمّع غير قابل للتعديل في السنة الجديدة.
     const carriedRepair = repairCarriedControlOpenings(nextAccounts, nextJournals, cashBoxes, bankAccounts, customers, vendors, employees);
     const audit = createAuditLog('GENERAL_LEDGER', 'POST', `توليد القيد الافتتاحي للسنة ${nextYear} من إقفال ${year}`);
-    const commit = commitAccountingStateResult({ idempotencyKey: `CARRY_FORWARD:${year}:${nextYear}`, commandType: 'CARRY_FORWARD', documentType: 'YEAR', documentNumber: nextYear }, [
-      { key: K.journals, value: nextJournals }, { key: K.accounts, value: carriedRepair.accounts },
-      { key: K.cashBoxes, value: carriedRepair.cashBoxes }, { key: K.bankAccounts, value: carriedRepair.bankAccounts },
-      { key: K.customers, value: carriedRepair.customers }, { key: K.vendors, value: carriedRepair.vendors },
-      { key: K.employees, value: carriedRepair.employees }, { key: K.periodStates, value: nextPeriods },
-    ], audit);
-    if (!commit.ok) return { ok: false, error: accountingCommandError(commit.error) };
-    setJournals(nextJournals);
-    setAccounts(carriedRepair.accounts);
-    setCashBoxes(carriedRepair.cashBoxes);
-    setBankAccounts(carriedRepair.bankAccounts);
-    setCustomers(carriedRepair.customers);
-    setVendors(carriedRepair.vendors);
-    setEmployees(carriedRepair.employees);
+    const targetOnly = <T extends { openingBalances?: OpeningBalanceRecord[] }>(rows: T[]) => rows.map(item => {
+      const openingBalances = (item.openingBalances || []).filter(record => record.fiscalYear === nextYear);
+      const openingBalance = round2(openingBalances.reduce((sum, record) => sum + (record.debitLocal || 0) - (record.creditLocal || 0), 0));
+      return { ...item, openingBalances, openingBalance, fiscalYear: nextYear };
+    });
+    const clone = cloneFiscalYearCollections({
+      accounts: targetOnly(carriedRepair.accounts), costCenters, currencies,
+      cashBoxes: targetOnly(carriedRepair.cashBoxes), bankAccounts: targetOnly(carriedRepair.bankAccounts),
+      employees: targetOnly(carriedRepair.employees), customers: targetOnly(carriedRepair.customers), vendors: targetOnly(carriedRepair.vendors),
+      journals: [entry],
+    }, year, nextYear);
+    const target = clone.collections;
+    const changes = [
+      { key: fiscalYearStorageKey(K.accounts, nextYear), value: target.accounts },
+      { key: fiscalYearStorageKey(K.costCenters, nextYear), value: target.costCenters },
+      { key: fiscalYearStorageKey(K.currencies, nextYear), value: target.currencies },
+      { key: fiscalYearStorageKey(K.cashBoxes, nextYear), value: target.cashBoxes },
+      { key: fiscalYearStorageKey(K.bankAccounts, nextYear), value: target.bankAccounts },
+      { key: fiscalYearStorageKey(K.employees, nextYear), value: target.employees },
+      { key: fiscalYearStorageKey(K.customers, nextYear), value: target.customers },
+      { key: fiscalYearStorageKey(K.vendors, nextYear), value: target.vendors },
+      { key: fiscalYearStorageKey(K.journals, nextYear), value: target.journals },
+      { key: fiscalYearStorageKey(K.vouchers, nextYear), value: [] },
+      { key: fiscalYearStorageKey(K.receipts, nextYear), value: [] },
+      { key: fiscalYearStorageKey(K.trusts, nextYear), value: [] },
+      { key: fiscalYearStorageKey(K.custodies, nextYear), value: [] },
+      { key: fiscalYearStorageKey(K.closedYears, nextYear), value: [] },
+      { key: fiscalYearStorageKey(K.closedMonths, nextYear), value: [] },
+      { key: fiscalYearStorageKey(K.periodStates, nextYear), value: [] },
+      { key: fiscalYearStorageKey(K.openingBalancesStatus, nextYear), value: 'POSTED' },
+      { key: fiscalYearStorageKey(K.periodStates, reportingYear), value: nextPeriods },
+      { key: fiscalYearStorageKey(K.auditLogs, reportingYear), value: [audit, ...auditLogs] },
+    ].map(change => ({ key: change.key, value: JSON.stringify(change.value) }));
+    const expectedVersions = Object.fromEntries(changes.map(change => [change.key, persistentVersion(change.key)]));
+    const commit = typeof window !== 'undefined' && window.desktopStore
+      ? commitAccountingCommand({ idempotencyKey: `FISCAL_YEAR_CLONE:${year}:${nextYear}`, commandType: 'FISCAL_YEAR_CLONE', documentType: 'YEAR_DATASET', documentNumber: `${year}->${nextYear}`, changes, expectedVersions })
+      : (() => { changes.forEach(change => window.localStorage.setItem(change.key, change.value)); return { ok: true }; })();
+    if (!commit.ok) return { ok: false, error: accountingCommandError('error' in commit ? String(commit.error || '') : undefined) };
     setPeriodStates(nextPeriods);
     setAuditLogs(prev => [audit, ...prev]);
     return true;

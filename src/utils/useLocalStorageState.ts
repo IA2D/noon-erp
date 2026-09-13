@@ -67,12 +67,20 @@ export function useLocalStorageState<T>(
 export function useFiscalYearStorageState<T>(
   baseKey: string,
   fiscalYear: string,
-  initialValue: T
+  initialValue: T,
+  legacyYear = fiscalYear
 ): [T, Dispatch<SetStateAction<T>>] {
   const key = `${baseKey}::fiscal-year::${fiscalYear}`;
   const read = (): T => {
     try {
-      const stored = window.desktopStore?.getItem(key) ?? localStorage.getItem(key);
+      let stored = window.desktopStore?.getItem(key) ?? localStorage.getItem(key);
+      if ((stored === null || stored === 'null') && fiscalYear === legacyYear) {
+        stored = window.desktopStore?.getItem(baseKey) ?? localStorage.getItem(baseKey);
+        if (stored !== null && stored !== 'null') {
+          if (window.desktopStore) window.desktopStore.setItem(key, stored);
+          else localStorage.setItem(key, stored);
+        }
+      }
       if (stored !== null && stored !== 'null') return JSON.parse(stored) as T;
     } catch {}
     return initialValue;
@@ -80,8 +88,10 @@ export function useFiscalYearStorageState<T>(
   const [state, setState] = useState<T>(read);
   const versionRef = useRef<number>(window.desktopStore?.version(key) ?? 0);
   const loadedKeyRef = useRef(key);
+  const skipWriteRef = useRef(false);
 
   useEffect(() => {
+    skipWriteRef.current = true;
     loadedKeyRef.current = key;
     versionRef.current = window.desktopStore?.version(key) ?? 0;
     setState(read());
@@ -91,6 +101,7 @@ export function useFiscalYearStorageState<T>(
 
   useEffect(() => {
     if (loadedKeyRef.current !== key) return;
+    if (skipWriteRef.current) { skipWriteRef.current = false; return; }
     const serialized = JSON.stringify(state);
     if (window.desktopStore) {
       const result = window.desktopStore.setItemVersioned(key, serialized, versionRef.current);
@@ -98,5 +109,6 @@ export function useFiscalYearStorageState<T>(
     } else localStorage.setItem(key, serialized);
   }, [key, state]);
 
-  return [state, setState];
+  const visibleState = loadedKeyRef.current === key ? state : read();
+  return [visibleState, setState];
 }

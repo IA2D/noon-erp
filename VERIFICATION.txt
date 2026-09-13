@@ -11,3 +11,4 @@ Context regression: node scripts/fiscal-year-context-regression.mjs = FISCAL_YEA
 Rollover graph regression: node scripts/fiscal-year-rollover-regression.mjs = FISCAL_YEAR_ROLLOVER_OK rows=4 sourceIdsIndependent=true linksRemapped=true datesShifted=true.
 Dataset regression: npx tsx scripts/fiscal-year-dataset-regression.mts = FISCAL_YEAR_DATASET_OK partition=true scopedKey=true stamp=true; npm run lint = passed.
 Scoped React state: npm run lint = passed; useFiscalYearStorageState reload boundary and versioned persistence added.
+App integration: npm run lint = passed; annual collections use useFiscalYearStorageState; accounting keys and command identities include fiscal year; rollover writes 19 source/destination changes atomically.

@@ -55,3 +55,9 @@
 - [x] Add renderer-side year-scoped dataset key, legacy partitioning, and fiscal-year stamping primitives.
 
 - [x] Add React persistence hook that reloads and writes an authoritative fiscal-year namespace when the selected year changes.
+
+### App integration
+- [x] Bind all financial/master collections in App.tsx to the selected fiscal-year namespace; settings remain global.
+- [x] Scope accounting command identity and document uniqueness by fiscal year.
+- [x] Write rollover destination masters/openings/OPEN audit entry to new-year keys atomically without mutating source-year React state.
+- [ ] Normalize scoped collections into year-aware relational tables.
