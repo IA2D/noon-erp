@@ -1375,9 +1375,11 @@ export default function ClosingView({
                     const verified = username && yearClosePassword ? desktop?.login(username, yearClosePassword) : { ok: false };
                     if (!verified?.ok) { toast('error', 'كلمة المرور غير صحيحة. لم يتم إقفال السنة.'); return; }
                     const entry = buildClosingEntry(selectedYearWizard);
-                    const done = onCloseYear(selectedYearWizard, entry);
+                    const result = onCloseYear(selectedYearWizard, entry);
+                    const done = typeof result === 'boolean' ? result : result.ok;
+                    const reason = typeof result === 'boolean' ? '' : result.error;
                     if (done) { setConfirmClose(false); setYearCloseStep(1); setYearClosePassword(''); }
-                    toast(done ? 'success' : 'error', done ? `تم الإقفال النهائي للسنة المالية ${selectedYearWizard}. أصبحت العمليات فيها للاستعراض والتقارير فقط.` : `تعذر الإقفال النهائي للسنة ${selectedYearWizard}`);
+                    toast(done ? 'success' : 'error', done ? `تم الإقفال النهائي للسنة المالية ${selectedYearWizard}. أصبحت العمليات فيها للاستعراض والتقارير فقط.` : `تعذر الإقفال النهائي للسنة ${selectedYearWizard}${reason ? `. السبب: ${reason}` : ''}`);
                   }}
                   className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-600/25 cursor-pointer"
                 ><Lock className="w-4 h-4" />تأكيد الإقفال النهائي</button>
