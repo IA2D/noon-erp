@@ -31,12 +31,14 @@ function openVisibleWindowCount() {
 }
 
 function confirmQuitWithOpenWindows(owner) {
-  if (quitConfirmed || openVisibleWindowCount() <= 1) return true;
+  if (quitConfirmed) return true;
   const choice = dialog.showMessageBoxSync(owner && !owner.isDestroyed() ? owner : undefined, {
     type: 'question',
     title: 'NOON ERP',
-    message: 'هناك أكثر من نافذة مفتوحة',
-    detail: 'سيؤدي إغلاق البرنامج إلى إغلاق جميع النوافذ المفتوحة. هل تريد المتابعة؟',
+    message: 'هل تريد إغلاق النظام؟',
+    detail: openVisibleWindowCount() > 1
+      ? 'سيؤدي إغلاق البرنامج إلى إغلاق جميع النوافذ المفتوحة.'
+      : 'سيتم إغلاق NOON ERP وحفظ نسخة احتياطية تلقائية.',
     buttons: ['إغلاق البرنامج', 'إلغاء'],
     defaultId: 1,
     cancelId: 1,
@@ -417,8 +419,7 @@ function createWindow() {
 
   mainWindow = window;
   window.on('close', event => {
-    // إغلاق النافذة الرئيسية وحده هو نية إغلاق البرنامج؛ لا نؤكد عند إغلاق
-    // نافذة معاينة منفردة. الموافقة تُغلق البرنامج والنوافذ التابعة معاً.
+    // إغلاق النافذة الرئيسية يطلب تأكيداً قبل إنهاء التطبيق.
     if (quitConfirmed || openVisibleWindowCount() <= 1) return;
     event.preventDefault();
     if (confirmQuitWithOpenWindows(window)) app.quit();
