@@ -1817,6 +1817,12 @@ function AppInner() {
   }
 
   const openTrustCount = trusts.filter(t => t.status === 'OPEN' || t.status === 'PARTIAL').length;
+  // Operational screens are scoped to the active reporting year; historical
+  // records remain available when the user logs in with their year.
+  const yearScoped = <T extends { date?: string }>(rows: T[]) => rows.filter(row => !row.date || String(row.date).startsWith(`${reportingYear}-`));
+  const visibleJournals = yearScoped(journals);
+  const visibleVouchers = yearScoped(vouchers);
+  const visibleReceipts = yearScoped(receiptVouchers);
 
   const renderModule = (module: ERPModule): React.ReactNode => {
     if (!allowedModules.includes(module)) return null;
@@ -1826,8 +1832,8 @@ function AppInner() {
       case 'OPERATIONS':
         return (
           <OperationsView
-            journals={journals}
-            vouchers={vouchers}
+            journals={visibleJournals}
+            vouchers={visibleVouchers}
             accounts={accounts}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
@@ -1840,7 +1846,7 @@ function AppInner() {
       case 'PAYMENT_VOUCHERS':
         return (
           <PaymentVouchersView
-            vouchers={vouchers}
+            vouchers={visibleVouchers}
             accounts={accounts}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
@@ -1848,7 +1854,7 @@ function AppInner() {
             customers={customers}
             vendors={vendors}
             costCenters={costCenters}
-            journals={journals}
+            journals={visibleJournals}
             currencies={currencies}
             onAddVoucher={handleAddVoucher}
             onUpdateVoucher={handleUpdateVoucher}
@@ -1864,12 +1870,12 @@ function AppInner() {
       case 'RECEIPT_VOUCHERS':
         return (
           <ReceiptVouchersWindow
-            receipts={receiptVouchers}
+            receipts={visibleReceipts}
             accounts={accounts}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
             costCenters={costCenters}
-            journals={journals}
+            journals={visibleJournals}
             currencies={currencies}
             employees={employees}
             customers={customers}
@@ -1905,7 +1911,7 @@ function AppInner() {
         return (
           <DashboardView
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             currencies={currencies}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
@@ -1918,7 +1924,7 @@ function AppInner() {
       case 'JOURNAL_ENTRIES':
         return (
           <JournalEntriesView
-            journals={journals}
+            journals={visibleJournals}
             accounts={accounts}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
@@ -1942,7 +1948,7 @@ function AppInner() {
         return (
           <ChartOfAccountsView
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
             employees={employees}
