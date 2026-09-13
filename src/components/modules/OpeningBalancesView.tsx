@@ -46,6 +46,9 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
   const [saving, setSaving] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isSavedBalancesOpen, setIsSavedBalancesOpen] = useState(false);
+  const [showAllAccountsInBrowse, setShowAllAccountsInBrowse] = useState(false);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const [deleteConfirmStep, setDeleteConfirmStep] = useState<1 | 2>(1);
   const [isPostConfirmOpen, setIsPostConfirmOpen] = useState(false);
   const [incompleteBrowseKeys, setIncompleteBrowseKeys] = useState<string[]>([]);
   const [autoFocusKey, setAutoFocusKey] = useState<string | null>(null);
@@ -293,6 +296,21 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     }
     setLines(prev => prev.filter(l => l.key !== key));
     savedLinesRef.current = savedLinesRef.current.filter(l => l.key !== key);
+  };
+
+  const requestClearLine = (key: string) => {
+    setPendingDeleteKey(key);
+    setDeleteConfirmStep(1);
+  };
+
+  const confirmClearLine = () => {
+    if (deleteConfirmStep === 1) {
+      setDeleteConfirmStep(2);
+      return;
+    }
+    if (pendingDeleteKey) clearLine(pendingDeleteKey);
+    setPendingDeleteKey(null);
+    setDeleteConfirmStep(1);
   };
 
   const currencyOptionsForAccount = (acc: Account): string[] => {
@@ -704,6 +722,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
   // يضم أسطر المسودة في الورقة أيضاً، لأن الحفظ قد لا يعيد رسم الحالة قبل فتح نافذة الاستعراض.
   const displayedSavedRows = useMemo<BrowseRow[]>(() => browseRows.filter(r => r.saved || r.onWorksheet), [browseRows]);
   const selectableRows = useMemo<BrowseRow[]>(() => browseRows.filter(r => !r.onWorksheet), [browseRows]);
+  const browseModalRows = showAllAccountsInBrowse ? selectableRows : displayedSavedRows;
 
   const browseTotals = useMemo(() => {
     let debit = 0;
@@ -1008,46 +1027,81 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
         onSetCurrency={setCurrency}
         onSetDocumentRef={(key, v) => setRowText(key, 'documentRef', v)}
         onSetDueDate={(key, v) => setRowText(key, 'dueDate', v)}
-        onClearLine={clearLine}
+        onClearLine={requestClearLine}
         onEnterLastField={addLine}
       />
 
       <ModalShell
         id="opening-balances-saved-browser"
         open={isSavedBalancesOpen}
-        onClose={() => setIsSavedBalancesOpen(false)}
+        onClose={() => { setIsSavedBalancesOpen(false); setShowAllAccountsInBrowse(false); }}
         title="استعراض الأرصدة المدخلة"
-        subtitle={`الأرصدة المسجلة في هذه السنة: ${displayedSavedRows.length}`}
+        subtitle={showAllAccountsInBrowse ? `جميع حسابات السنة: ${browseModalRows.length}` : `الأرصدة المسجلة في هذه السنة: ${browseModalRows.length}`}
         icon={ClipboardList}
-        size="lg"
+        size="full"
+        maxWidth="max-w-[96vw]"
+        bodyClassName="p-0"
         footer={null}
+        topRight={
+          <button
+            type="button"
+            onClick={() => setShowAllAccountsInBrowse(value => !value)}
+            className="rounded-xl border border-sky-600/60 bg-sky-950 px-4 py-2 text-xs font-bold text-sky-200 hover:bg-sky-900"
+          >
+            {showAllAccountsInBrowse ? 'الأرصدة المدخلة فقط' : 'عرض الكل'}
+          </button>
+        }
       >
-        <div className="max-h-[60vh] overflow-y-auto p-1">
-          {displayedSavedRows.length === 0 ? (
+        <div className="max-h-[70vh] overflow-auto custom-scrollbar">
+          {browseModalRows.length === 0 ? (
             <p className="p-8 text-center text-sm text-slate-400">لا توجد أرصدة مدخلة بعد.</p>
           ) : (
-            <table className="w-full text-right text-xs">
-              <thead className="sticky top-0 bg-slate-900 text-slate-300">
+            <table className="min-w-[1050px] w-full text-right text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-900 text-slate-300">
                 <tr>
-                  <th className="p-3">رقم الحساب</th><th className="p-3">اسم الحساب / التحليلي</th><th className="p-3">العملة</th><th className="p-3">مدين</th><th className="p-3">دائن</th><th className="p-3">إجراء</th>
+                  <th className="p-3">رقم الحساب</th><th className="p-3">اسم الحساب / التحليلي</th><th className="p-3">العملة</th><th className="p-3">سعر الصرف</th><th className="p-3">مدين</th><th className="p-3">دائن</th><th className="p-3">المرجع</th><th className="p-3">إجراء</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {displayedSavedRows.map(row => (
+                {browseModalRows.map(row => (
                   <tr key={`${row.key}:${row.entity?.id || 'none'}`} className="hover:bg-slate-900/70">
                     <td className="p-3 font-mono text-sky-300">{row.accountCode}</td>
                     <td className="p-3 text-slate-100">{row.entity?.nameAr || row.accountName}</td>
                     <td className="p-3 font-mono">{row.currency}</td>
+                    <td className="p-3 font-mono">{fmtAmount(row.rate)}</td>
                     <td className="p-3 font-mono text-emerald-300">{row.debit ? fmtAmount(row.debitForeign || row.debit) : '—'}</td>
                     <td className="p-3 font-mono text-amber-300">{row.credit ? fmtAmount(row.creditForeign || row.credit) : '—'}</td>
+                    <td className="p-3 font-mono text-slate-300">{row.documentRef || '—'}</td>
                     <td className="p-3">
-                      <button type="button" onClick={() => { handleEditFromBrowse(row); setIsSavedBalancesOpen(false); }} className="rounded-lg border border-sky-600/60 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-950">فتح للتعديل</button>
+                      <button type="button" onClick={() => { handleEditFromBrowse(row); setIsSavedBalancesOpen(false); setShowAllAccountsInBrowse(false); }} className="rounded-lg border border-sky-600/60 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-950">فتح للتعديل</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+        </div>
+      </ModalShell>
+
+      <ModalShell
+        id="opening-balances-delete-confirm"
+        open={pendingDeleteKey !== null}
+        onClose={() => { setPendingDeleteKey(null); setDeleteConfirmStep(1); }}
+        title={deleteConfirmStep === 1 ? 'تأكيد حذف السطر' : 'تأكيد نهائي للحذف'}
+        subtitle={deleteConfirmStep === 1 ? 'الخطوة 1 من 2' : 'الخطوة 2 من 2'}
+        icon={AlertTriangle}
+        size="sm"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={() => { setPendingDeleteKey(null); setDeleteConfirmStep(1); }} className="rounded-xl border border-slate-600 px-4 py-2 text-xs font-bold text-slate-200">إلغاء</button>
+            <button type="button" onClick={confirmClearLine} className="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-500">{deleteConfirmStep === 1 ? 'متابعة' : 'حذف السطر نهائياً'}</button>
+          </div>
+        }
+      >
+        <div className="p-5 text-right text-sm text-slate-200">
+          {deleteConfirmStep === 1
+            ? 'هل أنت متأكد من رغبتك في حذف هذا السطر من الأرصدة الافتتاحية؟'
+            : 'سيُحذف السطر من ورقة الإدخال، وسيُصفّر الرصيد المحفوظ المرتبط به إن وُجد. لا يمكن التراجع من هذه النافذة.'}
         </div>
       </ModalShell>
 
@@ -1207,4 +1261,3 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
     </div>
   );
 }
-
