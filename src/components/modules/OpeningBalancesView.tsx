@@ -14,7 +14,7 @@ import OpeningBalancesToolbar from './opening/OpeningBalancesToolbar';
 import OpeningBalancesGrid, { type GridLine } from './opening/OpeningBalancesGrid';
 import ModalShell from '../ui/ModalShell';
 import { useTabDirty } from '../../tabs/TabsContext';
-import { selectPostingAccounts, buildLinkedEntities, buildOpeningBalancesPayload, type LinkedEntity } from '../../services/openingBalancesService';
+import { selectPostingAccounts, buildLinkedEntities, buildOpeningBalancesPayload, dedupeOpeningBalanceRecords, type LinkedEntity } from '../../services/openingBalancesService';
 import { loadBranchesLocal } from '../../utils/companyStore';
 import { buildXlsx, downloadBlob, type XlsxSheet } from '../../utils/xlsxWriter';
 import { handleCurrencyFieldChange } from '../../utils/currencyMath';
@@ -614,7 +614,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
 
     selectPostingAccounts(accounts).forEach(a => {
       const records = a.openingBalances && a.openingBalances.length > 0
-        ? a.openingBalances.filter(openingRecordForYear)
+        ? dedupeOpeningBalanceRecords(a.openingBalances.filter(openingRecordForYear))
         : [
           ...(a.openingBalance ? [{ currency: a.defaultCurrency || baseCode, amount: a.openingBalance, foreignAmount: a.openingBalanceForeign, rate: a.openingRate, documentRef: a.openingDocumentRef, dueDate: a.openingDueDate }] : []),
           ...(a.openingBalanceForeign && a.openingCurrency ? [{ currency: a.openingCurrency, amount: a.openingBalanceForeign, foreignAmount: a.openingBalanceForeign, rate: a.openingRate, documentRef: a.openingDocumentRef, dueDate: a.openingDueDate }] : []),
@@ -622,6 +622,10 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
       records.forEach(rec => {
         if (!rec.amount || rec.amount === 0) return;
         const k = compositeKey(a.id, null, rec.currency);
+        // Control-account totals are a denormalized cache of their analytical
+        // rows. Show the analytical rows as the editable source of truth, not
+        // the same amount again on the parent account.
+        if (controlAccountIds.has(a.id) && linked.some(entity => entity.linkedAccountId === a.id && entity.openingBalances?.some(row => openingRecordForYear(row) && row.currency === rec.currency && Math.abs(row.amount || 0) > 0))) return;
         if (seen.has(k) || deletedKeys.has(k)) return;
         seen.add(k);
         const ob = rec.amount;
@@ -650,7 +654,7 @@ export default function OpeningBalancesView({ currentUserName = '—', fiscalYea
 
     linked.forEach(ent => {
       const records = ent.openingBalances && ent.openingBalances.length > 0
-        ? ent.openingBalances.filter(openingRecordForYear)
+        ? dedupeOpeningBalanceRecords(ent.openingBalances.filter(openingRecordForYear))
         : [
           ...(ent.openingBalance ? [{ currency: ent.openingCurrency || ent.defaultCurrency, amount: ent.openingBalance, foreignAmount: ent.openingBalanceForeign, rate: ent.openingRate, documentRef: ent.openingDocumentRef, dueDate: ent.openingDueDate }] : []),
           ...(ent.openingBalanceForeign && ent.openingCurrency ? [{ currency: ent.openingCurrency, amount: ent.openingBalanceForeign, foreignAmount: ent.openingBalanceForeign, rate: ent.openingRate, documentRef: ent.openingDocumentRef, dueDate: ent.openingDueDate }] : []),

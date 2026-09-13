@@ -20,6 +20,10 @@ const cashBox: CashBox = {
   openingBalance: 37.5, openingBalanceForeign: 10, openingBalances: [{
     id: 'box-opening', fiscalYear: '2026', accountId: 'cash', subAccountId: 'box', currency: 'USD', exchangeRate: 3.75,
     debit: 10, credit: 0, debitLocal: 37.5, creditLocal: 0, amount: 37.5, foreignAmount: 10, rate: 3.75,
+  }, {
+    // Legacy restore fixture: the same entity/currency row was appended twice.
+    id: 'box-opening-legacy-duplicate', fiscalYear: '2026', accountId: 'cash', subAccountId: 'box', currency: 'USD', exchangeRate: 3.75,
+    debit: 10, credit: 0, debitLocal: 37.5, creditLocal: 0, amount: 37.5, foreignAmount: 10, rate: 3.75,
   }],
 };
 const journal: JournalEntry = {

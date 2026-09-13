@@ -1,6 +1,6 @@
 import type { Account, BankAccount, CashBox, Customer, Employee, JournalEntry, JournalLine, OpeningBalanceRecord, Vendor } from '../types/erp';
 import { accountFinancialType, isPostingAccount } from './accountingEngine';
-import { reconcileControlAccountOpenings } from '../services/openingBalancesService';
+import { dedupeOpeningBalanceRecords, reconcileControlAccountOpenings } from '../services/openingBalancesService';
 
 type Entity = (CashBox | BankAccount | Customer | Vendor | Employee) & { linkedAccountId?: string };
 type Input = {
@@ -94,8 +94,8 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
 
   input.accounts.filter(isPostingAccount).forEach(account => {
     const entities = entitiesByAccount.get(account.id) || [];
-    const analyticalRows = entities.flatMap(entity => (entity.openingBalances || []).filter(row => row.fiscalYear === sourceYear));
-    const accountRows = (account.openingBalances || []).filter(row => row.fiscalYear === sourceYear || (!row.fiscalYear && sourceYear === input.sourceYear));
+    const analyticalRows = entities.flatMap(entity => dedupeOpeningBalanceRecords((entity.openingBalances || []).filter(row => row.fiscalYear === sourceYear)));
+    const accountRows = dedupeOpeningBalanceRecords((account.openingBalances || []).filter(row => row.fiscalYear === sourceYear || (!row.fiscalYear && sourceYear === input.sourceYear)));
     const rows = entities.length && analyticalRows.length ? [] : accountRows;
     rows.forEach(record => {
       const amount = recordAmount(record, baseCurrency);
@@ -111,7 +111,7 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
   });
   allEntities.forEach(entity => {
     if (!entity.linkedAccountId) return;
-    const rows = (entity.openingBalances || []).filter(record => record.fiscalYear === sourceYear || (!record.fiscalYear && sourceYear === input.sourceYear));
+    const rows = dedupeOpeningBalanceRecords((entity.openingBalances || []).filter(record => record.fiscalYear === sourceYear || (!record.fiscalYear && sourceYear === input.sourceYear)));
     rows.forEach(record => {
       const amount = recordAmount(record, baseCurrency);
       add(entity.linkedAccountId!, entity.id, record.costCenterId, record.currency || entity.defaultCurrency || baseCurrency, amount.local, amount.foreign, amount.rate);

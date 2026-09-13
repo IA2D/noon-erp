@@ -163,6 +163,22 @@ export interface ApplyBalancesResult extends BalanceCollections {
   totalCredit: number;
 }
 
+/**
+ * Removes duplicate opening rows introduced by legacy restores/clones while
+ * preserving legitimate rows split by currency or cost centre.  A row is
+ * unique within its fiscal year, currency, analytical account and cost centre.
+ */
+export function dedupeOpeningBalanceRecords(records: OpeningBalanceRecord[]): OpeningBalanceRecord[] {
+  const byKey = new Map<string, OpeningBalanceRecord>();
+  records.forEach(record => {
+    const key = [record.fiscalYear || '', record.currency || '', record.subAccountId || '', record.costCenterId || ''].join('|');
+    // Keep the last row: legacy imports append the corrected copy after the
+    // stale copy, and this avoids summing the same balance twice.
+    byKey.set(key, record);
+  });
+  return Array.from(byKey.values());
+}
+
 type SubLedgerLike = {
   id: string;
   defaultCurrency?: string;
@@ -335,7 +351,7 @@ export function reconcileControlAccountOpenings(current: BalanceCollections, fis
         foreignAmount: round2(entity.openingBalanceForeign || 0),
         rate: entity.openingRate || 1,
       };
-      const scoped = fiscalYear ? (entity.openingBalances || []).filter(record => record.fiscalYear === fiscalYear) : (entity.openingBalances || []);
+      const scoped = dedupeOpeningBalanceRecords(fiscalYear ? (entity.openingBalances || []).filter(record => record.fiscalYear === fiscalYear) : (entity.openingBalances || []));
       const records = scoped.length ? scoped : fiscalYear ? [] : [fallback];
       records.forEach(record => {
         const currency = record.currency || account.defaultCurrency || 'YER';
