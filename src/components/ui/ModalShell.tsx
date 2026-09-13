@@ -22,14 +22,17 @@ type ResizeHandle = 'tl' | 't' | 'tr' | 'r' | 'br' | 'b' | 'bl' | 'l';
 const RESIZE_HANDLES: ResizeHandle[] = ['tl', 't', 'tr', 'r', 'br', 'b', 'bl', 'l'];
 
 const HANDLE_CLASSES: Record<ResizeHandle, string> = {
-  tl: 'top-0 left-0 w-3.5 h-3.5',
-  t: 'top-0 left-0 right-0 h-1.5',
-  tr: 'top-0 right-0 w-3.5 h-3.5',
-  r: 'top-0 right-0 bottom-0 w-1.5',
-  br: 'bottom-0 right-0 w-3.5 h-3.5',
-  b: 'bottom-0 left-0 right-0 h-1.5',
-  bl: 'bottom-0 left-0 w-3.5 h-3.5',
-  l: 'top-0 left-0 bottom-0 w-1.5',
+  // Keep a generous hit target so resizing remains usable on small screens.
+  // The previous 1.5px edge handles were effectively impossible to grab and
+  // competed with scrollbars/sliders inside popup content.
+  tl: 'top-0 left-0 w-5 h-5',
+  t: 'top-0 left-0 right-0 h-3',
+  tr: 'top-0 right-0 w-5 h-5',
+  r: 'top-0 right-0 bottom-0 w-3',
+  br: 'bottom-0 right-0 w-5 h-5',
+  b: 'bottom-0 left-0 right-0 h-3',
+  bl: 'bottom-0 left-0 w-5 h-5',
+  l: 'top-0 left-0 bottom-0 w-3',
 };
 
 const HANDLE_CURSOR: Record<ResizeHandle, string> = {
