@@ -1,43 +1,56 @@
 # Fiscal-year isolation implementation tasks
 
 ## Phase 0 — Baseline and safety
-- [x] Capture current branch and baseline TypeScript build.
-- [ ] Export a full SQLite backup and record SHA-256.
-- [ ] Create a legacy-data inventory grouped by table and year evidence.
+- [x] Capture the baseline commit and TypeScript build.
+- [x] Export an online SQLite backup and record SHA-256 plus `PRAGMA integrity_check`.
+- [x] Inventory legacy tables, scoped keys, and year evidence.
 
 ## Phase 1 — Data model
-- [ ] Add `fiscal_years` registry with lifecycle/status fields.
-- [ ] Add mandatory `fiscal_year_id` to every financial/business table.
-- [ ] Keep company identity, users, permissions, UI, and system settings global.
-- [ ] Add composite uniqueness for codes and document numbers per year.
-- [ ] Add `entry_kind`, `affects_ledger`, and `read_only` to opening audit entries.
+- [x] Add the fiscal-year registry and record/year ownership registry (schema v4).
+- [x] Store every annual collection in an isolated `::fiscal-year::YYYY` namespace and normalized fiscal-record projection.
+- [x] Keep settings, company identity, users, permissions, and UI preferences global.
+- [x] Scope record identity, document command identity, and uniqueness by year.
+- [x] Add `fiscalYear`, `entryKind`, `affectsLedger`, and `readOnly` to rollover audit journals.
 
 ## Phase 2 — Repository isolation
-- [ ] Introduce one year-scoped repository context for all reads/writes.
-- [ ] Remove UI-only year filtering as the source of isolation.
-- [ ] Enforce closed-year writes at the service/database boundary.
-- [ ] Scope reports, searches, exports, attachments, and audit records.
+- [x] Bind all annual React persistence to the selected fiscal-year context.
+- [x] Bind SQLite read/write/projection to the same fiscal-year namespace.
+- [x] Enforce final-closed-year write rejection at the SQLite command boundary; allow an authorized reopen transition.
+- [x] Scope reports, searches, exports, attachments, audit logs, masters, operations, and opening-balance state.
+- [x] Discover all persisted fiscal years in the login/reporting selector.
 
 ## Phase 3 — Atomic rollover
-- [ ] Implement `BEGIN IMMEDIATE` rollover transaction.
-- [ ] Clone year-owned master/input records with new IDs.
-- [ ] Remap all internal foreign keys and parent/analytical links.
-- [ ] Calculate source closing balances by account, analytical account, currency, and cost center.
-- [ ] Insert destination opening balances exactly once.
-- [ ] Insert a read-only `OPEN-YYYY` audit journal excluded from ledger/report calculations.
-- [ ] Validate debit/credit and source/destination equality before `COMMIT`.
-- [ ] Roll back the entire operation on any failure.
+- [x] Execute rollover under one `BEGIN IMMEDIATE` accounting command.
+- [x] Clone year-owned inputs/masters with new IDs.
+- [x] Remap internal parent, analytical, cost-center, account, entity, and journal relationships.
+- [x] Calculate closing/opening balances by account, analytical account, currency, and cost center.
+- [x] Insert destination opening balances exactly once.
+- [x] Insert `OPEN-YYYY` as a read-only audit journal with `affectsLedger=false`.
+- [x] Validate balance and target graph before `COMMIT`.
+- [x] Roll back every target write on conflict or broken relationship.
+- [x] Leave a new year without rollover empty and zeroed.
 
 ## Phase 4 — Existing-data migration
-- [ ] Assign the current legacy dataset to its source fiscal year.
-- [ ] Rebuild any already-created destination year in a temporary workspace.
-- [ ] Compare old-year reports before/after migration byte-for-byte at numeric level.
-- [ ] Replace destination data only after reconciliation passes.
+- [x] Detect the dominant source year without choosing a stray historical date or generated OPEN journal.
+- [x] Partition legacy source and already-created destination-year records into independent namespaces.
+- [x] Clone destination IDs and remap their relationships.
+- [x] Preserve original legacy keys and shared settings byte-for-byte.
+- [x] Verify the real database copy: source 2026 trial-balance numeric output is identical before/after migration.
+- [x] Validate every migrated year graph inside the migration transaction.
 
 ## Phase 5 — Verification and release
-- [ ] Test year isolation for every CRUD module.
-- [ ] Test multi-currency and analytical/control balances.
-- [ ] Test closed-year read-only behavior.
-- [ ] Test rollback by injecting failures at each transaction stage.
-- [ ] Run full regression suite.
-- [ ] Build installer and portable artifacts and verify hashes.
+- [x] Test namespace isolation, ID independence, relationship remapping, and stale-write conflicts.
+- [x] Test analytical, multi-currency, and cost-center carry-forward.
+- [x] Test closed-year database rejection and reopen exception.
+- [x] Test conflict and invalid-graph rollback.
+- [x] Run the full P1 regression/build gate.
+- [x] Run targeted financial report, opening-balance, statement, balance-sheet, and login-year tests.
+- [x] Build fresh NSIS installer and portable executables.
+- [x] Run the packaged smoke probe against unpacked and portable editions.
+- [x] Verify artifact timestamps, sizes, SHA-256 hashes, and packed source hash.
+- [x] Test `ROLLBACK.sh` on a separate detached worktree and match the exact baseline tree.
+
+## Final state
+- Source/base commit: `a6fff06e5562a51d7622c9d6662ec3f4a2f8e529`.
+- Product-code commit packed in release: `52b6e2cb48e67e717e8ad9dd5db267bba46a1928`.
+- Release folder: `D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb`.

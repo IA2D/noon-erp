@@ -1,19 +1,87 @@
-Baseline command: npm run lint
-Baseline result: TypeScript compilation passed before fiscal-isolation changes.
-Modified command: pending Phase 1 implementation.
-Rollback command: git revert <fiscal-isolation-commit>
-Status: task tracker created; implementation starts with schema and repository boundary.
-Schema command: node --check electron/relational-store.mjs
-Schema result: passed; fiscal-year registry added as schema v4.
-Relational projection: node --check electron/relational-store.mjs = passed; npm run lint = passed; added erp_record_years registry.
-Relational smoke: node scripts/relational-sqlite-smoke.mjs = RELATIONAL_SQLITE_SMOKE_OK; fiscalYears=2; mappedJournalYear=fy-2026; integrity=ok.
-Context regression: node scripts/fiscal-year-context-regression.mjs = FISCAL_YEAR_CONTEXT_OK normalization=true explicitYear=true atomicRollback=true.
-Rollover graph regression: node scripts/fiscal-year-rollover-regression.mjs = FISCAL_YEAR_ROLLOVER_OK rows=4 sourceIdsIndependent=true linksRemapped=true datesShifted=true.
-Dataset regression: npx tsx scripts/fiscal-year-dataset-regression.mts = FISCAL_YEAR_DATASET_OK partition=true scopedKey=true stamp=true; npm run lint = passed.
-Scoped React state: npm run lint = passed; useFiscalYearStorageState reload boundary and versioned persistence added.
-App integration: npm run lint = passed; annual collections use useFiscalYearStorageState; accounting keys and command identities include fiscal year; rollover writes 19 source/destination changes atomically.
-Scoped relational repository: npm run relational:smoke = RELATIONAL_SQLITE_SMOKE_OK scopedIsolation=true; same account code stored independently for 2026/2027.
-Atomic integration: node scripts/fiscal-year-atomic-rollover-regression.mjs = FISCAL_YEAR_ATOMIC_ROLLOVER_OK sourceUnchanged=true targetIndependent=true linksRemapped=true conflictRollback=true.
-Legacy migration: node scripts/legacy-fiscal-migration-regression.mjs = LEGACY_FISCAL_MIGRATION_OK sourceUnchanged=true sourceYear=2026 futureRowsExcluded=true settingsGlobal=true idempotent=true.
-Graph validation: fiscal-year atomic regression = brokenGraphRollback=true. Fiscal reset now replaces selected-year scoped values with empty values and preserves all other keys/settings.
-Restore isolation: relational smoke passed with stale fiscalRecords cleared and 2026/2027 scoped records rebuilt; database recovery regression passed.
+FISCAL-YEAR ISOLATION VERIFICATION
+
+Branch: main
+Baseline commit: a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
+Product-code commit packed in release: 52b6e2cb48e67e717e8ad9dd5db267bba46a1928
+Verification/rollback commit: ca13b7bf17de4109088a27e479b626637a44a654
+Changed branches/fields: storage key suffix ::fiscal-year::YYYY; erp_fiscal_years; erp_record_years; erp_fiscal_records; fiscalYear; entryKind=OPENING_AUDIT; affectsLedger=false; readOnly=true; OpeningBalanceRecord.costCenterId.
+Restored behavior/status: every year reads and writes an independent dataset; shared settings remain global; a final-closed year is read-only; rollover IDs and relationships are independent; OPEN-YYYY is visible only as a read-only audit record and is excluded from balances; target openings are counted once.
+
+FOUR REQUIRED ARTIFACTS
+MODIFIED_FILE: D:\Dev env\@commando\FULLERP\artifacts\fiscal-year-isolation\migration-verified-FULLERP-20260913.sqlite
+DIFF_FILE: D:\Dev env\@commando\FULLERP\FISCAL_YEAR_ISOLATION_TASKS.diff.md
+VERIFICATION: D:\Dev env\@commando\FULLERP\VERIFICATION.txt
+ROLLBACK: D:\Dev env\@commando\FULLERP\ROLLBACK.sh (git mode 100755)
+PRESERVED_BASELINE: D:\Dev env\@commando\FULLERP\artifacts\fiscal-year-isolation\baseline-FULLERP-20260913.sqlite
+PRESERVED_BASELINE_SHA256: 6ED9A480B895940630736539A793F9285E276C8E8CF1E84A2429F4DB2881CBFE
+MODIFIED_FILE_SHA256: 5C198ECC4239AC68FDA020A966718C73088229BFFED62B272D4BEFE599D62F0E
+
+BASELINE
+Command: python SQLite online-backup fixture creation followed by PRAGMA integrity_check
+Input: C:\Users\ahmed\AppData\Roaming\FULLERP\FULLERP.sqlite
+Literal output/result: SQLITE_BACKUP_OK integrity=ok
+Exit status: 0
+
+Command: npm run lint
+Input: baseline worktree at a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
+Literal output/result: > fullerp-desktop@1.0.0 lint / > tsc --noEmit
+Exit status: 0
+
+MODIFIED
+Command: npx tsx scripts/verify-fiscal-migration-database.mts "artifacts\fiscal-year-isolation\baseline-FULLERP-20260913.sqlite" "artifacts\fiscal-year-isolation\migration-verified-FULLERP-20260913.sqlite"
+Input: preserved 11,452,416-byte database copy; legacy records for 2022, 2026, and 2027
+Literal output/result: FISCAL_MIGRATION_DATABASE_OK year=2026 years=2022,2026,2027 rows=7 debit=11646885.11 credit=11646885.11 sourceUnchanged=true settingsGlobal=true targetIndependent=true auditReadOnly=true integrity=ok output=artifacts\fiscal-year-isolation\migration-verified-FULLERP-20260913.sqlite
+Exit status: 0
+
+Command: npm run fiscal-year:regression
+Input: isolated 2026/2027 fixture, conflict fixture, broken-graph fixture, closed-year fixture, USD analytical/cost-center fixture
+Literal output/result: FISCAL_YEAR_ATOMIC_ROLLOVER_OK sourceUnchanged=true targetIndependent=true linksRemapped=true conflictRollback=true brokenGraphRollback=true closedWriteBlocked=true reopenAllowed=true
+Literal output/result: FISCAL_YEAR_REPORT_ISOLATION_OK sourceUnchanged=true openingOnce=true auditExcluded=true auditReadOnly=true
+Literal output/result: FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true
+Exit status: 0
+
+Command: npm run p1:verify
+Input: current full source tree and all P1 accounting, persistence, lifecycle, security, reports, printing, and production-build fixtures
+Literal output/result: ACCOUNTING_COMMAND_REGRESSION_OK accountProjectionRepaired=true atomic=true idempotentReplay=true duplicateDocumentBlocked=true optimisticConflictBlocked=true staleWindowWriteBlocked=true failedCommandRolledBack=true receiptDurable=true integrity=ok
+Literal output/result: RELATIONAL_SQLITE_SMOKE_OK accounts=2 journals=1/2 payments=1/1 receipts=1/1 masters=1 fiscalYears=2 scopedIsolation=true mappedJournalYear=fy-2026 authority=normalized authoritativeDebit=321 diagnostics=true fkReferenceBlocked=true referencedDeleteBlocked=true duplicateEntityBlocked=true duplicateJournalLinesRepaired=true updateDebit=125 deleteCascade=0 integrity=ok
+Literal output/result: ✓ built in 2m 33s
+Exit status: 0
+
+Command: npm run reports-ui:regression
+Input: financial report implementation including pending vouchers and affectsLedger/OPENING_AUDIT filtering
+Literal output/result: FINANCIAL_REPORTS_BACKGROUND_OK inheritedShell=true standaloneBackground=false matchesOtherModules=true entitySections=true currencySections=true combinedPrintJob=true summarySuppressesDetails=true pendingVouchersVisible=true analyticalProjection=true
+Exit status: 0
+
+PACKAGED RELEASE
+Command: npx electron-builder --win nsis portable --config.directories.output=release-20260913-154919-fiscal-year-isolation-52b6e2cb
+Input: production dist plus Electron sources at product-code commit 52b6e2cb48e67e717e8ad9dd5db267bba46a1928
+Literal output/result: target=nsis file=release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Setup-1.0.0-x64.exe
+Literal output/result: target=portable file=release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
+Exit status: 0
+
+Installer: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Setup-1.0.0-x64.exe
+Installer bytes: 112254780
+Installer SHA256: B182E02DD7F8147AE606E4728CC0648D1A36C24CB309C9DAE20983F20BD4126E
+Portable: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
+Portable bytes: 112063564
+Portable SHA256: 0D1F735FD07A4A06B48DB533446C5EDA2E97CA4A803B5D3F711B804F4A65733F
+Freshness result: NEW_TIME=2026-09-13T15:50:15.4635824+03:00; LATEST_PREVIOUS_TIME=2026-09-13T15:46:25.8722970+03:00; NEWER=True
+Packed source result: electron/main.mjs PACKED_MATCH=True; legacy-fiscal-migration.mjs PACKED_MATCH=True; accounting-command-store.mjs PACKED_MATCH=True
+
+Command: packaged smoke (win-unpacked) with FULLERP_SMOKE_TEST=1 and isolated --user-data-dir
+Input: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\win-unpacked\NOON ERP.exe
+Literal output/result: "ok": true; "brand": true; "loginForm": true; "fiscalYearSelector": true; "loginOk": true; "sqlite": true; "authority": "RELATIONAL_SQLITE"
+Exit status: 0
+
+Command: packaged smoke (portable) with FULLERP_SMOKE_TEST=1 and isolated --user-data-dir
+Input: D:\Dev env\@commando\FULLERP\release-20260913-154919-fiscal-year-isolation-52b6e2cb\NOON-ERP-Portable-1.0.0-x64.exe
+Literal output/result: "ok": true; "brand": true; "loginForm": true; "fiscalYearSelector": true; "loginOk": true; "sqlite": true; "authority": "RELATIONAL_SQLITE"
+Exit status: 0
+
+ROLLBACK
+Command: "C:\Program Files\Git\bin\bash.exe" ./ROLLBACK.sh
+Input: separate detached worktree at ca13b7bf17de4109088a27e479b626637a44a654; baseline a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
+Literal output/result: ROLLBACK_OK base=a6fff06e5562a51d7622c9d6662ec3f4a2f8e529 restored_tree=d44062f47daaba3f6a5bd98e3e524b15e60084b0
+Literal output/result: ROLLBACK_TREE_MATCH=True
+Exit status: 0
+Restored behavior/status: the separate copy exactly matched the baseline commit tree; the primary worktree and MODIFIED_FILE remained changed.
