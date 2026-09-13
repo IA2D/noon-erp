@@ -604,18 +604,15 @@ export default function FinancialReportsView({
 
   const allJournals = useMemo(() => reportJournals, [reportJournals]);
 
-  // عند تدوير السنة تُرحّل الأرصدة الافتتاحية إلى قيد OPEN-YYYY؛ إبقاء
-  // الحقول الافتتاحية القديمة مع القيد يضاعف الرصيد، لذلك نعتمد القيد وحده.
-  const hasCarryForwardOpening = useMemo(
-    () => reportingJournals.some(journal => journal.reference === `OPEN-${fiscalYear}` && journal.status === 'POSTED'),
-    [reportingJournals, fiscalYear]
-  );
-
   const reconciledAccounts = useMemo(() => {
     const reconciled = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }).accounts;
-    if (!hasCarryForwardOpening) return reconciled;
-    return reconciled.map(account => ({ ...account, openingBalance: 0, openingBalanceForeign: 0, openingBalances: [] }));
-  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, hasCarryForwardOpening]);
+    return reconciled.map(account => {
+      const rows = (account.openingBalances || []).filter(row => row.fiscalYear === fiscalYear);
+      const openingBalance = rows.reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
+      const openingBalanceForeign = rows.reduce((sum, row) => sum + (row.debit || 0) - (row.credit || 0), 0);
+      return { ...account, openingBalance, openingBalanceForeign, openingBalances: rows };
+    });
+  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear]);
   const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(reconciledAccounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [reconciledAccounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
   const reportAccounts = useMemo(
     () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1, true),
@@ -707,10 +704,10 @@ export default function FinancialReportsView({
       const periodAct = periodMovement[acc.id] || { debit: 0, credit: 0 };
       const currentDebit = round2(periodAct.debit);
       const currentCredit = round2(periodAct.credit);
-      const yearOpeningRows = (acc.openingBalances || []).filter(row => !row.fiscalYear || row.fiscalYear === fiscalYear);
-      const openingForYear = yearOpeningRows.length > 0
-        ? yearOpeningRows.reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0)
-        : (acc.openingBalance || 0);
+      // الأرصدة الافتتاحية مرتبطة بسنة إدخالها صراحةً؛ لا نرث سجلات قديمة
+      // أو قيم legacy عامة إلى سنة مالية لاحقة.
+      const yearOpeningRows = (acc.openingBalances || []).filter(row => row.fiscalYear === fiscalYear);
+      const openingForYear = yearOpeningRows.reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
       const b = accountBalancesDC(acc, openingForYear, act);
       const cumulativeDebit = round2(b.endingDebit);
       const cumulativeCredit = round2(b.endingCredit);
@@ -722,7 +719,7 @@ export default function FinancialReportsView({
         const matching = journals.filter(entry => entry.date <= toDate).flatMap(entry => entry.lines.filter(line => line.accountId === acc.id && (line.currency || entry.currency) === currency).map(line => ({ entry, line })));
         localCurrentDebit = round2(matching.filter(item => item.entry.date >= fromDate).reduce((sum, item) => sum + (item.line.debit || 0), 0));
         localCurrentCredit = round2(matching.filter(item => item.entry.date >= fromDate).reduce((sum, item) => sum + (item.line.credit || 0), 0));
-        const openingLocal = (acc.openingBalances || []).filter(row => (!row.fiscalYear || row.fiscalYear === fiscalYear) && row.currency === currency).reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
+        const openingLocal = (acc.openingBalances || []).filter(row => row.fiscalYear === fiscalYear && row.currency === currency).reduce((sum, row) => sum + (row.debitLocal || 0) - (row.creditLocal || 0), 0);
         const signedLocal = round2(openingLocal + matching.reduce((sum, item) => sum + (item.line.debit || 0) - (item.line.credit || 0), 0));
         localCumulativeDebit = signedLocal > 0 ? signedLocal : 0;
         localCumulativeCredit = signedLocal < 0 ? Math.abs(signedLocal) : 0;
