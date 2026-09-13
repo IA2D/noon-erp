@@ -58,6 +58,8 @@ export interface OpeningBalanceRecord {
   accountId: string;
   /** معرف الحساب التحليلي (اختياري — للعملاء/الموردين/الموظفين/الصناديق/البنوك) */
   subAccountId?: string;
+  /** Optional carried dimension for cost-center-specific opening balances. */
+  costCenterId?: string;
   /** رمز العملة (YER / USD / SAR) */
   currency: string;
   /** سعر التحويل من العملة الأجنبية إلى المحلية */

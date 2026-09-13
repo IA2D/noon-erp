@@ -64,8 +64,9 @@ import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
 import { useFiscalYearStorageState } from './utils/useLocalStorageState';
 import { fiscalYearStorageKey } from './utils/fiscalYearDatasetStore';
 import { cloneFiscalYearCollections } from './utils/fiscalYearRollover';
+import { buildFiscalYearOpeningSnapshot } from './utils/fiscalYearClosing';
 import { isPeriodClosed } from './utils/periodGuard';
-import { reindexAccountCodes, ensureEmployeeAdvanceGroup, ensureMonthlyEmployeeAdvancesGroup, employeeAdvanceGeneralAccount, monthlyEmployeeAdvancesAccount, nextJournalNumber, calculateAccountActivity, netAccountBalance, isPostingAccount, accountFinancialType } from './utils/accountingEngine';
+import { reindexAccountCodes, ensureEmployeeAdvanceGroup, ensureMonthlyEmployeeAdvancesGroup, employeeAdvanceGeneralAccount, monthlyEmployeeAdvancesAccount, nextJournalNumber } from './utils/accountingEngine';
 import { CUSTODY_TYPE_LABEL, CUSTODY_STATUS_LABEL } from './utils/custodyEngine';
 import { deriveLegacySubLedgerType } from './utils/subLedger';
 import { validateGeneratedJournalForPosting, validateJournalForPosting, validateOpeningBalancesForPosting, validateVoucherForPosting } from './utils/postingValidation';
@@ -1487,37 +1488,14 @@ function AppInner() {
       try { return Array.isArray(JSON.parse(raw || '[]')) && JSON.parse(raw || '[]').length > 0; } catch { return true; }
     });
     if (targetHasData) return { ok: false, error: `السنة المالية ${nextYear} تحتوي بيانات مستقلة بالفعل؛ لم تُستبدل.` };
-    const retained = accounts.find(a => a.code === '2202010001' && a.level === 5) ?? accounts.find(a => a.nameAr.includes('أرباح مبقاة') && a.level === 5);
-    const upToYear = journals.filter(j => j.status === 'POSTED' && yearOf(j.date) <= year);
-    const activity = calculateAccountActivity(accounts, upToYear);
-    const lines: JournalLine[] = [];
-    let totalDebit = 0;
-    let totalCredit = 0;
-    accounts.filter(isPostingAccount).forEach(acc => {
-      const type = accountFinancialType(acc, accounts);
-      if (type === 'REVENUE' || type === 'EXPENSE') return;
-      const net = round2(netAccountBalance(acc, activity[acc.id] || { debit: 0, credit: 0 }));
-      if (Math.abs(net) < 0.005) return;
-      if (net > 0) {
-        lines.push({ id: `op-${acc.id}`, accountId: acc.id, accountCode: acc.code, accountNameAr: acc.nameAr, debit: net, credit: 0, description: `رصيد افتتاحي ${acc.nameAr}` });
-        totalDebit += net;
-      } else {
-        lines.push({ id: `op-${acc.id}`, accountId: acc.id, accountCode: acc.code, accountNameAr: acc.nameAr, debit: 0, credit: Math.abs(net), description: `رصيد افتتاحي ${acc.nameAr}` });
-        totalCredit += Math.abs(net);
-      }
+    const baseCurrency = currencies.find(c => c.isBase)?.code ?? 'YER';
+    const openingSnapshot = buildFiscalYearOpeningSnapshot({
+      accounts, journals, cashBoxes, bankAccounts, customers, vendors, employees,
+      sourceYear: year, targetYear: nextYear, baseCurrency,
     });
-    totalDebit = round2(totalDebit);
-    totalCredit = round2(totalCredit);
-    const diff = round2(totalDebit - totalCredit);
-    if (Math.abs(diff) > 0.005 && retained) {
-      if (diff > 0) {
-        lines.push({ id: 'op-retained', accountId: retained.id, accountCode: retained.code, accountNameAr: retained.nameAr, debit: 0, credit: diff, description: `تسوية رصيد افتتاحي` });
-        totalCredit += diff;
-      } else {
-        lines.push({ id: 'op-retained', accountId: retained.id, accountCode: retained.code, accountNameAr: retained.nameAr, debit: Math.abs(diff), credit: 0, description: `تسوية رصيد افتتاحي` });
-        totalDebit += Math.abs(diff);
-      }
-    }
+    const lines = openingSnapshot.lines;
+    const totalDebit = round2(lines.reduce((sum, line) => sum + (line.debit || 0), 0));
+    const totalCredit = round2(lines.reduce((sum, line) => sum + (line.credit || 0), 0));
     const now = new Date().toISOString().replace('T', ' ').substring(0, 16);
     const entry: JournalEntry = {
       id: `open-${nextYear}-from-${year}`,
@@ -1550,44 +1528,11 @@ function AppInner() {
     const nextJournals = [entry, ...journals];
     // قيد OPEN-YYYY سجل تدقيق للعرض فقط. مصدر الحقيقة للسنة الجديدة هو
     // سجلات openingBalances المرتبطة بها، كي لا يدخل القيد كحركة بالتقارير.
-    const baseCurrency = currencies.find(c => c.isBase)?.code ?? 'YER';
-    const openingByAccount = new Map(lines.map(line => [line.accountId, line]));
-    const nextAccounts = accounts.map(account => {
-      const carried = openingByAccount.get(account.id);
-      if (!carried) return account;
-      const debit = round2(carried.debit || 0);
-      const credit = round2(carried.credit || 0);
-      const record: OpeningBalanceRecord = {
-        id: `rollover-opening-${nextYear}-${account.id}`,
-        fiscalYear: nextYear,
-        accountId: account.id,
-        currency: baseCurrency,
-        exchangeRate: 1,
-        debit,
-        credit,
-        debitLocal: debit,
-        creditLocal: credit,
-        amount: round2(debit - credit),
-        foreignAmount: round2(debit - credit),
-        rate: 1,
-        documentRef: entry.entryNumber,
-      };
-      const priorYears = (account.openingBalances || []).filter(item => item.fiscalYear !== nextYear);
-      return { ...account, openingBalances: [...priorYears, record] };
-    });
-    // فور التدوير حوّل أرصدة حسابات التحكم إلى الكيانات التحليلية نفسها؛
-    // وبذلك لا يظهر للمستخدم رصيد مجمّع غير قابل للتعديل في السنة الجديدة.
-    const carriedRepair = repairCarriedControlOpenings(nextAccounts, nextJournals, cashBoxes, bankAccounts, customers, vendors, employees);
     const audit = createAuditLog('GENERAL_LEDGER', 'POST', `توليد القيد الافتتاحي للسنة ${nextYear} من إقفال ${year}`);
-    const targetOnly = <T extends { openingBalances?: OpeningBalanceRecord[] }>(rows: T[]) => rows.map(item => {
-      const openingBalances = (item.openingBalances || []).filter(record => record.fiscalYear === nextYear);
-      const openingBalance = round2(openingBalances.reduce((sum, record) => sum + (record.debitLocal || 0) - (record.creditLocal || 0), 0));
-      return { ...item, openingBalances, openingBalance, fiscalYear: nextYear };
-    });
     const clone = cloneFiscalYearCollections({
-      accounts: targetOnly(carriedRepair.accounts), costCenters, currencies,
-      cashBoxes: targetOnly(carriedRepair.cashBoxes), bankAccounts: targetOnly(carriedRepair.bankAccounts),
-      employees: targetOnly(carriedRepair.employees), customers: targetOnly(carriedRepair.customers), vendors: targetOnly(carriedRepair.vendors),
+      accounts: openingSnapshot.accounts, costCenters, currencies,
+      cashBoxes: openingSnapshot.cashBoxes, bankAccounts: openingSnapshot.bankAccounts,
+      employees: openingSnapshot.employees, customers: openingSnapshot.customers, vendors: openingSnapshot.vendors,
       journals: [entry],
     }, year, nextYear);
     const target = clone.collections;
@@ -2458,7 +2403,6 @@ function AppInner() {
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
-const yearOf = (date: string): string => date.slice(0, 4);
 
 export default function App() {
   return (
