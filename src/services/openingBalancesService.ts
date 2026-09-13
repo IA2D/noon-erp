@@ -352,7 +352,8 @@ export function reconcileControlAccountOpenings(current: BalanceCollections, fis
       const creditLocal = round2(records.reduce((sum, record) => sum + (record.creditLocal ?? Math.max(0, -(record.amount || 0))), 0));
       const rate = records.find(record => (record.rate || record.exchangeRate || 1) > 0)?.rate || records[0]?.exchangeRate || 1;
       return {
-        id: `control-opening-${account.id}-${currency}`,
+        id: `control-opening-${account.id}-${currency}${fiscalYear ? `-${fiscalYear}` : ''}`,
+        fiscalYear,
         accountId: account.id,
         currency,
         exchangeRate: rate,

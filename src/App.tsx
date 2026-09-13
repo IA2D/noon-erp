@@ -421,10 +421,11 @@ function AppInner() {
 
   useEffect(() => {
     // إصلاح بيانات قديمة: مزامنة أرصدة حسابات التحكم من أرصدة الحسابات التحليلية المرتبطة بها.
-    const reconciled = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees });
+    // اربط إعادة التجميع بالسنة الحالية حتى لا تُفقد سنة السجل عند إعادة التحميل.
+    const reconciled = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }, reportingYear);
     if (reconciled.changed) setAccounts(reconciled.accounts);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reportingYear]);
 
   useEffect(() => {
     const cleaned = cleanupOpeningBalanceDuplicates({ accounts, cashBoxes, bankAccounts, customers, vendors, employees });
