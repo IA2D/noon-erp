@@ -47,6 +47,11 @@ Literal output/result: RELATIONAL_SQLITE_SMOKE_OK accounts=2 journals=1/2 paymen
 Literal output/result: ✓ built in 2m 33s
 Exit status: 0
 
+Command: npm run lint && npm run fiscal-year:regression && npm run build
+Input: final product source at dcc50ae7b78fd19db5083fffb8e30d4350f76be2, including fiscal state version synchronization
+Literal output/result: FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true
+Literal output/result: ✓ built in 2m 19s
+Exit status: 0
 Command: npm run reports-ui:regression
 Input: financial report implementation including pending vouchers and affectsLedger/OPENING_AUDIT filtering
 Literal output/result: FINANCIAL_REPORTS_BACKGROUND_OK inheritedShell=true standaloneBackground=false matchesOtherModules=true entitySections=true currencySections=true combinedPrintJob=true summarySuppressesDetails=true pendingVouchersVisible=true analyticalProjection=true
@@ -85,5 +90,6 @@ Literal output/result: ROLLBACK_OK base=a6fff06e5562a51d7622c9d6662ec3f4a2f8e529
 Literal output/result: ROLLBACK_TREE_MATCH=True
 Exit status: 0
 Restored behavior/status: the separate copy exactly matched the baseline commit tree; the primary worktree and MODIFIED_FILE remained changed.
+
 
 
