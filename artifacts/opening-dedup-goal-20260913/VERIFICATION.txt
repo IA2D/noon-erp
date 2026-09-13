@@ -1,0 +1,60 @@
+BRANCH/FIELD
+opening-balances/control-account-source-of-truth
+
+FOUR PATHS
+MODIFIED_FILE: D:\Dev env\@commando\FULLERP\artifacts\opening-dedup-goal-20260913\MODIFIED_FILE
+DIFF_FILE: D:\Dev env\@commando\FULLERP\artifacts\opening-dedup-goal-20260913\DIFF_FILE
+VERIFICATION.txt: D:\Dev env\@commando\FULLERP\artifacts\opening-dedup-goal-20260913\VERIFICATION.txt
+ROLLBACK.sh: D:\Dev env\@commando\FULLERP\artifacts\opening-dedup-goal-20260913\ROLLBACK.sh
+
+BASELINE
+command: git rev-parse 2050dbd
+input: repository before opening-balance de-duplication goal
+literal output/result: 2050dbd471c66ccb65e5fdc506246991d020b3ce
+exit status: 0
+
+MODIFIED
+command: npm run lint
+input: current source tree
+literal output/result: tsc --noEmit
+exit status: 0
+command: npm run fiscal-year:regression
+input: legacy parent total 37.50 + duplicated analytical row 37.50 + current movement 18.75
+literal output/result: CANONICAL_CONTROL_OPENINGS_OK analyticalSource=true duplicateRemoved=true scalarUpgraded=true parentDerivedOnce=true total=150 idempotent=true; FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true noJournal=true
+exit status: 0
+command: npm run opening-interaction:regression
+input: opening balances saved-browser source
+literal output/result: OPENING_BALANCES_INTERACTION_OK focus=modal shortcuts=F9+F8 enterPreserves=true autosaveBrowse=true savedRows=primary-grid printSavedRows=true entityPriority=true lightButtons=true
+exit status: 0
+command: npm run accounting:regression
+input: accounting fixture
+literal output/result: ACCOUNTING_REPORT_REGRESSION_OK ... balanced=true pendingExcluded=true
+exit status: 0
+command: npm run build
+input: current source tree
+literal output/result: built in 2m 20s
+exit status: 0
+command: npm run desktop:smoke
+input: SQLite backup/restore fixture
+literal output/result: SQLITE_BACKUP_RESTORE_SMOKE_OK baseline=[{"id":"J-1"}] restored=2 removed=1 total=2 integrity=ok
+exit status: 0
+command: npx electron-builder --win nsis portable --config.directories.output=release-20260913-opening-dedup-final
+input: dist from current HEAD
+literal output/result: installer and portable produced; installer SHA256 C0AED5A3462A180E132C0070CB083967F1A6418DB3DEC783F0288D1C21937A7A; portable SHA256 67EBE5D466AA6448FC4EBA4B0A8A13D7D73410E0BE632447A551A4A11A83ED71
+exit status: 0
+
+ROLLBACK
+command: C:\Program Files\Git\bin\bash.exe artifacts/opening-dedup-goal-20260913/ROLLBACK.sh artifacts/opening-dedup-goal-20260913/rollback-test
+input: modified source bundle, baseline 2050dbd
+literal output/result: ROLLBACK_MATCH=true
+exit status: 0
+
+RESTORED BEHAVIOR/STATUS
+Legacy restored databases are canonicalized once at database open. Analytical openings are the source of truth, exact duplicate records are removed, scalar legacy analytical balances are upgraded to records, and each control account contains one derived aggregate cache per currency. Opening-balance browse/edit omits the duplicate parent total. Rollover ignores parent totals whenever analytical rows exist.
+
+
+PACKAGED CONTENT CHECK
+command: @electron/asar extractFile(app.asar, electron/legacy-fiscal-migration.mjs)
+input: release-20260913-opening-dedup-final/win-unpacked/resources/app.asar
+literal output/result: PACKAGED_MIGRATION_VERIFIED=true
+exit status: 0
