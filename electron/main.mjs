@@ -521,6 +521,10 @@ app.on('before-quit', event => {
   if (backupScheduleTimer) clearInterval(backupScheduleTimer);
   if (db) {
     try { createInternalBackup('shutdown'); } catch (error) { console.error('[database-backup:quit]', error); }
-    db.close();
+    // before-quit can be emitted again after window-all-closed. Mark the
+    // handle consumed so the second pass never closes an already closed DB.
+    const closingDb = db;
+    db = undefined;
+    closingDb.close();
   }
 });
