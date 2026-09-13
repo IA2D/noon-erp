@@ -44,8 +44,8 @@ export default function Navbar({ user, onLogout, onNavigate, notificationCount, 
     <header
       className="paper sticky top-0 z-50 px-4 py-2 flex flex-col gap-2 border-b border-[#023e6a] bg-[#0284c7] text-white overflow-visible transition-colors duration-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
     >
-      <div className="flex items-center justify-between gap-2 min-h-[40px]">
-      {fiscalYear && <div className="order-2 ms-auto rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-bold text-white dark:border-slate-700 dark:bg-slate-800">السنة المالية: <bdi dir="ltr">{fiscalYear}</bdi></div>}
+      <div className="relative flex items-center justify-between gap-2 min-h-[40px]">
+      {fiscalYear && <div className="absolute left-1/2 -translate-x-1/2 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-bold text-white whitespace-nowrap dark:border-slate-700 dark:bg-slate-800">السنة المالية: <bdi dir="ltr">{fiscalYear}</bdi></div>}
       <div className="flex items-center gap-2.5 min-w-0 shrink-0" aria-label={`${PRODUCT_NAME} for Finance & Accounting`}>
         <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border border-white/40 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 overflow-hidden">
           <img src="./brand/fullerp-icon-64.png" alt="" aria-hidden="true" className="w-9 h-9 object-contain dark:hidden" />
