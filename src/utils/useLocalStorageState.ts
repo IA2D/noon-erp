@@ -58,3 +58,45 @@ export function useLocalStorageState<T>(
 
   return [state, setState];
 }
+
+/**
+ * Same persistence contract, but bound to a fiscal-year namespace. Changing the
+ * selected year reloads that year's authoritative value instead of retaining
+ * the previous year's React state.
+ */
+export function useFiscalYearStorageState<T>(
+  baseKey: string,
+  fiscalYear: string,
+  initialValue: T
+): [T, Dispatch<SetStateAction<T>>] {
+  const key = `${baseKey}::fiscal-year::${fiscalYear}`;
+  const read = (): T => {
+    try {
+      const stored = window.desktopStore?.getItem(key) ?? localStorage.getItem(key);
+      if (stored !== null && stored !== 'null') return JSON.parse(stored) as T;
+    } catch {}
+    return initialValue;
+  };
+  const [state, setState] = useState<T>(read);
+  const versionRef = useRef<number>(window.desktopStore?.version(key) ?? 0);
+  const loadedKeyRef = useRef(key);
+
+  useEffect(() => {
+    loadedKeyRef.current = key;
+    versionRef.current = window.desktopStore?.version(key) ?? 0;
+    setState(read());
+  // initialValue is a fallback seed; a year switch is the reload boundary.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  useEffect(() => {
+    if (loadedKeyRef.current !== key) return;
+    const serialized = JSON.stringify(state);
+    if (window.desktopStore) {
+      const result = window.desktopStore.setItemVersioned(key, serialized, versionRef.current);
+      if (result.ok) versionRef.current = result.version ?? versionRef.current + 1;
+    } else localStorage.setItem(key, serialized);
+  }, [key, state]);
+
+  return [state, setState];
+}

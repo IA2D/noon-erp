@@ -53,3 +53,5 @@
 - [x] Implement reusable year-dataset graph cloning with new IDs, FK remapping, date shifting, and clone validation.
 
 - [x] Add renderer-side year-scoped dataset key, legacy partitioning, and fiscal-year stamping primitives.
+
+- [x] Add React persistence hook that reloads and writes an authoritative fiscal-year namespace when the selected year changes.
