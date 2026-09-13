@@ -461,9 +461,17 @@ function runPackagedSmoke(window) {
   });
   window.webContents.once('did-finish-load', async () => {
     try {
-      // did-finish-load can precede React's first committed frame in a packaged
-      // renderer; wait briefly so the smoke probe validates the real login UI.
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // The portable launcher extracts the application on every run and its
+      // first React commit can be delayed by antivirus scanning. Poll the real
+      // rendered login screen instead of sampling a transient empty body.
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const ready = await window.webContents.executeJavaScript(`(() => {
+          const text = document.body?.innerText || '';
+          return text.includes('NOON ERP') && text.includes('تسجيل الدخول') && text.includes('العام الافتراضي');
+        })()`);
+        if (ready) break;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
       const renderer = await window.webContents.executeJavaScript(`(() => {
         const text = document.body?.innerText || '';
         const login = window.desktopStore?.login('admin', 'admin123');
