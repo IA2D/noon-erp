@@ -1405,7 +1405,7 @@ function AppInner() {
   };
 
   function reversePostedJournal(original: JournalEntry, reason: string, module: AuditLog['module'], extraStateChanges: Array<{ key: string; value: unknown }> = []): JournalEntry | null {
-    if (original.reference?.startsWith('OPEN-')) {
+    if (original.readOnly || original.entryKind === 'OPENING_AUDIT' || original.reference?.startsWith('OPEN-')) {
       addAuditLog(module, 'VOID', `رُفض عكس القيد الافتتاحي ${original.entryNumber}: القيد سجل تدوير للعرض فقط، ومصدر الرصيد هو الأرصدة الافتتاحية للسنة.`);
       return null;
     }
@@ -1522,6 +1522,10 @@ function AppInner() {
       currency: currencies.find(c => c.isBase)?.code ?? 'YER',
       exchangeRate: 1,
       status: 'POSTED',
+      fiscalYear: nextYear,
+      entryKind: 'OPENING_AUDIT',
+      affectsLedger: false,
+      readOnly: true,
       createdBy: currentUserName,
       createdAt: now,
       postedBy: currentUserName,

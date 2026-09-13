@@ -67,7 +67,8 @@
     "opening-interaction:regression": "tsx scripts/opening-balances-interaction-regression.mts",
     "sub-ledger-scope:regression": "tsx scripts/sub-ledger-account-scope-regression.mts",
     "statement-summary:regression": "tsx scripts/statement-summary-regression.mts",
-    "balance-sheet:regression": "tsx scripts/balance-sheet-report-regression.mts"
+    "balance-sheet:regression": "tsx scripts/balance-sheet-report-regression.mts",
+    "fiscal-year:regression": "node scripts/fiscal-year-context-regression.mjs && node scripts/fiscal-year-rollover-regression.mjs && tsx scripts/fiscal-year-dataset-regression.mts && node scripts/fiscal-year-atomic-rollover-regression.mjs && node scripts/legacy-fiscal-migration-regression.mjs && tsx scripts/fiscal-year-report-isolation-regression.mts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

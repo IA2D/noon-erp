@@ -594,7 +594,7 @@ export default function FinancialReportsView({
   // from its own currency statement because its source side was stored as YER.
   const reportingJournals = useMemo(
     () => normalizeVoucherSourceJournalCurrencies(
-      [...journals.filter(journal => journal.status !== 'VOIDED'), ...pendingVoucherJournals].map(journal => ({ ...journal, date: dateToIso(journal.date) })),
+      [...journals.filter(journal => journal.status !== 'VOIDED' && journal.affectsLedger !== false), ...pendingVoucherJournals].map(journal => ({ ...journal, date: dateToIso(journal.date) })),
       [...vouchers, ...receiptVouchers],
       baseCode,
       selectedDecimals,
@@ -614,15 +614,11 @@ export default function FinancialReportsView({
     [fiscalReportingJournals, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]
   );
 
-  const carryForwardJournals = useMemo(
-    () => baseJournals.filter(journal => journal.status === 'POSTED' &&
-      (/^OPEN-\d{4}$/.test(journal.reference || '') || /^OPEN-\d{4}$/.test(journal.entryNumber || '')) &&
-      (journal.reference === `OPEN-${fiscalYear}` || journal.entryNumber === `OPEN-${fiscalYear}`) &&
-      !journal.reversedByEntryId),
-    [baseJournals, fiscalYear]
-  );
-  const carryForwardIds = useMemo(() => new Set(carryForwardJournals.map(journal => journal.id)), [carryForwardJournals]);
-  const reportJournals = useMemo(() => baseJournals.filter(journal => !carryForwardIds.has(journal.id)), [baseJournals, carryForwardIds]);
+  const reportJournals = useMemo(() => baseJournals.filter(journal =>
+    journal.affectsLedger !== false &&
+    journal.entryKind !== 'OPENING_AUDIT' &&
+    !(/^OPEN-\d{4}$/.test(journal.reference || '') || /^OPEN-\d{4}$/.test(journal.entryNumber || ''))
+  ), [baseJournals]);
 
   const journalsInRange = useMemo(() => reportDocuments(reportJournals, fromDate, toDate, true), [reportJournals, fromDate, toDate]);
   // تشمل التقارير القيود والسندات المنتظرة من دون وسم حالة إضافي داخل التقرير.

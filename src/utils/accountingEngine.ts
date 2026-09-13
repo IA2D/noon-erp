@@ -711,7 +711,7 @@ export function calculateAccountActivity(accounts: Account[], journals: JournalE
   });
 
   journals
-    .filter(j => includeAllStatuses || j.status === 'POSTED')
+    .filter(j => j.affectsLedger !== false && (includeAllStatuses || j.status === 'POSTED'))
     .forEach(entry => {
       entry.lines.forEach(line => {
         if (!accountBalances[line.accountId]) {

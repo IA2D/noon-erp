@@ -218,6 +218,14 @@ export interface JournalEntry extends ExchangeRateEvidence {
   replacementOfEntryId?: string;
   replacementReason?: string;
   attachments?: SupportingDocument[];
+  /** Fiscal-year ownership for isolated datasets. */
+  fiscalYear?: string;
+  /** OPENING_AUDIT is a read-only rollover trace, not a ledger movement. */
+  entryKind?: 'STANDARD' | 'OPENING_AUDIT';
+  /** False means the journal is visible for audit only and is excluded from balances/reports. */
+  affectsLedger?: boolean;
+  /** Prevents edit, reversal, void, or deletion of system audit journals. */
+  readOnly?: boolean;
 }
 
 export interface AuditLog {

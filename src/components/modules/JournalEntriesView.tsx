@@ -617,7 +617,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
   {selectedEntry.status ==='POSTED' ?'مُرّحل معتمد' : selectedEntry.status ==='PENDING_POSTING' ?'بانتظار الترحيل' :'ملغى'}
   </span>
 
-   {selectedEntry.status === 'PENDING_POSTING' && (
+   {selectedEntry.status === 'PENDING_POSTING' && !selectedEntry.readOnly && selectedEntry.entryKind !== 'OPENING_AUDIT' && (
    <button
    onClick={() => openEditJournal(selectedEntry)}
    className="text-xs text-sky-400 hover:text-sky-300 font-medium hover:underline"
@@ -635,7 +635,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
    <span className="inline-flex items-center gap-1"><Printer className="w-3.5 h-3.5" /> طباعة</span>
    </button>
 
-  {selectedEntry.status ==='POSTED' && !selectedEntry.reference?.startsWith('OPEN-') && (
+  {selectedEntry.status ==='POSTED' && !selectedEntry.readOnly && selectedEntry.entryKind !== 'OPENING_AUDIT' && !selectedEntry.reference?.startsWith('OPEN-') && (
    <button
    onClick={() => { const reason = prompt('سبب إنشاء مستند بديل للقيد؟'); if (!reason?.trim()) return; const replacement = replacementJournal(selectedEntry, { ...selectedEntry, id: `replacement-${Date.now()}`, entryNumber: nextJournalNumber(journals), status: 'PENDING_POSTING', createdAt: new Date().toISOString(), postedAt: undefined, postedBy: undefined, replacementOfEntryId: selectedEntry.id, replacementReason: reason.trim(), attachments: [] }, currentUserName, reason); onAddJournal(replacement); }}
    className="text-xs text-amber-400 hover:text-amber-300 font-medium hover:underline"
@@ -645,7 +645,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
    </button>
    )}
 
-   {selectedEntry.status ==='POSTED' && !selectedEntry.reference?.startsWith('OPEN-') && (
+   {selectedEntry.status ==='POSTED' && !selectedEntry.readOnly && selectedEntry.entryKind !== 'OPENING_AUDIT' && !selectedEntry.reference?.startsWith('OPEN-') && (
    <button
    onClick={() => confirm(`سيبقى القيد ${selectedEntry.entryNumber} مُرحّلاً وسيُنشأ قيد عكسي مرتبط. متابعة؟`) && onVoidJournal(selectedEntry.id)}
    className="text-xs text-red-400 hover:text-red-300 font-medium hover:underline"
@@ -654,7 +654,7 @@ export default function JournalEntriesView({ journals, accounts, cashBoxes, bank
    </button>
    )}
 
-   {selectedEntry.reference?.startsWith('OPEN-') && (
+   {(selectedEntry.readOnly || selectedEntry.entryKind === 'OPENING_AUDIT' || selectedEntry.reference?.startsWith('OPEN-')) && (
      <span className="text-xs font-bold text-slate-400">قيد تدوير للعرض فقط — الرصيد محفوظ في الأرصدة الافتتاحية</span>
    )}
 

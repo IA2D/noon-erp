@@ -271,7 +271,7 @@ export default function ClosingView({
   const unpostRows: PostRow[] = useMemo(() => {
     const rows: PostRow[] = [];
     journals
-      .filter(j => j.status === 'POSTED' && !j.reversedByEntryId && !j.reversalOfEntryId && (!j.sourceType || j.sourceType === 'MANUAL') && !j.reference?.startsWith('CLOSE-') && !j.reference?.startsWith('OPEN-'))
+      .filter(j => j.status === 'POSTED' && j.affectsLedger !== false && j.entryKind !== 'OPENING_AUDIT' && !j.reversedByEntryId && !j.reversalOfEntryId && (!j.sourceType || j.sourceType === 'MANUAL') && !j.reference?.startsWith('CLOSE-') && !j.reference?.startsWith('OPEN-'))
       .forEach(j => {
         rows.push({ kind: 'JOURNAL', id: j.id, docNo: j.entryNumber, date: j.date, amount: j.totalDebit, narration: j.narration, balanced: true });
       });
