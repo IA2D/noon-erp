@@ -227,9 +227,18 @@ const K = {
 
 function legacyDatasetYear(fallback: string): string {
   try {
-    const rows = JSON.parse(getPersistentItem(K.journals) || '[]') as Array<{ date?: string }>;
-    const years = rows.map(row => String(row.date || '').slice(0, 4)).filter(year => /^\d{4}$/.test(year)).sort();
-    if (years.length) return years[0];
+    const rows = JSON.parse(getPersistentItem(K.journals) || '[]') as Array<{ date?: string; reference?: string; entryNumber?: string }>;
+    const counts = new Map<string, number>();
+    rows.forEach(row => {
+      if (/^OPEN-\d{4}$/.test(String(row.reference || row.entryNumber || ''))) return;
+      const year = String(row.date || '').slice(0, 4);
+      if (/^\d{4}$/.test(year)) counts.set(year, (counts.get(year) || 0) + 1);
+    });
+    if (counts.size) {
+      const ranked = [...counts].sort((a, b) => b[1] - a[1] || Number(b[0]) - Number(a[0]));
+      const tied = ranked.filter(([, count]) => count === ranked[0][1]).map(([year]) => year);
+      return tied.includes(fallback) ? fallback : ranked[0][0];
+    }
   } catch {}
   return fallback;
 }
