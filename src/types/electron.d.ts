@@ -60,7 +60,7 @@ declare global {
       };
       createBackup(): { ok: boolean; path?: string; integrity?: string; retained?: number; error?: string };
       exportBackup(): Promise<{ ok: boolean; canceled?: boolean; path?: string; integrity?: string; error?: string }>;
-      restoreBackup(): Promise<{ ok: boolean; canceled?: boolean; integrity?: string; safetyBackup?: string; restarting?: boolean; error?: string }>;
+      restoreBackup(sourcePath?: string): Promise<{ ok: boolean; canceled?: boolean; integrity?: string; safetyBackup?: string; restarting?: boolean; error?: string }>;
       login(username: string, password: string): { ok: boolean; token?: string; error?: string; user?: { username: string; name: string; roleId: string; mustChangePassword: boolean; expiresAt: string } };
       session(token: string): { ok: boolean; user?: { username: string; name: string; roleId: string; mustChangePassword: boolean; expiresAt: string } };
       logout(token: string): boolean;

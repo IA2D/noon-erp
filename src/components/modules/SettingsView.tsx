@@ -228,6 +228,7 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
   const restoreInputRef = useRef<HTMLInputElement>(null);
+  const databaseRestoreInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const { t, lang } = useI18n();
   const Arrow = lang === 'ar' ? ChevronLeft : ChevronRight;
@@ -519,6 +520,34 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
     } finally {
       setRestoreBusy(false);
     }
+  };
+
+  const chooseDatabaseRestoreFile = () => {
+    if (!databaseRestorePassword) { toast('error', 'أدخل كلمة المرور أولاً.'); return; }
+    databaseRestoreInputRef.current?.click();
+  };
+
+  const handleDatabaseRestoreFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !window.desktopStore?.restoreBackup) return;
+    setRestoreBusy(true);
+    try {
+      const desktopSession = window.desktopStore.session('');
+      const session = JSON.parse(window.localStorage.getItem('elite-erp-session-v1') || '{}');
+      const username = String(desktopSession?.user?.username || session.username || '');
+      if (!username || !window.desktopStore.login(username, databaseRestorePassword).ok) {
+        toast('error', 'كلمة المرور غير صحيحة — لم تتم استعادة النسخة.');
+        return;
+      }
+      const sourcePath = (file as File & { path?: string }).path;
+      if (!sourcePath) { toast('error', 'تعذر تحديد مسار ملف النسخة.'); return; }
+      const result = await window.desktopStore.restoreBackup(sourcePath);
+      if (result.canceled) return;
+      if (!result.ok) { toast('error', 'تعذر التحقق من نسخة SQLite أو استعادتها.'); return; }
+      setPendingDatabaseRestore(false); setDatabaseRestorePassword('');
+      toast('success', 'تمت استعادة النسخة الكاملة والتحقق منها. سيُعاد تشغيل التطبيق الآن.');
+    } finally { setRestoreBusy(false); }
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1127,13 +1156,14 @@ export default function SettingsView({ currentUserName = 'مستخدم', onPassw
             </label>
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" disabled={restoreBusy} onClick={() => setPendingDatabaseRestore(false)} className="px-4 py-2 text-slate-400 hover:bg-slate-900 rounded-xl text-sm font-medium cursor-pointer disabled:opacity-50">إلغاء</button>
-              <button type="button" disabled={restoreBusy} onClick={applyDatabaseRestore} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-50">
+              <button type="button" disabled={restoreBusy} onClick={chooseDatabaseRestoreFile} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-50">
                 {restoreBusy ? 'جارٍ التحقق والاستعادة...' : 'اختيار النسخة واستعادتها'}
               </button>
             </div>
           </div>
         </ModalShell>
       )}
+      <input ref={databaseRestoreInputRef} type="file" accept=".sqlite,.db" className="hidden" onChange={handleDatabaseRestoreFile} />
     </div>
   );
 }

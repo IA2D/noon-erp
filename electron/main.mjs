@@ -232,8 +232,8 @@ function registerStorageIpc() {
     try { return { ok: true, ...createVerifiedBackupAt(db, choice.filePath) }; }
     catch (error) { return { ok: false, error: String(error) }; }
   });
-  ipcMain.handle('desktop-store:restore-backup', async event => {
-    const choice = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender) ?? undefined, {
+  ipcMain.handle('desktop-store:restore-backup', async (event, requestedSource) => {
+    const choice = requestedSource ? { canceled: false, filePaths: [String(requestedSource)] } : await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender) ?? undefined, {
       title: 'اختيار نسخة NOON ERP للاستعادة', properties: ['openFile'],
       filters: [{ name: 'NOON ERP SQLite Backup', extensions: ['sqlite', 'db'] }],
     });

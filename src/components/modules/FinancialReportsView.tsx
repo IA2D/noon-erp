@@ -453,7 +453,7 @@ export default function FinancialReportsView({
   const [includeOpening, setIncludeOpening] = useState(true);
   const [reportLevel, setReportLevel] = useState<'ANALYTICAL' | 'SUMMARY'>('ANALYTICAL');
   const isSummary = reportLevel === 'SUMMARY';
-  const [showZeroAccounts, setShowZeroAccounts] = useState(true);
+  const [showZeroAccounts, setShowZeroAccounts] = useState(false);
   const [showPriorComparison, setShowPriorComparison] = useState(true);
   const [showReport, setShowReport] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(true);
