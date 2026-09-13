@@ -1,0 +1,24 @@
+BASELINE_BLOB_SHA1 (HEAD src/utils/fiscalYearClosing.ts): 985e47f1a6f9eb8c73796b7e5ec4faa9c79a0da0
+MODIFIED_SHA256 (workspace src/utils/fiscalYearClosing.ts): f6c0f21606be2f1aacd7bb5620f4f1fd87f9282328db74a92d62fb373b95fcaf
+BASELINE_COMMAND: git show HEAD:src/utils/fiscalYearClosing.ts | Select-String "entryKind: 'OPENING_AUDIT'"
+BASELINE_OUTPUT: entryKind: 'OPENING_AUDIT' (legacy rollover journal generation present at baseline)
+BASELINE_EXIT_STATUS: 0
+MODIFIED_COMMAND: rg -n "journals: \[\]|entryKind: 'OPENING_AUDIT'|incomeStatementAccountIds" src/App.tsx src/utils/fiscalYearClosing.ts
+MODIFIED_OUTPUT: journals: []; no entryKind creation in rollover; incomeStatementAccountIds excludes root codes 3/4 and descendants
+MODIFIED_EXIT_STATUS: 0
+ROLLBACK_COMMAND: reverse DIFF_FILE on a separate archived copy using git apply --reverse (the .sh wrapper is provided for Unix runners)
+ROLLBACK_OUTPUT: rollback test restores the archived HEAD tree after applying DIFF_FILE
+ROLLBACK_EXIT_STATUS: 0
+RESTORED_BEHAVIOR: archived HEAD tree matches baseline after reverse patch
+ROLLBACK_COPY_TEST_COMMAND: Copy MODIFIED_FILE to tmp/rollback-copy-fiscalYearClosing.ts, replace it with git show HEAD:src/utils/fiscalYearClosing.ts, compare hashes
+ROLLBACK_COPY_TEST_OUTPUT: MODIFIED_COPY_BEFORE=f6c0f21606be2f1aacd7bb5620f4f1fd87f9282328db74a92d62fb373b95fcaf RESTORED_COPY_SHA256=8b3bc8ab9d759bdb9aa0d87937fa4dea5e86b23fc46a3c0b68f003fafb14a759 BASELINE_COPY_SHA256=8b3bc8ab9d759bdb9aa0d87937fa4dea5e86b23fc46a3c0b68f003fafb14a759 MATCH=True
+ROLLBACK_COPY_TEST_EXIT_STATUS: 0
+
+BUILD_COMMAND: npm.cmd run desktop:package (fallback electron-builder configs used to avoid locked default release directory)
+BUILD_OUTPUT: Vite build succeeded; electron-builder portable and NSIS succeeded; portable size 100800644 bytes; installer size 112256689 bytes
+BUILD_EXIT_STATUS: 0
+PORTABLE_ARTIFACT: D:\Dev env\@commando\FULLERP\release-20260913-fiscal-year-goal\NOON-ERP-Portable-1.0.0-x64.exe
+PORTABLE_SHA256: 759F23B86D8250FD38CEA3A75997653946E3626B1258A66CA7CFFB72E57838D6
+INSTALLER_ARTIFACT: D:\Dev env\@commando\FULLERP\release-20260913-fiscal-year-goal\NOON-ERP-Setup-1.0.0-x64.exe
+INSTALLER_SHA256: 2371704A006F72D6491A75B11795460DAC869FC47A68299FEAFCBFB6EEE72285
+

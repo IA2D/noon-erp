@@ -127,3 +127,51 @@ export function migrateLegacyFiscalDataset(db, relationalStore, fallbackYear = '
     throw error;
   }
 }
+
+const isRolloverAuditJournal = row => row?.entryKind === 'OPENING_AUDIT'
+  || /^OPEN-\d{4}$/.test(String(row?.reference || row?.entryNumber || ''));
+
+/** One-time cleanup after opening balances became the sole rollover source of truth. */
+export function migrateRemoveRolloverJournals(db, relationalStore) {
+  const markerKey = 'rollover_audit_journals_removed_v1';
+  if (db.prepare('SELECT value FROM app_metadata WHERE key=?').get(markerKey)?.value) return { migrated: false, removed: 0, keys: 0 };
+  const rows = db.prepare("SELECT key,value FROM kv_store WHERE key=? OR key GLOB ?")
+    .all(JOURNALS, `${JOURNALS}::fiscal-year::*`);
+  const periodRows = db.prepare("SELECT key,value FROM kv_store WHERE key=? OR key GLOB ?")
+    .all(PERIOD_STATES, `${PERIOD_STATES}::fiscal-year::*`);
+  const write = db.prepare("UPDATE kv_store SET value=?,updated_at=datetime('now') WHERE key=?");
+  const bump = db.prepare(`INSERT INTO kv_versions(key,version,updated_at) VALUES(?,1,datetime('now')) ON CONFLICT(key) DO UPDATE SET version=version+1,updated_at=datetime('now')`);
+  let removed = 0;
+  let keys = 0;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const row of rows) {
+      const journals = parse(row.value);
+      if (!Array.isArray(journals)) continue;
+      const kept = journals.filter(item => !isRolloverAuditJournal(item));
+      if (kept.length === journals.length) continue;
+      removed += journals.length - kept.length;
+      const serialized = JSON.stringify(kept);
+      write.run(serialized, row.key);
+      relationalStore.syncCollection(row.key, serialized);
+      bump.run(row.key);
+      keys += 1;
+    }
+    for (const row of periodRows) {
+      const periods = parse(row.value);
+      if (!Array.isArray(periods) || !periods.some(item => item?.openingEntryId)) continue;
+      const cleaned = periods.map(item => item?.openingEntryId ? { ...item, openingEntryId: undefined } : item);
+      const serialized = JSON.stringify(cleaned);
+      write.run(serialized, row.key);
+      relationalStore.syncCollection(row.key, serialized);
+      bump.run(row.key);
+      keys += 1;
+    }
+    db.prepare('INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(markerKey, new Date().toISOString());
+    db.exec('COMMIT');
+    return { migrated: true, removed, keys };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}

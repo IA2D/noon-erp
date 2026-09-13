@@ -65,6 +65,7 @@ import { accountsWithCurrencyOpenings, normalizeVoucherSourceJournalCurrencies, 
 import { defaultReportToDate, toLocalIsoDate } from '../../utils/dateDefaults';
 import { reconcileControlAccountOpenings } from '../../services/openingBalancesService';
 import { summarizeStatementCurrencyConversions, summarizeStatementsByCurrency } from '../../utils/statementSummary';
+import type { FiscalYearDatasetLoader } from '../../utils/fiscalYearReporting';
 
 interface Props {
   accounts: Account[];
@@ -83,6 +84,8 @@ interface Props {
   receiptVouchers?: ReceiptVoucher[];
   enableEnhancedView?: boolean;
   fiscalYear: string;
+  availableFiscalYears?: string[];
+  loadFiscalYearDataset?: FiscalYearDatasetLoader;
 }
 
 type ReportType = 'TRIAL_BALANCE' | 'INCOME_STATEMENT' | 'BALANCE_SHEET' | 'CASH_FLOW' | 'EQUITY_CHANGES' | 'LEDGER' | 'COST_CENTERS' | 'EMPLOYEES_REPORT' | 'CUSTOMERS_REPORT' | 'VENDORS_REPORT' | 'CASHBOX_REPORT' | 'BANK_REPORT' | 'TRUSTS_REPORT' | 'PAYMENT_VOUCHERS_REPORT' | 'RECEIPT_VOUCHERS_REPORT' | 'JOURNAL_ENTRIES_REPORT';
@@ -423,7 +426,7 @@ function TreeBranch({
   );
 }
 
-export default function FinancialReportsView({
+function FinancialReportsContent({
   accounts,
   journals,
   costCenters,
@@ -444,7 +447,7 @@ export default function FinancialReportsView({
   const { active: activeCurrencies, baseCode, symbolOf } = useActiveCurrencies(currencies);
   const [reportType, setReportType] = useState<ReportType>('TRIAL_BALANCE');
   const [fromDate, setFromDate] = useState(() => configuredFiscalPeriod(fiscalYear).start);
-  const [toDate, setToDate] = useState(defaultReportToDate);
+  const [toDate, setToDate] = useState(() => configuredFiscalPeriod(fiscalYear).end);
   const [selectedCurrency, setSelectedCurrency] = useState<string>('ALL');
   const [fromAccount, setFromAccount] = useState('');
   const [toAccount, setToAccount] = useState('');
@@ -466,24 +469,13 @@ export default function FinancialReportsView({
   );
 
   const currency = selectedCurrency === 'ALL' ? baseCode : selectedCurrency;
-  // السجلات القديمة لا تحمل fiscalYear. بعد التدوير نحدد سنة المصدر من
-  // أقدم قيد OPEN الموجود (OPEN-2027 يعني أن السجلات القديمة تخص 2026)،
-  // حتى لا تختفي من تقرير السنة المصدر أو تُحتسب مرة أخرى في السنة الجديدة.
-  const legacyOpeningYear = useMemo(() => {
-    const rolloverYears = journals
-      .map(journal => /^OPEN-(\d{4})$/.exec(journal.reference || '')?.[1])
-      .filter((year): year is string => Boolean(year))
-      .map(Number)
-      .filter(Number.isFinite);
-    return rolloverYears.length ? String(Math.min(...rolloverYears) - 1) : fiscalYear;
-  }, [journals, fiscalYear]);
   const openingRecordBelongsToReportYear = (row: { fiscalYear?: string }) =>
-    row.fiscalYear === fiscalYear || (!row.fiscalYear && fiscalYear === legacyOpeningYear);
+    row.fiscalYear === fiscalYear || !row.fiscalYear;
 
   useEffect(() => {
     const period = configuredFiscalPeriod(fiscalYear);
     setFromDate(period.start);
-    setToDate(defaultReportToDate());
+    setToDate(period.end);
     setShowReport(false);
   }, [fiscalYear]);
 
@@ -634,7 +626,7 @@ export default function FinancialReportsView({
       const openingBalanceForeign = rows.reduce((sum, row) => sum + (row.debit || 0) - (row.credit || 0), 0);
       return { ...account, openingBalance, openingBalanceForeign, openingBalances: rows };
     });
-  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear, legacyOpeningYear]);
+  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear]);
   const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(reconciledAccounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [reconciledAccounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
   const reportAccounts = useMemo(
     () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1, true),
@@ -3493,6 +3485,35 @@ export default function FinancialReportsView({
           </FinancialReportPrintLayout>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Keeps report browsing independent from the operational fiscal year. */
+export default function FinancialReportsView(props: Props) {
+  const years = props.availableFiscalYears?.length ? props.availableFiscalYears : [props.fiscalYear];
+  const [selectedYear, setSelectedYear] = useState(props.fiscalYear);
+  useEffect(() => setSelectedYear(props.fiscalYear), [props.fiscalYear]);
+  const dataset = selectedYear === props.fiscalYear || !props.loadFiscalYearDataset
+    ? null
+    : props.loadFiscalYearDataset(selectedYear);
+  const scopedProps: Props = dataset ? { ...props, ...dataset, fiscalYear: selectedYear } : { ...props, fiscalYear: selectedYear };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <label htmlFor="financial-report-year" className="text-sm font-bold text-slate-700 dark:text-slate-200">سنة بيانات التقرير</label>
+        <select
+          id="financial-report-year"
+          value={selectedYear}
+          onChange={event => setSelectedYear(event.target.value)}
+          className="min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+        >
+          {years.map(year => <option key={year} value={year}>{year}{year === props.fiscalYear ? ' — النشطة' : ''}</option>)}
+        </select>
+        {selectedYear !== props.fiscalYear && <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">استعراض فقط — السنة التشغيلية لم تتغير</span>}
+      </div>
+      <FinancialReportsContent key={selectedYear} {...scopedProps} />
     </div>
   );
 }

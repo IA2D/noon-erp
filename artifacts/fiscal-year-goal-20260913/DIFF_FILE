@@ -1,0 +1,960 @@
+diff --git a/electron/legacy-fiscal-migration.mjs b/electron/legacy-fiscal-migration.mjs
+index b6487ed..2543ac4 100644
+--- a/electron/legacy-fiscal-migration.mjs
++++ b/electron/legacy-fiscal-migration.mjs
+@@ -127,3 +127,51 @@ export function migrateLegacyFiscalDataset(db, relationalStore, fallbackYear = '
+     throw error;
+   }
+ }
++
++const isRolloverAuditJournal = row => row?.entryKind === 'OPENING_AUDIT'
++  || /^OPEN-\d{4}$/.test(String(row?.reference || row?.entryNumber || ''));
++
++/** One-time cleanup after opening balances became the sole rollover source of truth. */
++export function migrateRemoveRolloverJournals(db, relationalStore) {
++  const markerKey = 'rollover_audit_journals_removed_v1';
++  if (db.prepare('SELECT value FROM app_metadata WHERE key=?').get(markerKey)?.value) return { migrated: false, removed: 0, keys: 0 };
++  const rows = db.prepare("SELECT key,value FROM kv_store WHERE key=? OR key GLOB ?")
++    .all(JOURNALS, `${JOURNALS}::fiscal-year::*`);
++  const periodRows = db.prepare("SELECT key,value FROM kv_store WHERE key=? OR key GLOB ?")
++    .all(PERIOD_STATES, `${PERIOD_STATES}::fiscal-year::*`);
++  const write = db.prepare("UPDATE kv_store SET value=?,updated_at=datetime('now') WHERE key=?");
++  const bump = db.prepare(`INSERT INTO kv_versions(key,version,updated_at) VALUES(?,1,datetime('now')) ON CONFLICT(key) DO UPDATE SET version=version+1,updated_at=datetime('now')`);
++  let removed = 0;
++  let keys = 0;
++  db.exec('BEGIN IMMEDIATE');
++  try {
++    for (const row of rows) {
++      const journals = parse(row.value);
++      if (!Array.isArray(journals)) continue;
++      const kept = journals.filter(item => !isRolloverAuditJournal(item));
++      if (kept.length === journals.length) continue;
++      removed += journals.length - kept.length;
++      const serialized = JSON.stringify(kept);
++      write.run(serialized, row.key);
++      relationalStore.syncCollection(row.key, serialized);
++      bump.run(row.key);
++      keys += 1;
++    }
++    for (const row of periodRows) {
++      const periods = parse(row.value);
++      if (!Array.isArray(periods) || !periods.some(item => item?.openingEntryId)) continue;
++      const cleaned = periods.map(item => item?.openingEntryId ? { ...item, openingEntryId: undefined } : item);
++      const serialized = JSON.stringify(cleaned);
++      write.run(serialized, row.key);
++      relationalStore.syncCollection(row.key, serialized);
++      bump.run(row.key);
++      keys += 1;
++    }
++    db.prepare('INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(markerKey, new Date().toISOString());
++    db.exec('COMMIT');
++    return { migrated: true, removed, keys };
++  } catch (error) {
++    try { db.exec('ROLLBACK'); } catch {}
++    throw error;
++  }
++}
+diff --git a/electron/main.mjs b/electron/main.mjs
+index a7fe002..128b66e 100644
+--- a/electron/main.mjs
++++ b/electron/main.mjs
+@@ -9,7 +9,7 @@ import { createAccountingCommandStore } from './accounting-command-store.mjs';
+ import { assertSupportedDataPath, createVerifiedBackup, createVerifiedBackupAt, listVerifiedBackups, restoreLatestVerifiedBackup, restoreVerifiedBackup, verifyDatabaseFile, verifyFullerpBackupFile } from './database-recovery.mjs';
+ import { createAuthStore } from './auth-store.mjs';
+ import { bindConfiguredUiScale, normalizeUiScalePercent, uiScaleToZoomFactor } from './ui-scale.mjs';
+-import { migrateLegacyFiscalDataset } from './legacy-fiscal-migration.mjs';
++import { migrateLegacyFiscalDataset, migrateRemoveRolloverJournals } from './legacy-fiscal-migration.mjs';
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ let db;
+@@ -120,6 +120,7 @@ function openDatabase() {
+   relationalStore.ensureSchema();
+   accountingCommandStore = createAccountingCommandStore(db, relationalStore);
+   migrateLegacyFiscalDataset(db, relationalStore, String(Math.max(2026, new Date().getFullYear())));
++  migrateRemoveRolloverJournals(db, relationalStore);
+   authStore = createAuthStore(db);
+   try {
+     const rawSettings = db.prepare("SELECT value FROM kv_store WHERE key='elite-erp-settings-v6'").get()?.value;
+diff --git a/package.json b/package.json
+index 39f67b4..1fff1aa 100644
+--- a/package.json
++++ b/package.json
+@@ -68,7 +68,7 @@
+     "sub-ledger-scope:regression": "tsx scripts/sub-ledger-account-scope-regression.mts",
+     "statement-summary:regression": "tsx scripts/statement-summary-regression.mts",
+     "balance-sheet:regression": "tsx scripts/balance-sheet-report-regression.mts",
+-    "fiscal-year:regression": "node scripts/fiscal-year-context-regression.mjs && node scripts/fiscal-year-rollover-regression.mjs && tsx scripts/fiscal-year-dataset-regression.mts && node scripts/fiscal-year-atomic-rollover-regression.mjs && node scripts/legacy-fiscal-migration-regression.mjs && tsx scripts/fiscal-year-report-isolation-regression.mts && tsx scripts/fiscal-year-closing-regression.mts"
++    "fiscal-year:regression": "node scripts/fiscal-year-context-regression.mjs && node scripts/fiscal-year-rollover-regression.mjs && tsx scripts/fiscal-year-dataset-regression.mts && node scripts/fiscal-year-atomic-rollover-regression.mjs && node scripts/legacy-fiscal-migration-regression.mjs && node scripts/rollover-journal-removal-migration-regression.mjs && tsx scripts/fiscal-year-report-isolation-regression.mts && tsx scripts/fiscal-year-closing-regression.mts && tsx scripts/fiscal-year-cross-reporting-regression.mts"
+   },
+   "dependencies": {
+     "@tailwindcss/vite": "^4.1.14",
+diff --git a/scripts/fiscal-year-closing-regression.mts b/scripts/fiscal-year-closing-regression.mts
+index 9bd1f1b..3701fb6 100644
+--- a/scripts/fiscal-year-closing-regression.mts
++++ b/scripts/fiscal-year-closing-regression.mts
+@@ -8,7 +8,12 @@ const posting = (id: string, code: string, nameAr: string, subLedgerType: Accoun
+   currencies: [{ id: `${id}-yer`, code: 'YER', isDefault: true, isActive: true }, { id: `${id}-usd`, code: 'USD', isDefault: false, isActive: true }],
+   defaultCurrency: 'YER', openingBalance: 0, isActive: true, openingBalances: [],
+ });
+-const accounts = [posting('cash', '1101010001', 'الصندوق', 'CASH_BOX'), posting('equity', '2202010001', 'أرباح مبقاة', 'NONE')];
++const accounts = [
++  posting('cash', '1101010001', 'الصندوق', 'CASH_BOX'),
++  posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'),
++  { ...posting('revenue', '3101010001', 'إيرادات تشغيلية', 'NONE'), nature: 'CREDIT' as const, category: 'INCOME_STATEMENT' as const },
++  { ...posting('expense', '4101010001', 'مصروفات تشغيلية', 'NONE'), nature: 'DEBIT' as const, category: 'INCOME_STATEMENT' as const },
++];
+ const cashBox: CashBox = {
+   id: 'box', code: 'CSH-1', nameAr: 'صندوق USD', nameEn: 'USD box', linkedAccountId: 'cash', defaultCurrency: 'USD', isActive: true,
+   boxType: 'MAIN', currencies: [{ id: 'box-usd', code: 'USD', isDefault: true, isActive: true }], createdAt: '2026-01-01',
+@@ -37,6 +42,9 @@ assert.ok(box.openingBalances?.every(row => row.currency === 'USD' && row.fiscal
+ const control = snapshot.accounts.find(account => account.id === 'cash')!;
+ assert.equal(control.openingBalance, 56.25);
+ assert.equal(control.openingBalances?.[0].foreignAmount, 15);
+-assert.equal(snapshot.lines.reduce((sum, line) => sum + line.debit, 0), 56.25);
+-assert.equal(snapshot.lines.reduce((sum, line) => sum + line.credit, 0), 56.25);
+-console.log('FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true');
++assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.debitLocal || 0), 0), 56.25);
++assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.creditLocal || 0), 0), 56.25);
++assert.ok(snapshot.openings.every(row => row.documentRef === 'CARRY-2026-2027'));
++assert.ok(snapshot.excludedAccountIds.has('revenue') && snapshot.excludedAccountIds.has('expense'));
++assert.ok(!snapshot.accounts.some(account => account.id === 'revenue' || account.id === 'expense'));
++console.log('FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true noJournal=true');
+diff --git a/src/App.tsx b/src/App.tsx
+index 4ed3196..f7a4b57 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -63,6 +63,7 @@ import { applyOpeningBalances, cleanupOpeningBalanceDuplicates, reconcileControl
+ import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
+ import { useFiscalYearStorageState } from './utils/useLocalStorageState';
+ import { fiscalYearStorageKey } from './utils/fiscalYearDatasetStore';
++import type { FiscalYearReportDataset } from './utils/fiscalYearReporting';
+ import { cloneFiscalYearCollections } from './utils/fiscalYearRollover';
+ import { buildFiscalYearOpeningSnapshot } from './utils/fiscalYearClosing';
+ import { isPeriodClosed } from './utils/periodGuard';
+@@ -366,6 +367,36 @@ function AppInner() {
+   // documents independently from the per-account balance rows.
+   const [openingBalanceAttachments, setOpeningBalanceAttachments] = useFiscalYearStorageState<SupportingDocument[]>(K.openingBalanceAttachments, reportingYear, [], legacyFiscalYear);
+ 
++  const loadFiscalYearReportDataset = (year: string): FiscalYearReportDataset => {
++    if (year === reportingYear) {
++      return { fiscalYear: year, accounts, journals, costCenters, currencies, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, vouchers, receiptVouchers };
++    }
++    const read = <T,>(key: string, fallback: T): T => {
++      try {
++        const raw = getPersistentItem(fiscalYearStorageKey(key, year));
++        return raw && raw !== 'null' ? JSON.parse(raw) as T : fallback;
++      } catch { return fallback; }
++    };
++    return {
++      fiscalYear: year,
++      accounts: read<Account[]>(K.accounts, []),
++      journals: read<JournalEntry[]>(K.journals, []).filter(journal =>
++        journal.entryKind !== 'OPENING_AUDIT' && !/^OPEN-\d{4}$/.test(String(journal.reference || journal.entryNumber || ''))
++      ),
++      costCenters: read<CostCenter[]>(K.costCenters, []),
++      currencies: read<Currency[]>(K.currencies, currencies),
++      employees: read<Employee[]>(K.employees, []),
++      customers: read<Customer[]>(K.customers, []),
++      vendors: read<Vendor[]>(K.vendors, []),
++      cashBoxes: read<CashBox[]>(K.cashBoxes, []),
++      bankAccounts: read<BankAccount[]>(K.bankAccounts, []),
++      trusts: read<Trust[]>(K.trusts, []),
++      custodies: read<Custody[]>(K.custodies, []),
++      vouchers: read<PaymentVoucher[]>(K.vouchers, []),
++      receiptVouchers: read<ReceiptVoucher[]>(K.receipts, []),
++    };
++  };
++
+   const [statementNavParams, setStatementNavParams] = useState<{ kind: string; id: string } | null>(null);
+ 
+   useEffect(() => {
+@@ -1493,47 +1524,16 @@ function AppInner() {
+       accounts, journals, cashBoxes, bankAccounts, customers, vendors, employees,
+       sourceYear: year, targetYear: nextYear, baseCurrency,
+     });
+-    const lines = openingSnapshot.lines;
+-    const totalDebit = round2(lines.reduce((sum, line) => sum + (line.debit || 0), 0));
+-    const totalCredit = round2(lines.reduce((sum, line) => sum + (line.credit || 0), 0));
+-    const now = new Date().toISOString().replace('T', ' ').substring(0, 16);
+-    const entry: JournalEntry = {
+-      id: `open-${nextYear}-from-${year}`,
+-      entryNumber: `OPEN-${nextYear}`,
+-      date: `${nextYear}-01-01`,
+-      reference: `OPEN-${nextYear}`,
+-      narration: `القيد الافتتاحي للسنة المالية ${nextYear}`,
+-      lines,
+-      totalDebit: round2(totalDebit),
+-      totalCredit: round2(totalCredit),
+-      currency: currencies.find(c => c.isBase)?.code ?? 'YER',
+-      exchangeRate: 1,
+-      status: 'POSTED',
+-      fiscalYear: nextYear,
+-      entryKind: 'OPENING_AUDIT',
+-      affectsLedger: false,
+-      readOnly: true,
+-      createdBy: currentUserName,
+-      createdAt: now,
+-      postedBy: currentUserName,
+-      postedAt: now
+-    };
+-    const validation = validateGeneratedJournalForPosting(entry, accounts, journals, currencies);
+-    if (!validation.valid) {
+-      addAuditLog('GENERAL_LEDGER', 'POST', `رُفض القيد الافتتاحي ${nextYear}: ${validation.errors.join(' | ')}`);
+-      return false;
+-    }
+-    const linkedPeriod = { ...sourcePeriod, openingEntryId: `OPEN-${nextYear}` };
++    // التدوير يكتب أرصدة افتتاحية مستقلة مباشرةً في مساحة السنة الجديدة.
++    // لا ينشأ قيد يومية صوري لأن مصدر الحقيقة هو openingBalances نفسه.
++    const linkedPeriod = { ...sourcePeriod, openingEntryId: undefined };
+     const nextPeriods = [...periodStates.filter(item => !(item.key === year && item.scope === 'YEAR')), linkedPeriod];
+-    const nextJournals = [entry, ...journals];
+-    // قيد OPEN-YYYY سجل تدقيق للعرض فقط. مصدر الحقيقة للسنة الجديدة هو
+-    // سجلات openingBalances المرتبطة بها، كي لا يدخل القيد كحركة بالتقارير.
+-    const audit = createAuditLog('GENERAL_LEDGER', 'POST', `توليد القيد الافتتاحي للسنة ${nextYear} من إقفال ${year}`);
++    const audit = createAuditLog('GENERAL_LEDGER', 'POST', `تدوير الأرصدة الافتتاحية المستقلة للسنة ${nextYear} من إقفال ${year} دون إنشاء قيد يومية`);
+     const clone = cloneFiscalYearCollections({
+       accounts: openingSnapshot.accounts, costCenters, currencies,
+       cashBoxes: openingSnapshot.cashBoxes, bankAccounts: openingSnapshot.bankAccounts,
+       employees: openingSnapshot.employees, customers: openingSnapshot.customers, vendors: openingSnapshot.vendors,
+-      journals: [entry],
++      journals: [],
+     }, year, nextYear);
+     const target = clone.collections;
+     const changes = [
+@@ -1999,7 +1999,9 @@ function AppInner() {
+   // Operational screens are scoped to the active reporting year; historical
+   // records remain available when the user logs in with their year.
+   const yearScoped = <T extends { date?: string }>(rows: T[]) => rows.filter(row => !row.date || String(row.date).startsWith(`${reportingYear}-`));
+-  const visibleJournals = yearScoped(journals);
++  const visibleJournals = yearScoped(journals).filter(journal =>
++    journal.entryKind !== 'OPENING_AUDIT' && !/^OPEN-\d{4}$/.test(String(journal.reference || journal.entryNumber || ''))
++  );
+   const visibleVouchers = yearScoped(vouchers);
+   const visibleReceipts = yearScoped(receiptVouchers);
+ 
+@@ -2096,6 +2098,9 @@ function AppInner() {
+             bankAccounts={bankAccounts}
+             paymentVouchers={vouchers}
+             receiptVouchers={receiptVouchers}
++            fiscalYear={reportingYear}
++            availableFiscalYears={availableReportingYears}
++            loadFiscalYearDataset={loadFiscalYearReportDataset}
+             onNavigate={(mod) => navigate(mod as ERPModule)}
+             theme={theme}
+           />
+@@ -2163,7 +2168,7 @@ function AppInner() {
+           <CashBoxesView
+             cashBoxes={cashBoxes}
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             currencies={currencies}
+             onAddCashBox={handleAddCashBox}
+             onUpdateCashBox={handleUpdateCashBox}
+@@ -2175,7 +2180,7 @@ function AppInner() {
+           <BankAccountsView
+             bankAccounts={bankAccounts}
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             currencies={currencies}
+             onAddBank={handleAddBank}
+             onUpdateBank={handleUpdateBank}
+@@ -2187,7 +2192,7 @@ function AppInner() {
+           <TrustsView
+             trusts={trusts}
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             employees={employees}
+             onAddTrust={handleAddTrust}
+             onUpdateTrust={handleUpdateTrust}
+@@ -2201,7 +2206,7 @@ function AppInner() {
+           <CustodyView
+             custodies={custodies}
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             employees={employees}
+             customers={customers}
+             cashBoxes={cashBoxes}
+@@ -2224,7 +2229,7 @@ function AppInner() {
+             employees={employees}
+             trusts={trusts}
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             currencies={currencies}
+             onAddEmployee={handleAddEmployee}
+             onUpdateEmployee={handleUpdateEmployee}
+@@ -2236,7 +2241,7 @@ function AppInner() {
+           <CustomersView
+             customers={customers}
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             currencies={currencies}
+             onAddCustomer={handleAddCustomer}
+             onUpdateCustomer={handleUpdateCustomer}
+@@ -2248,7 +2253,7 @@ function AppInner() {
+           <VendorsView
+             vendors={vendors}
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             currencies={currencies}
+             onAddVendor={handleAddVendor}
+             onUpdateVendor={handleUpdateVendor}
+@@ -2259,7 +2264,7 @@ function AppInner() {
+         return (
+           <CostCentersView
+             costCenters={costCenters}
+-            journals={journals}
++            journals={visibleJournals}
+             onAddCostCenter={handleAddCostCenter}
+             onUpdateCostCenter={handleUpdateCostCenter}
+             onDeleteCostCenter={handleDeleteCostCenter}
+@@ -2272,7 +2277,7 @@ function AppInner() {
+             accounts={accounts}
+             cashBoxes={cashBoxes}
+             bankAccounts={bankAccounts}
+-            journals={journals}
++            journals={visibleJournals}
+             onAddCurrency={handleAddCurrency}
+             onUpdateCurrency={handleUpdateCurrency}
+             onDeleteCurrency={handleDeleteCurrency}
+@@ -2282,7 +2287,7 @@ function AppInner() {
+         return (
+           <FinancialReportsView
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             costCenters={costCenters}
+             currentUserName={currentUserName}
+             currencies={currencies}
+@@ -2296,13 +2301,15 @@ function AppInner() {
+             vouchers={vouchers}
+             receiptVouchers={receiptVouchers}
+             fiscalYear={reportingYear}
++            availableFiscalYears={availableReportingYears}
++            loadFiscalYearDataset={loadFiscalYearReportDataset}
+           />
+         );
+       case 'STATEMENT_ACCOUNT':
+         return (
+           <StatementOfAccountView
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             vouchers={vouchers}
+             receiptVouchers={receiptVouchers}
+             employees={employees}
+@@ -2313,6 +2320,8 @@ function AppInner() {
+             currencies={currencies}
+             currentUserName={currentUserName}
+             fiscalYear={reportingYear}
++            availableFiscalYears={availableReportingYears}
++            loadFiscalYearDataset={loadFiscalYearReportDataset}
+             initialKind={statementNavParams?.kind}
+             initialId={statementNavParams?.id}
+             onParamsConsumed={() => setStatementNavParams(null)}
+@@ -2322,7 +2331,7 @@ function AppInner() {
+         return (
+           <ClosingView
+             accounts={accounts}
+-            journals={journals}
++            journals={visibleJournals}
+             auditLogs={auditLogs}
+             vouchers={vouchers}
+             receipts={receiptVouchers}
+diff --git a/src/components/Navbar.tsx b/src/components/Navbar.tsx
+index 5a7bc97..69e21ba 100644
+--- a/src/components/Navbar.tsx
++++ b/src/components/Navbar.tsx
+@@ -45,7 +45,6 @@ export default function Navbar({ user, onLogout, onNavigate, notificationCount,
+       className="paper sticky top-0 z-50 px-4 py-2 flex flex-col gap-2 border-b border-[#023e6a] bg-[#0284c7] text-white overflow-visible transition-colors duration-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+     >
+       <div className="relative flex items-center justify-between gap-2 min-h-[40px]">
+-      {fiscalYear && <div className="absolute left-1/2 -translate-x-1/2 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-bold text-white whitespace-nowrap dark:border-slate-700 dark:bg-slate-800">السنة المالية: <bdi dir="ltr">{fiscalYear}</bdi></div>}
+       <div className="flex items-center gap-2.5 min-w-0 shrink-0" aria-label={`${PRODUCT_NAME} for Finance & Accounting`}>
+         <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border border-white/40 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 overflow-hidden">
+           <img src="./brand/fullerp-icon-64.png" alt="" aria-hidden="true" className="w-9 h-9 object-contain dark:hidden" />
+@@ -58,6 +57,15 @@ export default function Navbar({ user, onLogout, onNavigate, notificationCount,
+       </div>
+ 
+       <div className="flex items-center gap-3 ms-auto">
++        {fiscalYear && (
++          <div
++            data-testid="navbar-fiscal-year"
++            className="hidden md:flex items-center rounded-xl border border-white/40 bg-white/10 px-3 py-2.5 text-xs font-bold text-white whitespace-nowrap dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
++            title={`السنة المالية النشطة: ${fiscalYear}`}
++          >
++            السنة المالية: <bdi dir="ltr" className="ms-1">{fiscalYear}</bdi>
++          </div>
++        )}
+         <button
+           onClick={() => setSearchOpen(true)}
+           title="بحث في النظام (Ctrl + K)"
+diff --git a/src/components/modules/ClosingView.tsx b/src/components/modules/ClosingView.tsx
+index 66df085..8c95be6 100644
+--- a/src/components/modules/ClosingView.tsx
++++ b/src/components/modules/ClosingView.tsx
+@@ -384,7 +384,6 @@ export default function ClosingView({
+   const wizardFinalClosed = wizardPeriod.status === 'FINAL_CLOSED';
+   const wizardNextStatus = wizardPeriod.status === 'OPEN' ? 'TEMP_CLOSED' : wizardPeriod.status === 'TEMP_CLOSED' ? 'REVIEWED' : wizardPeriod.status === 'REVIEWED' ? 'FINAL_CLOSED' : null;
+   const wizardClosingEntry = journals.find(j => j.reference === `CLOSE-${selectedYearWizard}` && j.status === 'POSTED' && !j.reversedByEntryId);
+-  const wizardOpeningEntry = journals.find(j => j.reference === `OPEN-${String(Number(selectedYearWizard) + 1)}` && j.status === 'POSTED');
+   const wizardPreview = wizardFinalClosed ? null : buildClosingEntry(selectedYearWizard);
+ 
+   const wizardTrial = useMemo(() => {
+@@ -1041,28 +1040,24 @@ export default function ClosingView({
+                   {stepBadge(3)}
+                   <div className="flex-1">
+                     <div className="font-bold text-white text-sm">تدوير أرصدة الميزانية للسنة الجديدة</div>
+-                    <p className="text-xs text-slate-400">توليد القيد الافتتاحي لسنة {Number(selectedYearWizard) + 1} من أرصدة الميزانية</p>
++                    <p className="text-xs text-slate-400">إنشاء أرصدة افتتاحية مستقلة لسنة {Number(selectedYearWizard) + 1} دون قيد يومية</p>
+                   </div>
+-                  {wizardOpeningEntry ? (
+-                    <span className="inline-flex items-center gap-1 text-sm font-bold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30"><FileText className="w-3.5 h-3.5" />مرحّل {wizardOpeningEntry.entryNumber}</span>
+-                  ) : (
+                     <button
+                       type="button"
+                       onClick={() => setConfirmRollover(true)}
+                       disabled={!wizardBalanced || !wizardFinalClosed}
+-                      title={!wizardFinalClosed ? 'الإقفال النهائي مطلوب قبل التدوير' : wizardBalanced ? 'توليد القيد الافتتاحي' : 'الميزانية غير متوازنة — لا يمكن التدوير'}
++                      title={!wizardFinalClosed ? 'الإقفال النهائي مطلوب قبل التدوير' : wizardBalanced ? 'تدوير الأرصدة الافتتاحية' : 'الميزانية غير متوازنة — لا يمكن التدوير'}
+                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                     >
+                       <Database className="w-3.5 h-3.5" />
+-                      توليد القيد الافتتاحي للسنة {Number(selectedYearWizard) + 1}
++                      تدوير الأرصدة للسنة {Number(selectedYearWizard) + 1}
+                     </button>
+-                  )}
+                 </div>
+                 <div className="p-4 flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/40 m-4 text-xs text-slate-300">
+                   <ArrowLeftRight className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
+                   <span>
+-                    تُدحر الأرصدة المدينة والدائنة لحسابات الميزانية (الأصول والخصوم وحقوق الملكية) إلى قيد افتتاحي بتاريخ
+-                    01/01/{Number(selectedYearWizard) + 1}، بينما تُقفل حسابات الإيرادات والمصروفات في الخطوة الثانية. يُرفض التدوير إذا كانت الميزانية غير متوازنة.
++                    تُسجل الأرصدة المدينة والدائنة لحسابات الميزانية (الأصول والخصوم وحقوق الملكية) مباشرةً كأرصدة افتتاحية مستقلة لسنة
++                    {Number(selectedYearWizard) + 1}. لا تُنسخ حسابات الإيرادات والمصروفات وفروعها، ولا يُنشأ قيد تدوير في دفتر اليومية.
+                   </span>
+                 </div>
+               </div>
+@@ -1452,7 +1447,7 @@ export default function ClosingView({
+           id="closing-rollover-confirm"
+           open={confirmRollover}
+           onClose={() => setConfirmRollover(false)}
+-          title={`توليد القيد الافتتاحي للسنة ${Number(selectedYearWizard) + 1}`}
++          title={`تدوير الأرصدة للسنة ${Number(selectedYearWizard) + 1}`}
+           icon={Database}
+           size="sm"
+           className="border-sky-500/30"
+@@ -1474,26 +1469,24 @@ export default function ClosingView({
+                     ? 'الإقفال النهائي للسنة المصدر غير مكتمل.'
+                     : !wizardBalanced
+                       ? `الميزانية غير متوازنة (مدين ${fmt(wizardDebit)} مقابل دائن ${fmt(wizardCredit)}).`
+-                      : wizardOpeningEntry
+-                        ? `يوجد قيد افتتاحي مرحّل للسنة ${Number(selectedYearWizard) + 1} بالفعل (${wizardOpeningEntry.entryNumber}).`
+-                        : commandError || 'فشل حفظ قيد التدوير في قاعدة البيانات.';
+-                  toast(done ? 'success' : 'error', done ? `تم توليد القيد الافتتاحي للسنة ${Number(selectedYearWizard) + 1}` : `تعذر التدوير للسنة ${Number(selectedYearWizard) + 1}. السبب: ${rolloverReason}`);
++                      : commandError || 'فشل حفظ الأرصدة الافتتاحية في قاعدة البيانات.';
++                  toast(done ? 'success' : 'error', done ? `تم تدوير الأرصدة الافتتاحية المستقلة للسنة ${Number(selectedYearWizard) + 1} دون إنشاء قيد يومية` : `تعذر التدوير للسنة ${Number(selectedYearWizard) + 1}. السبب: ${rolloverReason}`);
+                 }}
+                 className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"
+               >
+                 <Database className="w-4 h-4" />
+-                توليد القيد الافتتاحي
++                تدوير الأرصدة
+               </button>
+             </div>
+           }
+         >
+           <p className="text-sm text-slate-300 leading-relaxed">
+-            سيتم تدوير أرصدة حسابات الميزانية (الأصول والخصوم وحقوق الملكية) للسنة {selectedYearWizard} إلى
+-            قيد افتتاحي بتاريخ 01/01/{Number(selectedYearWizard) + 1}. إذا تبين فرق غير متوازن، تُسوّى عبر حساب الأرباح المبقاة.
++            سيتم تسجيل أرصدة حسابات الميزانية للسنة {selectedYearWizard} مباشرةً كأرصدة افتتاحية مستقلة في سنة
++            {Number(selectedYearWizard) + 1}، مع استبعاد الإيرادات والمصروفات وفروعها بالكامل ودون إنشاء قيد يومية.
+           </p>
+           <div className="flex items-start gap-2 rounded-xl bg-sky-500/5 border border-sky-500/20 p-3 text-xs text-sky-300">
+             <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />
+-            <span>يُنشأ القيد مرة واحدة فقط — أي محاولة تكرار تُرفض ويُسجل ذلك في سجل التدقيق.</span>
++            <span>تُنشأ بيانات السنة الجديدة مرة واحدة فقط — أي محاولة تكرار تُرفض ويُسجل ذلك في سجل التدقيق.</span>
+           </div>
+         </ModalShell>
+       )}
+diff --git a/src/components/modules/DashboardView.tsx b/src/components/modules/DashboardView.tsx
+index 09f378f..29fa473 100644
+--- a/src/components/modules/DashboardView.tsx
++++ b/src/components/modules/DashboardView.tsx
+@@ -1,4 +1,4 @@
+-import React from 'react';
++import React, { useEffect, useState } from 'react';
+ import {
+   TrendingUp,
+   ArrowUpRight,
+@@ -39,8 +39,6 @@ import {
+   calculateBalanceSheet,
+   accountFinancialType,
+   percentChange,
+-  currentMonthKey,
+-  previousMonthKey,
+   aggregateAccountBalance,
+   calculateAccountActivity
+ } from '../../utils/accountingEngine';
+@@ -48,6 +46,7 @@ import { ThemeMode } from '../../utils/useTheme';
+ import PageHeader from '../ui/PageHeader';
+ import EmptyState from '../ui/EmptyState';
+ import KPICard from '../ui/KPICard';
++import type { FiscalYearDatasetLoader, FiscalYearReportDataset } from '../../utils/fiscalYearReporting';
+ 
+ interface Props {
+   accounts: Account[];
+@@ -59,6 +58,10 @@ interface Props {
+   receiptVouchers?: ReceiptVoucher[];
+   onNavigate: (module: string) => void;
+   theme: ThemeMode;
++  fiscalYear: string;
++  availableFiscalYears?: string[];
++  loadFiscalYearDataset?: FiscalYearDatasetLoader;
++  comparisonDataset?: FiscalYearReportDataset;
+ }
+ 
+ const EXPENSE_CATEGORY_COLORS = ['#0ea5e9', '#38bdf8', '#f59e0b', '#94a3b8'];
+@@ -171,7 +174,7 @@ function SparklineKpiCard({
+   );
+ }
+ 
+-export default function DashboardView({
++function DashboardContent({
+   accounts,
+   journals,
+   currencies = [],
+@@ -180,7 +183,9 @@ export default function DashboardView({
+   paymentVouchers = [],
+   receiptVouchers = [],
+   onNavigate,
+-  theme
++  theme,
++  fiscalYear,
++  comparisonDataset
+ }: Props) {
+   const isLight = theme === 'light';
+ 
+@@ -216,8 +221,13 @@ export default function DashboardView({
+   const totalExpenses = income.totalExpenses;
+   const capital = balanceSheet.equityBase;
+ 
+-  const curMonth = currentMonthKey();
+-  const prevMonth = previousMonthKey();
++  const today = new Date();
++  const liveMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
++  const journalMonths = postedJournals.map(j => j.date.slice(0, 7)).filter(month => month.startsWith(`${fiscalYear}-`)).sort();
++  const curMonth = fiscalYear === String(today.getFullYear()) ? liveMonth : (journalMonths.at(-1) || `${fiscalYear}-12`);
++  const [periodYear, periodMonth] = curMonth.split('-').map(Number);
++  const previousDate = new Date(periodYear, periodMonth - 2, 1);
++  const prevMonth = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+   const curPosted = postedJournals.filter(j => j.date.startsWith(curMonth));
+   const prevPosted = postedJournals.filter(j => j.date.startsWith(prevMonth));
+   const curIncome = calculateIncomeStatement(accounts, curPosted);
+@@ -225,12 +235,14 @@ export default function DashboardView({
+   const curExpenses = curIncome.totalExpenses;
+   const prevExpenses = prevIncome.totalExpenses;
+ 
+-  const trendRevenues = percentChange(curIncome.totalRevenues, prevIncome.totalRevenues);
+-  const trendNetProfit = percentChange(curIncome.netIncome, prevIncome.netIncome);
+-  const trendExpenses = percentChange(curExpenses, prevExpenses);
++  const comparisonIncome = comparisonDataset ? calculateIncomeStatement(comparisonDataset.accounts, comparisonDataset.journals.filter(j => j.status === 'POSTED')) : null;
++  const comparisonBalance = comparisonDataset ? calculateBalanceSheet(comparisonDataset.accounts, comparisonDataset.journals.filter(j => j.status === 'POSTED')) : null;
++  const trendRevenues = comparisonIncome ? percentChange(totalRevenues, comparisonIncome.totalRevenues) : percentChange(curIncome.totalRevenues, prevIncome.totalRevenues);
++  const trendNetProfit = comparisonIncome ? percentChange(netIncome, comparisonIncome.netIncome) : percentChange(curIncome.netIncome, prevIncome.netIncome);
++  const trendExpenses = comparisonIncome ? percentChange(totalExpenses, comparisonIncome.totalExpenses) : percentChange(curExpenses, prevExpenses);
+ 
+   const prevBalanceSheet = calculateBalanceSheet(accounts, postedJournals.filter(j => j.date.slice(0, 7) <= prevMonth));
+-  const trendCapital = percentChange(balanceSheet.totalEquity, prevBalanceSheet.totalEquity);
++  const trendCapital = percentChange(balanceSheet.totalEquity, comparisonBalance?.totalEquity ?? prevBalanceSheet.totalEquity);
+ 
+   const liquidEntities = [
+     ...cashBoxes.filter(b => b.isActive).map(b => ({ openingBalance: b.openingBalance || 0, linkedAccountId: b.linkedAccountId })),
+@@ -253,13 +265,17 @@ export default function DashboardView({
+ 
+   const currentLiabilities = balanceSheet.currentLiabilities;
+   const currentAssets = balanceSheet.currentAssets;
+-  const currentRatio = currentLiabilities > 0 ? currentAssets / currentLiabilities : 0;
++  const currentRatio = currentLiabilities > 0 ? currentAssets / currentLiabilities : null;
+   const quickRatio = currentLiabilities > 0 ? totalLiquidity / currentLiabilities : null;
+ 
+-  const sym = baseCode;
+-  const totalAR = accounts.filter(a => a.level === 5 && a.isActive && a.category === 'RECEIVABLE').reduce((sum, a) => sum + Math.abs(a.openingBalance || 0), 0);
++  const activity = calculateAccountActivity(accounts, postedJournals);
++  const totalAR = accounts.filter(a => a.level === 5 && a.isActive && a.category === 'RECEIVABLE')
++    .reduce((sum, account) => sum + Math.max(0, aggregateAccountBalance(account, accounts, activity)), 0);
+   const arTurnover = totalAR > 0 ? totalRevenues / totalAR : 0;
+   const dsoDays = arTurnover > 0 ? Math.round(365 / arTurnover) : 0;
++  const workingCapital = currentAssets - currentLiabilities;
++  const debtRatio = balanceSheet.totalAssets > 0 ? (balanceSheet.totalLiabilities / balanceSheet.totalAssets) * 100 : null;
++  const netMargin = totalRevenues > 0 ? (netIncome / totalRevenues) * 100 : null;
+ 
+   const pendingJournals = journals.filter(j => j.status !== 'POSTED' && j.status !== 'VOIDED').length;
+   const pendingPayments = paymentVouchers.filter(v => v.status === 'PENDING_POSTING').length;
+@@ -388,6 +404,32 @@ export default function DashboardView({
+         </div>
+       </section>
+ 
++      <section>
++        <div className="section-head">
++          <div className="section-icon"><Gauge className="w-5 h-5" /></div>
++          <div><h2 className="section-title">مؤشرات المركز المالي — {fiscalYear}</h2></div>
++          <div className="section-line" />
++        </div>
++        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
++          {[
++            ['إجمالي الأصول', fmtCur(balanceSheet.totalAssets), 'مجموع الأصول المتداولة وغير المتداولة'],
++            ['إجمالي الالتزامات', fmtCur(balanceSheet.totalLiabilities), debtRatio === null ? 'نسبة المديونية غير متاحة' : `نسبة المديونية ${debtRatio.toFixed(1)}%`],
++            ['إجمالي حقوق الملكية', fmtCur(balanceSheet.totalEquity), balanceSheet.isBalanced ? 'الميزانية متوازنة' : 'توجد فجوة في الميزانية'],
++            ['رأس المال العامل', fmtCur(workingCapital), 'الأصول المتداولة ناقص الالتزامات المتداولة'],
++            ['نسبة التداول', currentRatio === null ? '—' : currentRatio.toFixed(2), currentLiabilities > 0 ? 'الأصول المتداولة ÷ الالتزامات المتداولة' : 'لا توجد التزامات متداولة'],
++            ['الذمم المدينة', fmtCur(totalAR), arTurnover > 0 ? `الدوران ${arTurnover.toFixed(2)} مرة — التحصيل ${dsoDays} يوم` : 'لا تتوفر حركة إيرادات للمقارنة'],
++            ['هامش صافي الربح', netMargin === null ? '—' : `${netMargin.toFixed(1)}%`, totalRevenues > 0 ? 'صافي النتيجة ÷ الإيرادات' : 'لا توجد إيرادات'],
++            ['القيود المرحلة', postedCount.toLocaleString('en-US'), fmtCur(postedTotalValue)],
++          ].map(([title, value, hint]) => (
++            <div key={title} className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
++              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{title}</p>
++              <p className="mt-1 text-xl font-extrabold text-slate-900 dark:text-white" dir="auto">{value}</p>
++              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{hint}</p>
++            </div>
++          ))}
++        </div>
++      </section>
++
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+         <div className="bg-white border border-[#e2e8f0] rounded-xl p-4 shadow-sm lg:col-span-2 dark:bg-slate-900 dark:border-slate-800">
+           <div className="flex items-center justify-between mb-4">
+@@ -566,3 +608,49 @@ export default function DashboardView({
+     </div>
+   );
+ }
++
++/** Financial indicators can inspect any fiscal-year namespace without switching the operational year. */
++export default function DashboardView(props: Props) {
++  const years = props.availableFiscalYears?.length ? props.availableFiscalYears : [props.fiscalYear];
++  const [selectedYear, setSelectedYear] = useState(props.fiscalYear);
++  const defaultComparison = years.find(year => Number(year) < Number(props.fiscalYear)) || '';
++  const [comparisonYear, setComparisonYear] = useState(defaultComparison);
++  useEffect(() => setSelectedYear(props.fiscalYear), [props.fiscalYear]);
++  const dataset = selectedYear === props.fiscalYear || !props.loadFiscalYearDataset
++    ? null
++    : props.loadFiscalYearDataset(selectedYear);
++  const comparisonDataset = comparisonYear && comparisonYear !== selectedYear && props.loadFiscalYearDataset
++    ? props.loadFiscalYearDataset(comparisonYear)
++    : undefined;
++  const scopedProps: Props = dataset
++    ? { ...props, ...dataset, fiscalYear: selectedYear, comparisonDataset }
++    : { ...props, fiscalYear: selectedYear, comparisonDataset };
++
++  return (
++    <div className="space-y-3">
++      <div className="flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
++        <label htmlFor="financial-indicators-year" className="text-sm font-bold text-slate-700 dark:text-slate-200">سنة المؤشرات المالية</label>
++        <select
++          id="financial-indicators-year"
++          value={selectedYear}
++          onChange={event => setSelectedYear(event.target.value)}
++          className="min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
++        >
++          {years.map(year => <option key={year} value={year}>{year}{year === props.fiscalYear ? ' — النشطة' : ''}</option>)}
++        </select>
++        <label htmlFor="financial-indicators-comparison-year" className="text-sm font-bold text-slate-700 dark:text-slate-200">المقارنة مع</label>
++        <select
++          id="financial-indicators-comparison-year"
++          value={comparisonYear}
++          onChange={event => setComparisonYear(event.target.value)}
++          className="min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
++        >
++          <option value="">الفترة السابقة</option>
++          {years.filter(year => year !== selectedYear).map(year => <option key={year} value={year}>{year}</option>)}
++        </select>
++        {selectedYear !== props.fiscalYear && <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">استعراض فقط</span>}
++      </div>
++      <DashboardContent key={selectedYear} {...scopedProps} />
++    </div>
++  );
++}
+diff --git a/src/components/modules/FinancialReportsView.tsx b/src/components/modules/FinancialReportsView.tsx
+index ca15c84..d140798 100644
+--- a/src/components/modules/FinancialReportsView.tsx
++++ b/src/components/modules/FinancialReportsView.tsx
+@@ -65,6 +65,7 @@ import { accountsWithCurrencyOpenings, normalizeVoucherSourceJournalCurrencies,
+ import { defaultReportToDate, toLocalIsoDate } from '../../utils/dateDefaults';
+ import { reconcileControlAccountOpenings } from '../../services/openingBalancesService';
+ import { summarizeStatementCurrencyConversions, summarizeStatementsByCurrency } from '../../utils/statementSummary';
++import type { FiscalYearDatasetLoader } from '../../utils/fiscalYearReporting';
+ 
+ interface Props {
+   accounts: Account[];
+@@ -83,6 +84,8 @@ interface Props {
+   receiptVouchers?: ReceiptVoucher[];
+   enableEnhancedView?: boolean;
+   fiscalYear: string;
++  availableFiscalYears?: string[];
++  loadFiscalYearDataset?: FiscalYearDatasetLoader;
+ }
+ 
+ type ReportType = 'TRIAL_BALANCE' | 'INCOME_STATEMENT' | 'BALANCE_SHEET' | 'CASH_FLOW' | 'EQUITY_CHANGES' | 'LEDGER' | 'COST_CENTERS' | 'EMPLOYEES_REPORT' | 'CUSTOMERS_REPORT' | 'VENDORS_REPORT' | 'CASHBOX_REPORT' | 'BANK_REPORT' | 'TRUSTS_REPORT' | 'PAYMENT_VOUCHERS_REPORT' | 'RECEIPT_VOUCHERS_REPORT' | 'JOURNAL_ENTRIES_REPORT';
+@@ -423,7 +426,7 @@ function TreeBranch({
+   );
+ }
+ 
+-export default function FinancialReportsView({
++function FinancialReportsContent({
+   accounts,
+   journals,
+   costCenters,
+@@ -444,7 +447,7 @@ export default function FinancialReportsView({
+   const { active: activeCurrencies, baseCode, symbolOf } = useActiveCurrencies(currencies);
+   const [reportType, setReportType] = useState<ReportType>('TRIAL_BALANCE');
+   const [fromDate, setFromDate] = useState(() => configuredFiscalPeriod(fiscalYear).start);
+-  const [toDate, setToDate] = useState(defaultReportToDate);
++  const [toDate, setToDate] = useState(() => configuredFiscalPeriod(fiscalYear).end);
+   const [selectedCurrency, setSelectedCurrency] = useState<string>('ALL');
+   const [fromAccount, setFromAccount] = useState('');
+   const [toAccount, setToAccount] = useState('');
+@@ -466,24 +469,13 @@ export default function FinancialReportsView({
+   );
+ 
+   const currency = selectedCurrency === 'ALL' ? baseCode : selectedCurrency;
+-  // السجلات القديمة لا تحمل fiscalYear. بعد التدوير نحدد سنة المصدر من
+-  // أقدم قيد OPEN الموجود (OPEN-2027 يعني أن السجلات القديمة تخص 2026)،
+-  // حتى لا تختفي من تقرير السنة المصدر أو تُحتسب مرة أخرى في السنة الجديدة.
+-  const legacyOpeningYear = useMemo(() => {
+-    const rolloverYears = journals
+-      .map(journal => /^OPEN-(\d{4})$/.exec(journal.reference || '')?.[1])
+-      .filter((year): year is string => Boolean(year))
+-      .map(Number)
+-      .filter(Number.isFinite);
+-    return rolloverYears.length ? String(Math.min(...rolloverYears) - 1) : fiscalYear;
+-  }, [journals, fiscalYear]);
+   const openingRecordBelongsToReportYear = (row: { fiscalYear?: string }) =>
+-    row.fiscalYear === fiscalYear || (!row.fiscalYear && fiscalYear === legacyOpeningYear);
++    row.fiscalYear === fiscalYear || !row.fiscalYear;
+ 
+   useEffect(() => {
+     const period = configuredFiscalPeriod(fiscalYear);
+     setFromDate(period.start);
+-    setToDate(defaultReportToDate());
++    setToDate(period.end);
+     setShowReport(false);
+   }, [fiscalYear]);
+ 
+@@ -634,7 +626,7 @@ export default function FinancialReportsView({
+       const openingBalanceForeign = rows.reduce((sum, row) => sum + (row.debit || 0) - (row.credit || 0), 0);
+       return { ...account, openingBalance, openingBalanceForeign, openingBalances: rows };
+     });
+-  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear, legacyOpeningYear]);
++  }, [accounts, cashBoxes, bankAccounts, customers, vendors, employees, fiscalYear]);
+   const currencyAccounts = useMemo(() => accountsWithCurrencyOpenings(reconciledAccounts, isOriginalCurrencyReport ? currency : baseCode, baseCode, selectedDecimals), [reconciledAccounts, baseCode, currency, isOriginalCurrencyReport, selectedDecimals]);
+   const reportAccounts = useMemo(
+     () => buildPeriodAccounts(currencyAccounts, reportJournals, fromDate, includeOpening, 1, true),
+@@ -3496,3 +3488,32 @@ export default function FinancialReportsView({
+     </div>
+   );
+ }
++
++/** Keeps report browsing independent from the operational fiscal year. */
++export default function FinancialReportsView(props: Props) {
++  const years = props.availableFiscalYears?.length ? props.availableFiscalYears : [props.fiscalYear];
++  const [selectedYear, setSelectedYear] = useState(props.fiscalYear);
++  useEffect(() => setSelectedYear(props.fiscalYear), [props.fiscalYear]);
++  const dataset = selectedYear === props.fiscalYear || !props.loadFiscalYearDataset
++    ? null
++    : props.loadFiscalYearDataset(selectedYear);
++  const scopedProps: Props = dataset ? { ...props, ...dataset, fiscalYear: selectedYear } : { ...props, fiscalYear: selectedYear };
++
++  return (
++    <div className="space-y-3">
++      <div className="flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
++        <label htmlFor="financial-report-year" className="text-sm font-bold text-slate-700 dark:text-slate-200">سنة بيانات التقرير</label>
++        <select
++          id="financial-report-year"
++          value={selectedYear}
++          onChange={event => setSelectedYear(event.target.value)}
++          className="min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
++        >
++          {years.map(year => <option key={year} value={year}>{year}{year === props.fiscalYear ? ' — النشطة' : ''}</option>)}
++        </select>
++        {selectedYear !== props.fiscalYear && <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">استعراض فقط — السنة التشغيلية لم تتغير</span>}
++      </div>
++      <FinancialReportsContent key={selectedYear} {...scopedProps} />
++    </div>
++  );
++}
+diff --git a/src/components/modules/StatementOfAccountView.tsx b/src/components/modules/StatementOfAccountView.tsx
+index 16c19cb..9cf7931 100644
+--- a/src/components/modules/StatementOfAccountView.tsx
++++ b/src/components/modules/StatementOfAccountView.tsx
+@@ -27,6 +27,7 @@ import type {
+ } from '../../types/erp';
+ import { openDesktopPrintPreview } from '../../utils/desktopPrintPreview';
+ import { defaultReportToDate } from '../../utils/dateDefaults';
++import type { FiscalYearDatasetLoader } from '../../utils/fiscalYearReporting';
+ 
+ interface Props {
+   accounts: Account[];
+@@ -44,6 +45,8 @@ interface Props {
+   initialKind?: string;
+   initialId?: string;
+   onParamsConsumed?: () => void;
++  availableFiscalYears?: string[];
++  loadFiscalYearDataset?: FiscalYearDatasetLoader;
+ }
+ 
+ interface EntityOption {
+@@ -64,7 +67,7 @@ const KIND_ICONS: Record<StatementEntityKind, string> = {
+   BANK: 'بنك/صراف'
+ };
+ 
+-export default function StatementOfAccountView({
++function StatementOfAccountContent({
+   accounts,
+   journals,
+   vouchers,
+@@ -86,12 +89,16 @@ export default function StatementOfAccountView({
+   const [selectedId, setSelectedId] = useState<string>('');
+   const [displayValue, setDisplayValue] = useState<string>('');
+   const [fromDate, setFromDate] = useState<string>(`${fiscalYear}-01-01`);
+-  const [toDate, setToDate] = useState<string>(defaultReportToDate);
++  const [toDate, setToDate] = useState<string>(() => {
++    const today = defaultReportToDate();
++    return today.startsWith(`${fiscalYear}-`) ? today : `${fiscalYear}-12-31`;
++  });
+   const [result, setResult] = useState<StatementResult | null>(null);
+ 
+   useEffect(() => {
+     setFromDate(`${fiscalYear}-01-01`);
+-    setToDate(defaultReportToDate());
++    const today = defaultReportToDate();
++    setToDate(today.startsWith(`${fiscalYear}-`) ? today : `${fiscalYear}-12-31`);
+     setResult(null);
+   }, [fiscalYear]);
+ 
+@@ -373,3 +380,23 @@ export default function StatementOfAccountView({
+     </div>
+   );
+ }
++
++export default function StatementOfAccountView(props: Props) {
++  const years = props.availableFiscalYears?.length ? props.availableFiscalYears : [props.fiscalYear];
++  const [selectedYear, setSelectedYear] = useState(props.fiscalYear);
++  useEffect(() => setSelectedYear(props.fiscalYear), [props.fiscalYear]);
++  const dataset = selectedYear === props.fiscalYear || !props.loadFiscalYearDataset ? null : props.loadFiscalYearDataset(selectedYear);
++  const scoped: Props = dataset ? { ...props, ...dataset, fiscalYear: selectedYear } : { ...props, fiscalYear: selectedYear };
++  return (
++    <div className="space-y-3">
++      <div className="flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
++        <label htmlFor="statement-fiscal-year" className="text-sm font-bold text-slate-700 dark:text-slate-200">سنة كشف الحساب</label>
++        <select id="statement-fiscal-year" value={selectedYear} onChange={event => setSelectedYear(event.target.value)} className="min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-950 dark:text-white">
++          {years.map(year => <option key={year} value={year}>{year}{year === props.fiscalYear ? ' — النشطة' : ''}</option>)}
++        </select>
++        {selectedYear !== props.fiscalYear && <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">استعراض فقط</span>}
++      </div>
++      <StatementOfAccountContent key={selectedYear} {...scoped} />
++    </div>
++  );
++}
+diff --git a/src/utils/fiscalYearClosing.ts b/src/utils/fiscalYearClosing.ts
+index 985e47f..b5704a1 100644
+--- a/src/utils/fiscalYearClosing.ts
++++ b/src/utils/fiscalYearClosing.ts
+@@ -30,6 +30,28 @@ const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 10
+ const keyOf = (accountId: string, subLedgerId: string | undefined, costCenterId: string | undefined, currency: string) =>
+   [accountId, subLedgerId || '', costCenterId || '', currency].join('\u001f');
+ 
++/** Every account below the income-statement roots is year-local and must not be rolled forward. */
++export function incomeStatementAccountIds(accounts: Account[]): Set<string> {
++  const excluded = new Set<string>();
++  accounts.forEach(account => {
++    const type = accountFinancialType(account, accounts);
++    const rootDigit = String(account.code || '').replace(/\D/g, '').charAt(0);
++    if (rootDigit === '3' || rootDigit === '4' || type === 'REVENUE' || type === 'EXPENSE') excluded.add(account.id);
++  });
++  // Defensive ancestry pass for imported charts whose financial type metadata is incomplete.
++  let changed = true;
++  while (changed) {
++    changed = false;
++    accounts.forEach(account => {
++      if (!excluded.has(account.id) && account.parentId && excluded.has(account.parentId)) {
++        excluded.add(account.id);
++        changed = true;
++      }
++    });
++  }
++  return excluded;
++}
++
+ function recordAmount(record: OpeningBalanceRecord, baseCurrency: string) {
+   const local = Number(record.debitLocal || 0) - Number(record.creditLocal || 0);
+   const foreignStored = Number(record.debit || 0) - Number(record.credit || 0);
+@@ -50,7 +72,9 @@ function lineAmount(line: JournalLine, journal: JournalEntry, baseCurrency: stri
+ /** Produces one independent opening snapshot by account, analytical entity, currency, and cost center. */
+ export function buildFiscalYearOpeningSnapshot(input: Input) {
+   const { sourceYear, targetYear, baseCurrency } = input;
+-  const allEntities: Entity[] = [...input.cashBoxes, ...input.bankAccounts, ...input.customers, ...input.vendors, ...input.employees];
++  const excludedAccountIds = incomeStatementAccountIds(input.accounts);
++  const allEntities: Entity[] = [...input.cashBoxes, ...input.bankAccounts, ...input.customers, ...input.vendors, ...input.employees]
++    .filter(entity => !entity.linkedAccountId || !excludedAccountIds.has(entity.linkedAccountId));
+   const entitiesByAccount = new Map<string, Entity[]>();
+   allEntities.forEach(entity => {
+     if (!entity.linkedAccountId) return;
+@@ -108,8 +132,7 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
+     }));
+ 
+   let records = [...buckets.values()].filter(bucket => Math.abs(bucket.local) >= 0.005 || Math.abs(bucket.foreign) >= 0.005);
+-  const accountType = new Map(input.accounts.map(account => [account.id, accountFinancialType(account, input.accounts)]));
+-  records = records.filter(record => !['REVENUE', 'EXPENSE'].includes(accountType.get(record.accountId) || ''));
++  records = records.filter(record => !excludedAccountIds.has(record.accountId));
+   const localNet = round(records.reduce((sum, record) => sum + record.local, 0));
+   if (Math.abs(localNet) >= 0.005) {
+     const retained = input.accounts.find(account => account.code === '2202010001' && isPostingAccount(account))
+@@ -137,7 +160,7 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
+       amount: local,
+       foreignAmount: foreign,
+       rate: exchangeRate,
+-      documentRef: `OPEN-${targetYear}`,
++      documentRef: `CARRY-${sourceYear}-${targetYear}`,
+     };
+   });
+   const byEntity = new Map<string, OpeningBalanceRecord[]>();
+@@ -152,26 +175,21 @@ export function buildFiscalYearOpeningSnapshot(input: Input) {
+     const foreign = entityOpenings.find(record => record.currency !== baseCurrency);
+     return { ...item, openingBalances: entityOpenings, openingBalance, openingBalanceForeign: foreign?.foreignAmount, openingCurrency: foreign?.currency, openingRate: foreign?.rate, fiscalYear: targetYear };
+   });
+-  const cashBoxes = updateEntities(input.cashBoxes);
+-  const bankAccounts = updateEntities(input.bankAccounts);
+-  const customers = updateEntities(input.customers);
+-  const vendors = updateEntities(input.vendors);
+-  const employees = updateEntities(input.employees);
++  const cashBoxes = updateEntities(input.cashBoxes.filter(item => !item.linkedAccountId || !excludedAccountIds.has(item.linkedAccountId)));
++  const bankAccounts = updateEntities(input.bankAccounts.filter(item => !item.linkedAccountId || !excludedAccountIds.has(item.linkedAccountId)));
++  const customers = updateEntities(input.customers.filter(item => !item.linkedAccountId || !excludedAccountIds.has(item.linkedAccountId)));
++  const vendors = updateEntities(input.vendors.filter(item => !item.linkedAccountId || !excludedAccountIds.has(item.linkedAccountId)));
++  const employees = updateEntities(input.employees.filter(item => !item.linkedAccountId || !excludedAccountIds.has(item.linkedAccountId)));
+   const ownByAccount = new Map<string, OpeningBalanceRecord[]>();
+   openings.filter(record => !record.subAccountId).forEach(record => {
+     const list = ownByAccount.get(record.accountId) || [];
+     list.push(record);
+     ownByAccount.set(record.accountId, list);
+   });
+-  let accounts: Account[] = input.accounts.map(account => {
++  let accounts: Account[] = input.accounts.filter(account => !excludedAccountIds.has(account.id)).map(account => {
+     const own = ownByAccount.get(account.id) || [];
+     return { ...account, openingBalances: own, openingBalance: round(own.reduce((sum, record) => sum + Number(record.amount || 0), 0)), fiscalYear: targetYear };
+   });
+   accounts = reconcileControlAccountOpenings({ accounts, cashBoxes, bankAccounts, customers, vendors, employees }, targetYear).accounts;
+-  const lines: JournalLine[] = input.accounts.filter(isPostingAccount).flatMap(account => {
+-    const amount = round(openings.filter(record => record.accountId === account.id).reduce((sum, record) => sum + Number(record.amount || 0), 0));
+-    if (Math.abs(amount) < 0.005) return [];
+-    return [{ id: `open-line-${targetYear}-${account.id}`, accountId: account.id, accountCode: account.code, accountNameAr: account.nameAr, debit: amount > 0 ? amount : 0, credit: amount < 0 ? Math.abs(amount) : 0, description: `رصيد افتتاحي ${account.nameAr}` }];
+-  });
+-  return { accounts, cashBoxes, bankAccounts, customers, vendors, employees, openings, lines };
++  return { accounts, cashBoxes, bankAccounts, customers, vendors, employees, openings, excludedAccountIds };
+ }

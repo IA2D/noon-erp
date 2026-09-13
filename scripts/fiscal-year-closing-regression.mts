@@ -8,7 +8,12 @@ const posting = (id: string, code: string, nameAr: string, subLedgerType: Accoun
   currencies: [{ id: `${id}-yer`, code: 'YER', isDefault: true, isActive: true }, { id: `${id}-usd`, code: 'USD', isDefault: false, isActive: true }],
   defaultCurrency: 'YER', openingBalance: 0, isActive: true, openingBalances: [],
 });
-const accounts = [posting('cash', '1101010001', 'الصندوق', 'CASH_BOX'), posting('equity', '2202010001', 'أرباح مبقاة', 'NONE')];
+const accounts = [
+  posting('cash', '1101010001', 'الصندوق', 'CASH_BOX'),
+  posting('equity', '2202010001', 'أرباح مبقاة', 'NONE'),
+  { ...posting('revenue', '3101010001', 'إيرادات تشغيلية', 'NONE'), nature: 'CREDIT' as const, category: 'INCOME_STATEMENT' as const },
+  { ...posting('expense', '4101010001', 'مصروفات تشغيلية', 'NONE'), nature: 'DEBIT' as const, category: 'INCOME_STATEMENT' as const },
+];
 const cashBox: CashBox = {
   id: 'box', code: 'CSH-1', nameAr: 'صندوق USD', nameEn: 'USD box', linkedAccountId: 'cash', defaultCurrency: 'USD', isActive: true,
   boxType: 'MAIN', currencies: [{ id: 'box-usd', code: 'USD', isDefault: true, isActive: true }], createdAt: '2026-01-01',
@@ -37,6 +42,9 @@ assert.ok(box.openingBalances?.every(row => row.currency === 'USD' && row.fiscal
 const control = snapshot.accounts.find(account => account.id === 'cash')!;
 assert.equal(control.openingBalance, 56.25);
 assert.equal(control.openingBalances?.[0].foreignAmount, 15);
-assert.equal(snapshot.lines.reduce((sum, line) => sum + line.debit, 0), 56.25);
-assert.equal(snapshot.lines.reduce((sum, line) => sum + line.credit, 0), 56.25);
-console.log('FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true');
+assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.debitLocal || 0), 0), 56.25);
+assert.equal(snapshot.openings.reduce((sum, row) => sum + (row.creditLocal || 0), 0), 56.25);
+assert.ok(snapshot.openings.every(row => row.documentRef === 'CARRY-2026-2027'));
+assert.ok(snapshot.excludedAccountIds.has('revenue') && snapshot.excludedAccountIds.has('expense'));
+assert.ok(!snapshot.accounts.some(account => account.id === 'revenue' || account.id === 'expense'));
+console.log('FISCAL_YEAR_CLOSING_OK analytical=true currencies=USD foreign=15 local=56.25 costCenter=true balanced=true noJournal=true');

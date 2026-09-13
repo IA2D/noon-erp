@@ -27,6 +27,7 @@ import type {
 } from '../../types/erp';
 import { openDesktopPrintPreview } from '../../utils/desktopPrintPreview';
 import { defaultReportToDate } from '../../utils/dateDefaults';
+import type { FiscalYearDatasetLoader } from '../../utils/fiscalYearReporting';
 
 interface Props {
   accounts: Account[];
@@ -44,6 +45,8 @@ interface Props {
   initialKind?: string;
   initialId?: string;
   onParamsConsumed?: () => void;
+  availableFiscalYears?: string[];
+  loadFiscalYearDataset?: FiscalYearDatasetLoader;
 }
 
 interface EntityOption {
@@ -64,7 +67,7 @@ const KIND_ICONS: Record<StatementEntityKind, string> = {
   BANK: 'بنك/صراف'
 };
 
-export default function StatementOfAccountView({
+function StatementOfAccountContent({
   accounts,
   journals,
   vouchers,
@@ -86,12 +89,16 @@ export default function StatementOfAccountView({
   const [selectedId, setSelectedId] = useState<string>('');
   const [displayValue, setDisplayValue] = useState<string>('');
   const [fromDate, setFromDate] = useState<string>(`${fiscalYear}-01-01`);
-  const [toDate, setToDate] = useState<string>(defaultReportToDate);
+  const [toDate, setToDate] = useState<string>(() => {
+    const today = defaultReportToDate();
+    return today.startsWith(`${fiscalYear}-`) ? today : `${fiscalYear}-12-31`;
+  });
   const [result, setResult] = useState<StatementResult | null>(null);
 
   useEffect(() => {
     setFromDate(`${fiscalYear}-01-01`);
-    setToDate(defaultReportToDate());
+    const today = defaultReportToDate();
+    setToDate(today.startsWith(`${fiscalYear}-`) ? today : `${fiscalYear}-12-31`);
     setResult(null);
   }, [fiscalYear]);
 
@@ -370,6 +377,26 @@ export default function StatementOfAccountView({
           onClose={() => setResult(null)}
         />
       )}
+    </div>
+  );
+}
+
+export default function StatementOfAccountView(props: Props) {
+  const years = props.availableFiscalYears?.length ? props.availableFiscalYears : [props.fiscalYear];
+  const [selectedYear, setSelectedYear] = useState(props.fiscalYear);
+  useEffect(() => setSelectedYear(props.fiscalYear), [props.fiscalYear]);
+  const dataset = selectedYear === props.fiscalYear || !props.loadFiscalYearDataset ? null : props.loadFiscalYearDataset(selectedYear);
+  const scoped: Props = dataset ? { ...props, ...dataset, fiscalYear: selectedYear } : { ...props, fiscalYear: selectedYear };
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <label htmlFor="statement-fiscal-year" className="text-sm font-bold text-slate-700 dark:text-slate-200">سنة كشف الحساب</label>
+        <select id="statement-fiscal-year" value={selectedYear} onChange={event => setSelectedYear(event.target.value)} className="min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-950 dark:text-white">
+          {years.map(year => <option key={year} value={year}>{year}{year === props.fiscalYear ? ' — النشطة' : ''}</option>)}
+        </select>
+        {selectedYear !== props.fiscalYear && <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">استعراض فقط</span>}
+      </div>
+      <StatementOfAccountContent key={selectedYear} {...scoped} />
     </div>
   );
 }

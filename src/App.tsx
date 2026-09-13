@@ -63,6 +63,7 @@ import { applyOpeningBalances, cleanupOpeningBalanceDuplicates, reconcileControl
 import { fitAmountInput, isAmountInput } from './utils/amountInputFit';
 import { useFiscalYearStorageState } from './utils/useLocalStorageState';
 import { fiscalYearStorageKey } from './utils/fiscalYearDatasetStore';
+import type { FiscalYearReportDataset } from './utils/fiscalYearReporting';
 import { cloneFiscalYearCollections } from './utils/fiscalYearRollover';
 import { buildFiscalYearOpeningSnapshot } from './utils/fiscalYearClosing';
 import { isPeriodClosed } from './utils/periodGuard';
@@ -365,6 +366,36 @@ function AppInner() {
   // Opening balances are a document in their own right; retain their supporting
   // documents independently from the per-account balance rows.
   const [openingBalanceAttachments, setOpeningBalanceAttachments] = useFiscalYearStorageState<SupportingDocument[]>(K.openingBalanceAttachments, reportingYear, [], legacyFiscalYear);
+
+  const loadFiscalYearReportDataset = (year: string): FiscalYearReportDataset => {
+    if (year === reportingYear) {
+      return { fiscalYear: year, accounts, journals, costCenters, currencies, employees, customers, vendors, cashBoxes, bankAccounts, trusts, custodies, vouchers, receiptVouchers };
+    }
+    const read = <T,>(key: string, fallback: T): T => {
+      try {
+        const raw = getPersistentItem(fiscalYearStorageKey(key, year));
+        return raw && raw !== 'null' ? JSON.parse(raw) as T : fallback;
+      } catch { return fallback; }
+    };
+    return {
+      fiscalYear: year,
+      accounts: read<Account[]>(K.accounts, []),
+      journals: read<JournalEntry[]>(K.journals, []).filter(journal =>
+        journal.entryKind !== 'OPENING_AUDIT' && !/^OPEN-\d{4}$/.test(String(journal.reference || journal.entryNumber || ''))
+      ),
+      costCenters: read<CostCenter[]>(K.costCenters, []),
+      currencies: read<Currency[]>(K.currencies, currencies),
+      employees: read<Employee[]>(K.employees, []),
+      customers: read<Customer[]>(K.customers, []),
+      vendors: read<Vendor[]>(K.vendors, []),
+      cashBoxes: read<CashBox[]>(K.cashBoxes, []),
+      bankAccounts: read<BankAccount[]>(K.bankAccounts, []),
+      trusts: read<Trust[]>(K.trusts, []),
+      custodies: read<Custody[]>(K.custodies, []),
+      vouchers: read<PaymentVoucher[]>(K.vouchers, []),
+      receiptVouchers: read<ReceiptVoucher[]>(K.receipts, []),
+    };
+  };
 
   const [statementNavParams, setStatementNavParams] = useState<{ kind: string; id: string } | null>(null);
 
@@ -1493,47 +1524,16 @@ function AppInner() {
       accounts, journals, cashBoxes, bankAccounts, customers, vendors, employees,
       sourceYear: year, targetYear: nextYear, baseCurrency,
     });
-    const lines = openingSnapshot.lines;
-    const totalDebit = round2(lines.reduce((sum, line) => sum + (line.debit || 0), 0));
-    const totalCredit = round2(lines.reduce((sum, line) => sum + (line.credit || 0), 0));
-    const now = new Date().toISOString().replace('T', ' ').substring(0, 16);
-    const entry: JournalEntry = {
-      id: `open-${nextYear}-from-${year}`,
-      entryNumber: `OPEN-${nextYear}`,
-      date: `${nextYear}-01-01`,
-      reference: `OPEN-${nextYear}`,
-      narration: `القيد الافتتاحي للسنة المالية ${nextYear}`,
-      lines,
-      totalDebit: round2(totalDebit),
-      totalCredit: round2(totalCredit),
-      currency: currencies.find(c => c.isBase)?.code ?? 'YER',
-      exchangeRate: 1,
-      status: 'POSTED',
-      fiscalYear: nextYear,
-      entryKind: 'OPENING_AUDIT',
-      affectsLedger: false,
-      readOnly: true,
-      createdBy: currentUserName,
-      createdAt: now,
-      postedBy: currentUserName,
-      postedAt: now
-    };
-    const validation = validateGeneratedJournalForPosting(entry, accounts, journals, currencies);
-    if (!validation.valid) {
-      addAuditLog('GENERAL_LEDGER', 'POST', `رُفض القيد الافتتاحي ${nextYear}: ${validation.errors.join(' | ')}`);
-      return false;
-    }
-    const linkedPeriod = { ...sourcePeriod, openingEntryId: `OPEN-${nextYear}` };
+    // التدوير يكتب أرصدة افتتاحية مستقلة مباشرةً في مساحة السنة الجديدة.
+    // لا ينشأ قيد يومية صوري لأن مصدر الحقيقة هو openingBalances نفسه.
+    const linkedPeriod = { ...sourcePeriod, openingEntryId: undefined };
     const nextPeriods = [...periodStates.filter(item => !(item.key === year && item.scope === 'YEAR')), linkedPeriod];
-    const nextJournals = [entry, ...journals];
-    // قيد OPEN-YYYY سجل تدقيق للعرض فقط. مصدر الحقيقة للسنة الجديدة هو
-    // سجلات openingBalances المرتبطة بها، كي لا يدخل القيد كحركة بالتقارير.
-    const audit = createAuditLog('GENERAL_LEDGER', 'POST', `توليد القيد الافتتاحي للسنة ${nextYear} من إقفال ${year}`);
+    const audit = createAuditLog('GENERAL_LEDGER', 'POST', `تدوير الأرصدة الافتتاحية المستقلة للسنة ${nextYear} من إقفال ${year} دون إنشاء قيد يومية`);
     const clone = cloneFiscalYearCollections({
       accounts: openingSnapshot.accounts, costCenters, currencies,
       cashBoxes: openingSnapshot.cashBoxes, bankAccounts: openingSnapshot.bankAccounts,
       employees: openingSnapshot.employees, customers: openingSnapshot.customers, vendors: openingSnapshot.vendors,
-      journals: [entry],
+      journals: [],
     }, year, nextYear);
     const target = clone.collections;
     const changes = [
@@ -1999,7 +1999,9 @@ function AppInner() {
   // Operational screens are scoped to the active reporting year; historical
   // records remain available when the user logs in with their year.
   const yearScoped = <T extends { date?: string }>(rows: T[]) => rows.filter(row => !row.date || String(row.date).startsWith(`${reportingYear}-`));
-  const visibleJournals = yearScoped(journals);
+  const visibleJournals = yearScoped(journals).filter(journal =>
+    journal.entryKind !== 'OPENING_AUDIT' && !/^OPEN-\d{4}$/.test(String(journal.reference || journal.entryNumber || ''))
+  );
   const visibleVouchers = yearScoped(vouchers);
   const visibleReceipts = yearScoped(receiptVouchers);
 
@@ -2096,6 +2098,9 @@ function AppInner() {
             bankAccounts={bankAccounts}
             paymentVouchers={vouchers}
             receiptVouchers={receiptVouchers}
+            fiscalYear={reportingYear}
+            availableFiscalYears={availableReportingYears}
+            loadFiscalYearDataset={loadFiscalYearReportDataset}
             onNavigate={(mod) => navigate(mod as ERPModule)}
             theme={theme}
           />
@@ -2163,7 +2168,7 @@ function AppInner() {
           <CashBoxesView
             cashBoxes={cashBoxes}
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             currencies={currencies}
             onAddCashBox={handleAddCashBox}
             onUpdateCashBox={handleUpdateCashBox}
@@ -2175,7 +2180,7 @@ function AppInner() {
           <BankAccountsView
             bankAccounts={bankAccounts}
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             currencies={currencies}
             onAddBank={handleAddBank}
             onUpdateBank={handleUpdateBank}
@@ -2187,7 +2192,7 @@ function AppInner() {
           <TrustsView
             trusts={trusts}
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             employees={employees}
             onAddTrust={handleAddTrust}
             onUpdateTrust={handleUpdateTrust}
@@ -2201,7 +2206,7 @@ function AppInner() {
           <CustodyView
             custodies={custodies}
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             employees={employees}
             customers={customers}
             cashBoxes={cashBoxes}
@@ -2224,7 +2229,7 @@ function AppInner() {
             employees={employees}
             trusts={trusts}
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             currencies={currencies}
             onAddEmployee={handleAddEmployee}
             onUpdateEmployee={handleUpdateEmployee}
@@ -2236,7 +2241,7 @@ function AppInner() {
           <CustomersView
             customers={customers}
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             currencies={currencies}
             onAddCustomer={handleAddCustomer}
             onUpdateCustomer={handleUpdateCustomer}
@@ -2248,7 +2253,7 @@ function AppInner() {
           <VendorsView
             vendors={vendors}
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             currencies={currencies}
             onAddVendor={handleAddVendor}
             onUpdateVendor={handleUpdateVendor}
@@ -2259,7 +2264,7 @@ function AppInner() {
         return (
           <CostCentersView
             costCenters={costCenters}
-            journals={journals}
+            journals={visibleJournals}
             onAddCostCenter={handleAddCostCenter}
             onUpdateCostCenter={handleUpdateCostCenter}
             onDeleteCostCenter={handleDeleteCostCenter}
@@ -2272,7 +2277,7 @@ function AppInner() {
             accounts={accounts}
             cashBoxes={cashBoxes}
             bankAccounts={bankAccounts}
-            journals={journals}
+            journals={visibleJournals}
             onAddCurrency={handleAddCurrency}
             onUpdateCurrency={handleUpdateCurrency}
             onDeleteCurrency={handleDeleteCurrency}
@@ -2282,7 +2287,7 @@ function AppInner() {
         return (
           <FinancialReportsView
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             costCenters={costCenters}
             currentUserName={currentUserName}
             currencies={currencies}
@@ -2296,13 +2301,15 @@ function AppInner() {
             vouchers={vouchers}
             receiptVouchers={receiptVouchers}
             fiscalYear={reportingYear}
+            availableFiscalYears={availableReportingYears}
+            loadFiscalYearDataset={loadFiscalYearReportDataset}
           />
         );
       case 'STATEMENT_ACCOUNT':
         return (
           <StatementOfAccountView
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             vouchers={vouchers}
             receiptVouchers={receiptVouchers}
             employees={employees}
@@ -2313,6 +2320,8 @@ function AppInner() {
             currencies={currencies}
             currentUserName={currentUserName}
             fiscalYear={reportingYear}
+            availableFiscalYears={availableReportingYears}
+            loadFiscalYearDataset={loadFiscalYearReportDataset}
             initialKind={statementNavParams?.kind}
             initialId={statementNavParams?.id}
             onParamsConsumed={() => setStatementNavParams(null)}
@@ -2322,7 +2331,7 @@ function AppInner() {
         return (
           <ClosingView
             accounts={accounts}
-            journals={journals}
+            journals={visibleJournals}
             auditLogs={auditLogs}
             vouchers={vouchers}
             receipts={receiptVouchers}

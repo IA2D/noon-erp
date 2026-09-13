@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   TrendingUp,
   ArrowUpRight,
@@ -39,8 +39,6 @@ import {
   calculateBalanceSheet,
   accountFinancialType,
   percentChange,
-  currentMonthKey,
-  previousMonthKey,
   aggregateAccountBalance,
   calculateAccountActivity
 } from '../../utils/accountingEngine';
@@ -48,6 +46,7 @@ import { ThemeMode } from '../../utils/useTheme';
 import PageHeader from '../ui/PageHeader';
 import EmptyState from '../ui/EmptyState';
 import KPICard from '../ui/KPICard';
+import type { FiscalYearDatasetLoader, FiscalYearReportDataset } from '../../utils/fiscalYearReporting';
 
 interface Props {
   accounts: Account[];
@@ -59,6 +58,10 @@ interface Props {
   receiptVouchers?: ReceiptVoucher[];
   onNavigate: (module: string) => void;
   theme: ThemeMode;
+  fiscalYear: string;
+  availableFiscalYears?: string[];
+  loadFiscalYearDataset?: FiscalYearDatasetLoader;
+  comparisonDataset?: FiscalYearReportDataset;
 }
 
 const EXPENSE_CATEGORY_COLORS = ['#0ea5e9', '#38bdf8', '#f59e0b', '#94a3b8'];
@@ -171,7 +174,7 @@ function SparklineKpiCard({
   );
 }
 
-export default function DashboardView({
+function DashboardContent({
   accounts,
   journals,
   currencies = [],
@@ -180,7 +183,9 @@ export default function DashboardView({
   paymentVouchers = [],
   receiptVouchers = [],
   onNavigate,
-  theme
+  theme,
+  fiscalYear,
+  comparisonDataset
 }: Props) {
   const isLight = theme === 'light';
 
@@ -216,8 +221,13 @@ export default function DashboardView({
   const totalExpenses = income.totalExpenses;
   const capital = balanceSheet.equityBase;
 
-  const curMonth = currentMonthKey();
-  const prevMonth = previousMonthKey();
+  const today = new Date();
+  const liveMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const journalMonths = postedJournals.map(j => j.date.slice(0, 7)).filter(month => month.startsWith(`${fiscalYear}-`)).sort();
+  const curMonth = fiscalYear === String(today.getFullYear()) ? liveMonth : (journalMonths.at(-1) || `${fiscalYear}-12`);
+  const [periodYear, periodMonth] = curMonth.split('-').map(Number);
+  const previousDate = new Date(periodYear, periodMonth - 2, 1);
+  const prevMonth = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
   const curPosted = postedJournals.filter(j => j.date.startsWith(curMonth));
   const prevPosted = postedJournals.filter(j => j.date.startsWith(prevMonth));
   const curIncome = calculateIncomeStatement(accounts, curPosted);
@@ -225,12 +235,14 @@ export default function DashboardView({
   const curExpenses = curIncome.totalExpenses;
   const prevExpenses = prevIncome.totalExpenses;
 
-  const trendRevenues = percentChange(curIncome.totalRevenues, prevIncome.totalRevenues);
-  const trendNetProfit = percentChange(curIncome.netIncome, prevIncome.netIncome);
-  const trendExpenses = percentChange(curExpenses, prevExpenses);
+  const comparisonIncome = comparisonDataset ? calculateIncomeStatement(comparisonDataset.accounts, comparisonDataset.journals.filter(j => j.status === 'POSTED')) : null;
+  const comparisonBalance = comparisonDataset ? calculateBalanceSheet(comparisonDataset.accounts, comparisonDataset.journals.filter(j => j.status === 'POSTED')) : null;
+  const trendRevenues = comparisonIncome ? percentChange(totalRevenues, comparisonIncome.totalRevenues) : percentChange(curIncome.totalRevenues, prevIncome.totalRevenues);
+  const trendNetProfit = comparisonIncome ? percentChange(netIncome, comparisonIncome.netIncome) : percentChange(curIncome.netIncome, prevIncome.netIncome);
+  const trendExpenses = comparisonIncome ? percentChange(totalExpenses, comparisonIncome.totalExpenses) : percentChange(curExpenses, prevExpenses);
 
   const prevBalanceSheet = calculateBalanceSheet(accounts, postedJournals.filter(j => j.date.slice(0, 7) <= prevMonth));
-  const trendCapital = percentChange(balanceSheet.totalEquity, prevBalanceSheet.totalEquity);
+  const trendCapital = percentChange(balanceSheet.totalEquity, comparisonBalance?.totalEquity ?? prevBalanceSheet.totalEquity);
 
   const liquidEntities = [
     ...cashBoxes.filter(b => b.isActive).map(b => ({ openingBalance: b.openingBalance || 0, linkedAccountId: b.linkedAccountId })),
@@ -253,13 +265,17 @@ export default function DashboardView({
 
   const currentLiabilities = balanceSheet.currentLiabilities;
   const currentAssets = balanceSheet.currentAssets;
-  const currentRatio = currentLiabilities > 0 ? currentAssets / currentLiabilities : 0;
+  const currentRatio = currentLiabilities > 0 ? currentAssets / currentLiabilities : null;
   const quickRatio = currentLiabilities > 0 ? totalLiquidity / currentLiabilities : null;
 
-  const sym = baseCode;
-  const totalAR = accounts.filter(a => a.level === 5 && a.isActive && a.category === 'RECEIVABLE').reduce((sum, a) => sum + Math.abs(a.openingBalance || 0), 0);
+  const activity = calculateAccountActivity(accounts, postedJournals);
+  const totalAR = accounts.filter(a => a.level === 5 && a.isActive && a.category === 'RECEIVABLE')
+    .reduce((sum, account) => sum + Math.max(0, aggregateAccountBalance(account, accounts, activity)), 0);
   const arTurnover = totalAR > 0 ? totalRevenues / totalAR : 0;
   const dsoDays = arTurnover > 0 ? Math.round(365 / arTurnover) : 0;
+  const workingCapital = currentAssets - currentLiabilities;
+  const debtRatio = balanceSheet.totalAssets > 0 ? (balanceSheet.totalLiabilities / balanceSheet.totalAssets) * 100 : null;
+  const netMargin = totalRevenues > 0 ? (netIncome / totalRevenues) * 100 : null;
 
   const pendingJournals = journals.filter(j => j.status !== 'POSTED' && j.status !== 'VOIDED').length;
   const pendingPayments = paymentVouchers.filter(v => v.status === 'PENDING_POSTING').length;
@@ -385,6 +401,32 @@ export default function DashboardView({
             trend={trendNetProfit}
             positiveIsGood
           />
+        </div>
+      </section>
+
+      <section>
+        <div className="section-head">
+          <div className="section-icon"><Gauge className="w-5 h-5" /></div>
+          <div><h2 className="section-title">مؤشرات المركز المالي — {fiscalYear}</h2></div>
+          <div className="section-line" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+          {[
+            ['إجمالي الأصول', fmtCur(balanceSheet.totalAssets), 'مجموع الأصول المتداولة وغير المتداولة'],
+            ['إجمالي الالتزامات', fmtCur(balanceSheet.totalLiabilities), debtRatio === null ? 'نسبة المديونية غير متاحة' : `نسبة المديونية ${debtRatio.toFixed(1)}%`],
+            ['إجمالي حقوق الملكية', fmtCur(balanceSheet.totalEquity), balanceSheet.isBalanced ? 'الميزانية متوازنة' : 'توجد فجوة في الميزانية'],
+            ['رأس المال العامل', fmtCur(workingCapital), 'الأصول المتداولة ناقص الالتزامات المتداولة'],
+            ['نسبة التداول', currentRatio === null ? '—' : currentRatio.toFixed(2), currentLiabilities > 0 ? 'الأصول المتداولة ÷ الالتزامات المتداولة' : 'لا توجد التزامات متداولة'],
+            ['الذمم المدينة', fmtCur(totalAR), arTurnover > 0 ? `الدوران ${arTurnover.toFixed(2)} مرة — التحصيل ${dsoDays} يوم` : 'لا تتوفر حركة إيرادات للمقارنة'],
+            ['هامش صافي الربح', netMargin === null ? '—' : `${netMargin.toFixed(1)}%`, totalRevenues > 0 ? 'صافي النتيجة ÷ الإيرادات' : 'لا توجد إيرادات'],
+            ['القيود المرحلة', postedCount.toLocaleString('en-US'), fmtCur(postedTotalValue)],
+          ].map(([title, value, hint]) => (
+            <div key={title} className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{title}</p>
+              <p className="mt-1 text-xl font-extrabold text-slate-900 dark:text-white" dir="auto">{value}</p>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{hint}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -563,6 +605,52 @@ export default function DashboardView({
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Financial indicators can inspect any fiscal-year namespace without switching the operational year. */
+export default function DashboardView(props: Props) {
+  const years = props.availableFiscalYears?.length ? props.availableFiscalYears : [props.fiscalYear];
+  const [selectedYear, setSelectedYear] = useState(props.fiscalYear);
+  const defaultComparison = years.find(year => Number(year) < Number(props.fiscalYear)) || '';
+  const [comparisonYear, setComparisonYear] = useState(defaultComparison);
+  useEffect(() => setSelectedYear(props.fiscalYear), [props.fiscalYear]);
+  const dataset = selectedYear === props.fiscalYear || !props.loadFiscalYearDataset
+    ? null
+    : props.loadFiscalYearDataset(selectedYear);
+  const comparisonDataset = comparisonYear && comparisonYear !== selectedYear && props.loadFiscalYearDataset
+    ? props.loadFiscalYearDataset(comparisonYear)
+    : undefined;
+  const scopedProps: Props = dataset
+    ? { ...props, ...dataset, fiscalYear: selectedYear, comparisonDataset }
+    : { ...props, fiscalYear: selectedYear, comparisonDataset };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <label htmlFor="financial-indicators-year" className="text-sm font-bold text-slate-700 dark:text-slate-200">سنة المؤشرات المالية</label>
+        <select
+          id="financial-indicators-year"
+          value={selectedYear}
+          onChange={event => setSelectedYear(event.target.value)}
+          className="min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+        >
+          {years.map(year => <option key={year} value={year}>{year}{year === props.fiscalYear ? ' — النشطة' : ''}</option>)}
+        </select>
+        <label htmlFor="financial-indicators-comparison-year" className="text-sm font-bold text-slate-700 dark:text-slate-200">المقارنة مع</label>
+        <select
+          id="financial-indicators-comparison-year"
+          value={comparisonYear}
+          onChange={event => setComparisonYear(event.target.value)}
+          className="min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+        >
+          <option value="">الفترة السابقة</option>
+          {years.filter(year => year !== selectedYear).map(year => <option key={year} value={year}>{year}</option>)}
+        </select>
+        {selectedYear !== props.fiscalYear && <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">استعراض فقط</span>}
+      </div>
+      <DashboardContent key={selectedYear} {...scopedProps} />
     </div>
   );
 }

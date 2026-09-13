@@ -384,7 +384,6 @@ export default function ClosingView({
   const wizardFinalClosed = wizardPeriod.status === 'FINAL_CLOSED';
   const wizardNextStatus = wizardPeriod.status === 'OPEN' ? 'TEMP_CLOSED' : wizardPeriod.status === 'TEMP_CLOSED' ? 'REVIEWED' : wizardPeriod.status === 'REVIEWED' ? 'FINAL_CLOSED' : null;
   const wizardClosingEntry = journals.find(j => j.reference === `CLOSE-${selectedYearWizard}` && j.status === 'POSTED' && !j.reversedByEntryId);
-  const wizardOpeningEntry = journals.find(j => j.reference === `OPEN-${String(Number(selectedYearWizard) + 1)}` && j.status === 'POSTED');
   const wizardPreview = wizardFinalClosed ? null : buildClosingEntry(selectedYearWizard);
 
   const wizardTrial = useMemo(() => {
@@ -1041,28 +1040,24 @@ export default function ClosingView({
                   {stepBadge(3)}
                   <div className="flex-1">
                     <div className="font-bold text-white text-sm">تدوير أرصدة الميزانية للسنة الجديدة</div>
-                    <p className="text-xs text-slate-400">توليد القيد الافتتاحي لسنة {Number(selectedYearWizard) + 1} من أرصدة الميزانية</p>
+                    <p className="text-xs text-slate-400">إنشاء أرصدة افتتاحية مستقلة لسنة {Number(selectedYearWizard) + 1} دون قيد يومية</p>
                   </div>
-                  {wizardOpeningEntry ? (
-                    <span className="inline-flex items-center gap-1 text-sm font-bold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30"><FileText className="w-3.5 h-3.5" />مرحّل {wizardOpeningEntry.entryNumber}</span>
-                  ) : (
                     <button
                       type="button"
                       onClick={() => setConfirmRollover(true)}
                       disabled={!wizardBalanced || !wizardFinalClosed}
-                      title={!wizardFinalClosed ? 'الإقفال النهائي مطلوب قبل التدوير' : wizardBalanced ? 'توليد القيد الافتتاحي' : 'الميزانية غير متوازنة — لا يمكن التدوير'}
+                      title={!wizardFinalClosed ? 'الإقفال النهائي مطلوب قبل التدوير' : wizardBalanced ? 'تدوير الأرصدة الافتتاحية' : 'الميزانية غير متوازنة — لا يمكن التدوير'}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Database className="w-3.5 h-3.5" />
-                      توليد القيد الافتتاحي للسنة {Number(selectedYearWizard) + 1}
+                      تدوير الأرصدة للسنة {Number(selectedYearWizard) + 1}
                     </button>
-                  )}
                 </div>
                 <div className="p-4 flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/40 m-4 text-xs text-slate-300">
                   <ArrowLeftRight className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
                   <span>
-                    تُدحر الأرصدة المدينة والدائنة لحسابات الميزانية (الأصول والخصوم وحقوق الملكية) إلى قيد افتتاحي بتاريخ
-                    01/01/{Number(selectedYearWizard) + 1}، بينما تُقفل حسابات الإيرادات والمصروفات في الخطوة الثانية. يُرفض التدوير إذا كانت الميزانية غير متوازنة.
+                    تُسجل الأرصدة المدينة والدائنة لحسابات الميزانية (الأصول والخصوم وحقوق الملكية) مباشرةً كأرصدة افتتاحية مستقلة لسنة
+                    {Number(selectedYearWizard) + 1}. لا تُنسخ حسابات الإيرادات والمصروفات وفروعها، ولا يُنشأ قيد تدوير في دفتر اليومية.
                   </span>
                 </div>
               </div>
@@ -1452,7 +1447,7 @@ export default function ClosingView({
           id="closing-rollover-confirm"
           open={confirmRollover}
           onClose={() => setConfirmRollover(false)}
-          title={`توليد القيد الافتتاحي للسنة ${Number(selectedYearWizard) + 1}`}
+          title={`تدوير الأرصدة للسنة ${Number(selectedYearWizard) + 1}`}
           icon={Database}
           size="sm"
           className="border-sky-500/30"
@@ -1474,26 +1469,24 @@ export default function ClosingView({
                     ? 'الإقفال النهائي للسنة المصدر غير مكتمل.'
                     : !wizardBalanced
                       ? `الميزانية غير متوازنة (مدين ${fmt(wizardDebit)} مقابل دائن ${fmt(wizardCredit)}).`
-                      : wizardOpeningEntry
-                        ? `يوجد قيد افتتاحي مرحّل للسنة ${Number(selectedYearWizard) + 1} بالفعل (${wizardOpeningEntry.entryNumber}).`
-                        : commandError || 'فشل حفظ قيد التدوير في قاعدة البيانات.';
-                  toast(done ? 'success' : 'error', done ? `تم توليد القيد الافتتاحي للسنة ${Number(selectedYearWizard) + 1}` : `تعذر التدوير للسنة ${Number(selectedYearWizard) + 1}. السبب: ${rolloverReason}`);
+                      : commandError || 'فشل حفظ الأرصدة الافتتاحية في قاعدة البيانات.';
+                  toast(done ? 'success' : 'error', done ? `تم تدوير الأرصدة الافتتاحية المستقلة للسنة ${Number(selectedYearWizard) + 1} دون إنشاء قيد يومية` : `تعذر التدوير للسنة ${Number(selectedYearWizard) + 1}. السبب: ${rolloverReason}`);
                 }}
                 className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/25 cursor-pointer"
               >
                 <Database className="w-4 h-4" />
-                توليد القيد الافتتاحي
+                تدوير الأرصدة
               </button>
             </div>
           }
         >
           <p className="text-sm text-slate-300 leading-relaxed">
-            سيتم تدوير أرصدة حسابات الميزانية (الأصول والخصوم وحقوق الملكية) للسنة {selectedYearWizard} إلى
-            قيد افتتاحي بتاريخ 01/01/{Number(selectedYearWizard) + 1}. إذا تبين فرق غير متوازن، تُسوّى عبر حساب الأرباح المبقاة.
+            سيتم تسجيل أرصدة حسابات الميزانية للسنة {selectedYearWizard} مباشرةً كأرصدة افتتاحية مستقلة في سنة
+            {Number(selectedYearWizard) + 1}، مع استبعاد الإيرادات والمصروفات وفروعها بالكامل ودون إنشاء قيد يومية.
           </p>
           <div className="flex items-start gap-2 rounded-xl bg-sky-500/5 border border-sky-500/20 p-3 text-xs text-sky-300">
             <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>يُنشأ القيد مرة واحدة فقط — أي محاولة تكرار تُرفض ويُسجل ذلك في سجل التدقيق.</span>
+            <span>تُنشأ بيانات السنة الجديدة مرة واحدة فقط — أي محاولة تكرار تُرفض ويُسجل ذلك في سجل التدقيق.</span>
           </div>
         </ModalShell>
       )}
