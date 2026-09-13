@@ -99,6 +99,79 @@ function restoredReportingYear(): string {
   return fallback;
 }
 
+type CarryEntity = (CashBox | BankAccount | Customer | Vendor | Employee) & { linkedAccountId?: string };
+
+type CarryControlRepair = {
+  accounts: Account[];
+  cashBoxes: CashBox[];
+  bankAccounts: BankAccount[];
+  customers: Customer[];
+  vendors: Vendor[];
+  employees: Employee[];
+  changed: boolean;
+};
+
+/** يحول الرصيد المجمّع لقيد تدوير قديم إلى أرصدة الحسابات التحليلية متى كان مصدره قابلاً للتتبع. */
+function repairCarriedControlOpenings(
+  accounts: Account[], journals: JournalEntry[], cashBoxes: CashBox[], bankAccounts: BankAccount[], customers: Customer[], vendors: Vendor[], employees: Employee[],
+): CarryControlRepair {
+  const lists = { cashBoxes, bankAccounts, customers, vendors, employees };
+  let nextAccounts = accounts;
+  let changed = false;
+  const allEntities: CarryEntity[] = [...cashBoxes, ...bankAccounts, ...customers, ...vendors, ...employees];
+  const rounds = (value: number) => Math.round(value * 100) / 100;
+
+  journals.filter(journal => journal.status === 'POSTED' && /^OPEN-\d{4}$/.test(journal.reference || '')).forEach(openingJournal => {
+    const nextYear = openingJournal.reference.slice(-4);
+    const sourceYear = String(Number(nextYear) - 1);
+    accounts.filter(account => account.subLedgerType && account.subLedgerType !== 'NONE').forEach(account => {
+      const generic = (account.openingBalances || []).find(record => record.id === `rollover-opening-${nextYear}-${account.id}` && record.fiscalYear === nextYear);
+      if (!generic) return;
+      const accountEntities = allEntities.filter(entity => entity.linkedAccountId === account.id);
+      if (!accountEntities.length) return;
+      const detailed = accountEntities.map(entity => {
+        const opening = (entity.openingBalances || []).filter(record => record.fiscalYear === sourceYear)
+          .reduce((sum, record) => sum + (record.amount ?? ((record.debitLocal || 0) - (record.creditLocal || 0))), 0);
+        const movement = journals.filter(journal => journal.status === 'POSTED' && journal.date.startsWith(`${sourceYear}-`) && journal.reference !== `OPEN-${sourceYear}`)
+          .reduce((sum, journal) => sum + journal.lines.filter(line => line.accountId === account.id && line.subLedgerId === entity.id)
+            .reduce((lineSum, line) => lineSum + (line.debit || 0) - (line.credit || 0), 0), 0);
+        return { entity, amount: rounds(opening + movement) };
+      }).filter(item => Math.abs(item.amount) >= 0.005);
+      const genericAmount = rounds(generic.amount ?? (generic.debitLocal || 0) - (generic.creditLocal || 0));
+      const detailedAmount = rounds(detailed.reduce((sum, item) => sum + item.amount, 0));
+      const allocations = detailed.length && Math.abs(detailedAmount - genericAmount) < 0.005
+        ? detailed
+        : accountEntities.length === 1 ? [{ entity: accountEntities[0], amount: genericAmount }] : [];
+      if (!allocations.length) return;
+
+      nextAccounts = nextAccounts.map(candidate => candidate.id !== account.id ? candidate : {
+        ...candidate,
+        openingBalances: (candidate.openingBalances || []).filter(record => record.id !== generic.id),
+      });
+      allocations.forEach(({ entity, amount }) => {
+        const record: OpeningBalanceRecord = {
+          id: `rollover-opening-${nextYear}-${account.id}-${entity.id}`,
+          fiscalYear: nextYear,
+          accountId: account.id,
+          subAccountId: entity.id,
+          currency: 'YER', exchangeRate: 1,
+          debit: amount > 0 ? amount : 0, credit: amount < 0 ? Math.abs(amount) : 0,
+          debitLocal: amount > 0 ? amount : 0, creditLocal: amount < 0 ? Math.abs(amount) : 0,
+          amount, foreignAmount: amount, rate: 1, documentRef: openingJournal.entryNumber,
+        };
+        (Object.keys(lists) as Array<keyof typeof lists>).forEach(key => {
+          lists[key] = lists[key].map(item => item.id !== entity.id ? item : {
+            ...item,
+            openingBalances: [...(item.openingBalances || []).filter(existing => existing.fiscalYear !== nextYear), record],
+          }) as never;
+        });
+      });
+      changed = true;
+    });
+  });
+  return { accounts: nextAccounts, ...lists, changed };
+}
+
 function reportingYearOptions(currentYear = new Date().getFullYear()): string[] {
   const effectiveCurrentYear = Math.max(MIN_REPORTING_YEAR, currentYear);
   const years: string[] = [];
@@ -306,6 +379,19 @@ function AppInner() {
     initializeCleanState();
     const timer = window.setTimeout(() => setIsBooted(true), 500);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const repaired = repairCarriedControlOpenings(accounts, journals, cashBoxes, bankAccounts, customers, vendors, employees);
+    if (!repaired.changed) return;
+    setAccounts(repaired.accounts);
+    setCashBoxes(repaired.cashBoxes);
+    setBankAccounts(repaired.bankAccounts);
+    setCustomers(repaired.customers);
+    setVendors(repaired.vendors);
+    setEmployees(repaired.employees);
+  // إصلاح بيانات التدوير القديمة مرة واحدة عند وجود تحويل قابل للتتبع.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1406,12 +1492,10 @@ function AppInner() {
     const baseCurrency = currencies.find(c => c.isBase)?.code ?? 'YER';
     const openingByAccount = new Map(lines.map(line => [line.accountId, line]));
     const nextAccounts = accounts.map(account => {
-      // أنشئ صف افتتاحي لكل حساب تشغيلي، حتى الحسابات الصفرية. هذا يجعل
-      // صفحة الأرصدة الافتتاحية للسنة الجديدة تعرض الدليل كاملاً بعد التدوير.
-      if (!isPostingAccount(account)) return account;
       const carried = openingByAccount.get(account.id);
-      const debit = round2(carried?.debit || 0);
-      const credit = round2(carried?.credit || 0);
+      if (!carried) return account;
+      const debit = round2(carried.debit || 0);
+      const credit = round2(carried.credit || 0);
       const record: OpeningBalanceRecord = {
         id: `rollover-opening-${nextYear}-${account.id}`,
         fiscalYear: nextYear,
@@ -1430,11 +1514,24 @@ function AppInner() {
       const priorYears = (account.openingBalances || []).filter(item => item.fiscalYear !== nextYear);
       return { ...account, openingBalances: [...priorYears, record] };
     });
+    // فور التدوير حوّل أرصدة حسابات التحكم إلى الكيانات التحليلية نفسها؛
+    // وبذلك لا يظهر للمستخدم رصيد مجمّع غير قابل للتعديل في السنة الجديدة.
+    const carriedRepair = repairCarriedControlOpenings(nextAccounts, nextJournals, cashBoxes, bankAccounts, customers, vendors, employees);
     const audit = createAuditLog('GENERAL_LEDGER', 'POST', `توليد القيد الافتتاحي للسنة ${nextYear} من إقفال ${year}`);
-    const commit = commitAccountingStateResult({ idempotencyKey: `CARRY_FORWARD:${year}:${nextYear}`, commandType: 'CARRY_FORWARD', documentType: 'YEAR', documentNumber: nextYear }, [{ key: K.journals, value: nextJournals }, { key: K.accounts, value: nextAccounts }, { key: K.periodStates, value: nextPeriods }], audit);
+    const commit = commitAccountingStateResult({ idempotencyKey: `CARRY_FORWARD:${year}:${nextYear}`, commandType: 'CARRY_FORWARD', documentType: 'YEAR', documentNumber: nextYear }, [
+      { key: K.journals, value: nextJournals }, { key: K.accounts, value: carriedRepair.accounts },
+      { key: K.cashBoxes, value: carriedRepair.cashBoxes }, { key: K.bankAccounts, value: carriedRepair.bankAccounts },
+      { key: K.customers, value: carriedRepair.customers }, { key: K.vendors, value: carriedRepair.vendors },
+      { key: K.employees, value: carriedRepair.employees }, { key: K.periodStates, value: nextPeriods },
+    ], audit);
     if (!commit.ok) return { ok: false, error: accountingCommandError(commit.error) };
     setJournals(nextJournals);
-    setAccounts(nextAccounts);
+    setAccounts(carriedRepair.accounts);
+    setCashBoxes(carriedRepair.cashBoxes);
+    setBankAccounts(carriedRepair.bankAccounts);
+    setCustomers(carriedRepair.customers);
+    setVendors(carriedRepair.vendors);
+    setEmployees(carriedRepair.employees);
     setPeriodStates(nextPeriods);
     setAuditLogs(prev => [audit, ...prev]);
     return true;
